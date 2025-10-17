@@ -19,6 +19,7 @@ interface LaserViewerProps {
   showCutting?: boolean;
   showPartLabels?: boolean;
   showContourLabels?: boolean;
+  contourLabelSize?: number;
   viewMode?: '2D' | '3D';
 }
 
@@ -32,6 +33,7 @@ export function LaserViewer({
   showCutting = true,
   showPartLabels = true,
   showContourLabels = true,
+  contourLabelSize = 12,
   viewMode = '2D',
 }: LaserViewerProps) {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -155,6 +157,7 @@ export function LaserViewer({
         showCutting,
         showPartLabels,
         showContourLabels,
+        contourLabelSize,
         isSelected: part.id === selectedPartId,
         partIndex: index + 1, // 1부터 시작하는 파트 번호
       });
@@ -162,7 +165,7 @@ export function LaserViewer({
 
     // 카메라 위치 조정
     fitCameraToWorkpiece(program.workpiece.width, program.workpiece.height);
-  }, [program, selectedPartId, selectedContourId, showPiercing, showLeadIn, showApproach, showCutting, showPartLabels, showContourLabels]);
+  }, [program, selectedPartId, selectedContourId, showPiercing, showLeadIn, showApproach, showCutting, showPartLabels, showContourLabels, contourLabelSize]);
 
   /**
    * 컨투어 바운딩 박스 계산 (HKOST 원점 기준)
@@ -211,22 +214,30 @@ export function LaserViewer({
         if (segment.start) addPoint(segment.start.x, segment.start.y);
         if (segment.end) addPoint(segment.end.x, segment.end.y);
 
-        // 원호인 경우 정확한 바운딩 박스를 위해 극단값 계산
-        if (segment.type === 'arc' && segment.start) {
+        // 원호인 경우 사각형 바운딩 박스로 계산 (0,0 ~ max,max)
+        if (segment.type === 'arc' && segment.start && segment.end) {
+          // 시작점과 종료점을 포함하는 사각형
+          const xs = [segment.start.x, segment.end.x];
+          const ys = [segment.start.y, segment.end.y];
+          
           const arcSegment = segment as any;
           if (arcSegment.i !== undefined && arcSegment.j !== undefined) {
+            // 중심점도 포함
             const centerX = segment.start.x + arcSegment.i;
             const centerY = segment.start.y + arcSegment.j;
-            const radius = Math.sqrt(arcSegment.i * arcSegment.i + arcSegment.j * arcSegment.j);
+            xs.push(centerX);
+            ys.push(centerY);
             
+            // 반지름 기준 극단점
+            const radius = Math.sqrt(arcSegment.i * arcSegment.i + arcSegment.j * arcSegment.j);
             if (!isNaN(centerX) && !isNaN(centerY) && !isNaN(radius)) {
-              // 원의 극단점 4개 추가
-              addPoint(centerX - radius, centerY);
-              addPoint(centerX + radius, centerY);
-              addPoint(centerX, centerY - radius);
-              addPoint(centerX, centerY + radius);
+              xs.push(centerX - radius, centerX + radius);
+              ys.push(centerY - radius, centerY + radius);
             }
           }
+          
+          // 모든 좌표의 min/max를 추가
+          xs.forEach(x => ys.forEach(y => addPoint(x, y)));
         }
       });
     }
@@ -300,6 +311,7 @@ export function LaserViewer({
       showCutting: boolean;
       showPartLabels: boolean;
       showContourLabels: boolean;
+      contourLabelSize: number;
       isSelected: boolean;
       partIndex: number;
     }
@@ -372,6 +384,7 @@ export function LaserViewer({
       showApproach: boolean;
       showCutting: boolean;
       showContourLabels: boolean;
+      contourLabelSize: number;
     },
     contourIndex: number
   ) => {
@@ -413,10 +426,12 @@ export function LaserViewer({
       
       // 유효한 좌표인 경우에만 라벨 생성
       if (!isNaN(centerX) && !isNaN(topY)) {
-        const contourLabel = createTextSprite(contourIndex.toString(), Colors.contourLabel, 12);
+        const contourLabel = createTextSprite(contourIndex.toString(), Colors.contourLabel, options.contourLabelSize);
         // 컨투어 상단 중앙에 마진 2 추가
         contourLabel.position.set(centerX, topY + 2, 0.8);
-        contourLabel.scale.set(4, 2, 1);
+        // 크기를 폰트 사이즈에 비례하여 조정
+        const scale = options.contourLabelSize / 3;
+        contourLabel.scale.set(scale, scale / 2, 1);
         group.add(contourLabel);
       } else {
         console.warn(`컨투어 ${contourIndex}: 유효하지 않은 좌표 - 라벨 생성 스킵`);

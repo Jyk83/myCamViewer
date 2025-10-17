@@ -10,12 +10,14 @@ interface ViewControlsProps {
   showCutting: boolean;
   showPartLabels: boolean;
   showContourLabels: boolean;
+  contourLabelSize: number;
   onTogglePiercing: () => void;
   onToggleLeadIn: () => void;
   onToggleApproach: () => void;
   onToggleCutting: () => void;
   onTogglePartLabels: () => void;
   onToggleContourLabels: () => void;
+  onContourLabelSizeChange: (size: number) => void;
 }
 
 export function ViewControls({
@@ -25,12 +27,14 @@ export function ViewControls({
   showCutting,
   showPartLabels,
   showContourLabels,
+  contourLabelSize,
   onTogglePiercing,
   onToggleLeadIn,
   onToggleApproach,
   onToggleCutting,
   onTogglePartLabels,
   onToggleContourLabels,
+  onContourLabelSizeChange,
 }: ViewControlsProps) {
   return (
     <div
@@ -89,6 +93,46 @@ export function ViewControls({
           checked={showContourLabels}
           onChange={onToggleContourLabels}
         />
+        
+        {/* 컨투어 라벨 크기 조절 */}
+        {showContourLabels && (
+          <div style={{ 
+            padding: '10px', 
+            backgroundColor: 'white', 
+            borderRadius: '4px',
+            marginTop: '5px'
+          }}>
+            <label style={{ 
+              display: 'flex', 
+              flexDirection: 'column', 
+              gap: '8px',
+              fontSize: '14px',
+              color: '#333'
+            }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span>컨투어 번호 크기</span>
+                <span style={{ 
+                  fontSize: '13px', 
+                  fontWeight: 'bold',
+                  color: '#2196f3',
+                  minWidth: '40px',
+                  textAlign: 'right'
+                }}>
+                  {contourLabelSize}
+                </span>
+              </div>
+              <input
+                type="range"
+                min="6"
+                max="48"
+                step="2"
+                value={contourLabelSize}
+                onChange={(e) => onContourLabelSizeChange(Number(e.target.value))}
+                style={{ width: '100%', cursor: 'pointer' }}
+              />
+            </label>
+          </div>
+        )}
       </div>
 
       <div style={{ marginTop: '20px', padding: '15px', backgroundColor: 'white', borderRadius: '4px' }}>

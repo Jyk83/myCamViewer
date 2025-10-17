@@ -29,6 +29,7 @@ function App() {
   const [showCutting, setShowCutting] = useState(true);
   const [showPartLabels, setShowPartLabels] = useState(true);
   const [showContourLabels, setShowContourLabels] = useState(true);
+  const [contourLabelSize, setContourLabelSize] = useState(12); // 컨투어 라벨 폰트 크기
 
   const handleFileLoad = (content: string, name: string) => {
     try {
@@ -137,12 +138,14 @@ function App() {
                 showCutting={showCutting}
                 showPartLabels={showPartLabels}
                 showContourLabels={showContourLabels}
+                contourLabelSize={contourLabelSize}
                 onTogglePiercing={() => setShowPiercing(!showPiercing)}
                 onToggleLeadIn={() => setShowLeadIn(!showLeadIn)}
                 onToggleApproach={() => setShowApproach(!showApproach)}
                 onToggleCutting={() => setShowCutting(!showCutting)}
                 onTogglePartLabels={() => setShowPartLabels(!showPartLabels)}
                 onToggleContourLabels={() => setShowContourLabels(!showContourLabels)}
+                onContourLabelSizeChange={setContourLabelSize}
               />
             </div>
 
@@ -189,6 +192,7 @@ function App() {
             showCutting={showCutting}
             showPartLabels={showPartLabels}
             showContourLabels={showContourLabels}
+            contourLabelSize={contourLabelSize}
             viewMode="2D"
           />
         )}
