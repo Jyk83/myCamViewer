@@ -321,12 +321,11 @@ export function LaserViewer({
       group.add(boundingBoxLine);
     }
 
-    // 파트 번호 표시 (바운딩 박스 하단 중앙) - 옵션이 활성화된 경우만
+    // 파트 번호 표시 (바운딩 박스 중앙) - 옵션이 활성화된 경우만
     if (options.showPartLabels) {
-      const textSprite = createTextSprite(options.partIndex.toString(), Colors.partLabel, 28);
-      // 바운딩 박스 하단 중앙에 배치 (기존 뷰어 레이아웃 참조)
-      textSprite.position.set(partWidth / 2, -8, 1.0);
-      textSprite.scale.set(12, 6, 1);
+      const textSprite = createTextSprite(options.partIndex.toString(), Colors.partLabel, 20);
+      textSprite.position.set(partWidth / 2, partHeight / 2, 0.7);
+      textSprite.scale.set(10, 5, 1);
       group.add(textSprite);
     }
 
@@ -378,10 +377,9 @@ export function LaserViewer({
       const actualCenterX = (bbox.minX + bbox.maxX) / 2;
       const actualTopY = bbox.maxY;
       
-      const contourLabel = createTextSprite(contourIndex.toString(), Colors.contourLabel, 16);
-      // 컨투어 상단 중앙에 배치 (기존 뷰어 레이아웃 참조)
-      contourLabel.position.set(actualCenterX, actualTopY + 3, 2.0);
-      contourLabel.scale.set(4, 2, 1);
+      const contourLabel = createTextSprite(contourIndex.toString(), Colors.contourLabel, 12);
+      contourLabel.position.set(actualCenterX, actualTopY + 3, 0.8);
+      contourLabel.scale.set(5, 2.5, 1);
       group.add(contourLabel);
       
       // 디버깅: 컨투어 번호 로그
@@ -465,17 +463,17 @@ export function LaserViewer({
   const createTextSprite = (text: string, color: string, fontSize: number): THREE.Sprite => {
     const canvas = document.createElement('canvas');
     const context = canvas.getContext('2d')!;
-    // 더 높은 해상도로 설정하여 선명하게 렌더링
-    canvas.width = 512;
-    canvas.height = 256;
+    // 더 높은 해상도로 선명하게 렌더링
+    canvas.width = 256;
+    canvas.height = 128;
 
-    // 배경 없음 (투명)
+    // 투명 배경
     context.clearRect(0, 0, canvas.width, canvas.height);
 
     // 텍스트 외곽선 (가독성 향상)
     context.strokeStyle = '#000000';
-    context.lineWidth = 8;
-    context.font = `bold ${fontSize * 8}px Arial`;
+    context.lineWidth = 6;
+    context.font = `bold ${fontSize * 6}px Arial`;
     context.textAlign = 'center';
     context.textBaseline = 'middle';
     context.strokeText(text, canvas.width / 2, canvas.height / 2);
@@ -490,12 +488,12 @@ export function LaserViewer({
     const material = new THREE.SpriteMaterial({ 
       map: texture, 
       transparent: true,
-      depthTest: false, // 항상 위에 렌더링
+      depthTest: false,
       depthWrite: false
     });
     const sprite = new THREE.Sprite(material);
-    sprite.scale.set(8, 4, 1); // 기본 크기 (호출하는 곳에서 조정 가능)
-    sprite.renderOrder = 999; // 렌더링 순서를 가장 높게 설정
+    sprite.scale.set(8, 4, 1);
+    sprite.renderOrder = 999;
 
     return sprite;
   };
