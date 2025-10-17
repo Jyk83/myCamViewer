@@ -273,7 +273,7 @@ export function LaserViewer({
   ) => {
     // 피어싱 위치 표시 (매우 작은 빨간 점)
     if (options.showPiercing && contour.piercingType > 0) {
-      const piercingGeometry = new THREE.CircleGeometry(0.5, 16);
+      const piercingGeometry = new THREE.CircleGeometry(0.3, 16);
       const piercingMaterial = new THREE.MeshBasicMaterial({ color: new THREE.Color(Colors.piercing) });
       const piercingMarker = new THREE.Mesh(piercingGeometry, piercingMaterial);
       piercingMarker.position.set(contour.piercingPosition.x, contour.piercingPosition.y, 0.5);

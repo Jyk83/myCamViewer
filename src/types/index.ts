@@ -274,9 +274,9 @@ export const Colors = {
   workpieceBorder: '#66d9d9',  // 밝은 청록색 테두리 (점선)
   partOrigin: '#ff3333',       // 빨간색 원점
   piercing: '#ff3333',         // 빨간색 피어싱 포인트
-  leadIn: '#00ffff',           // 시안 Lead-in
-  approach: '#00ffff',         // 시안 Approach
-  cutting: '#00ffff',          // 시안 절단 경로
+  leadIn: '#3366ff',           // 파란색 Lead-in (리드인 구간)
+  approach: '#3366ff',         // 파란색 Approach
+  cutting: '#ffffff',          // 흰색 절단 경로
   marking: '#ff00ff',          // 마젠타 마킹
   selected: '#ffff00',         // 노란색 선택
   grid: '#2a4a4a',             // 어두운 그리드

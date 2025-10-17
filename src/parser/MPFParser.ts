@@ -423,6 +423,7 @@ export class MPFParser {
     let currentBlockNumber = nest.partCodeBlockNumber;
     let currentPosition: Point2D = { x: 0, y: 0 };
     let inCutting = false;
+    let inLeadIn = false; // HKCUT 이후 ~ HKLEADEND 전까지
 
     for (let i = startIdx; i < this.commands.length; i++) {
       const cmd = this.commands[i];
@@ -430,6 +431,15 @@ export class MPFParser {
       // 블록 번호 업데이트
       if (cmd.type === 'NBLOCK') {
         currentBlockNumber = (cmd as NBlockCommand).blockNumber;
+      }
+
+      // HKLEADEND 주석 감지
+      if (cmd.type === 'COMMENT' && currentContour) {
+        const comment = (cmd as CommentCommand).text;
+        if (comment.includes('HKLEADEND')) {
+          this.log(`    HKLEADEND 감지 - 리드인 종료, 절단 시작`);
+          inLeadIn = false;
+        }
       }
 
       // HKSTR: 컨투어 시작
@@ -487,11 +497,12 @@ export class MPFParser {
 
       // HKCUT: 절단 시작
       if (cmd.type === 'HKCUT' && currentContour) {
-        this.log(`    절단 시작`);
+        this.log(`    HKCUT - 리드인 구간 시작`);
         inCutting = true;
+        inLeadIn = true; // HKCUT 이후는 리드인 구간
       }
 
-      // G-code: 절단 경로
+      // G-code: 리드인 또는 절단 경로
       if (cmd.type === 'GCODE' && currentContour && inCutting) {
         const gcode = cmd as GCodeCommand;
         if (gcode.x !== undefined && gcode.y !== undefined) {
@@ -503,7 +514,17 @@ export class MPFParser {
             gcode.j || 0
           );
           if (segment) {
-            currentContour.cuttingPath!.push(segment);
+            if (inLeadIn) {
+              // HKLEADEND 전: 리드인 경로에 추가
+              if (!currentContour.leadIn) {
+                currentContour.leadIn = { gCode: this.getGCodeNumber(gcode.command), path: [] };
+              }
+              currentContour.leadIn.path.push(segment);
+              this.log(`      리드인 세그먼트 추가: ${gcode.command}`);
+            } else {
+              // HKLEADEND 후: 절단 경로에 추가
+              currentContour.cuttingPath!.push(segment);
+            }
           }
           currentPosition = { x: gcode.x, y: gcode.y };
         }
