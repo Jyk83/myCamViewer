@@ -8,6 +8,10 @@ export default defineConfig({
     host: '0.0.0.0',
     port: 5173,
     strictPort: true,
+    allowedHosts: [
+      '.sandbox.novita.ai',
+      '5173-i07elqkb0lwzw1dgus9v7-de59bda9.sandbox.novita.ai',
+    ],
     hmr: {
       clientPort: 5173,
     },
