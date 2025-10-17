@@ -495,29 +495,17 @@ export class MPFParser {
         }
         // HKSCRC(3) 형태: 절단 경로 계속 (레이저 ON 유지)
         else if (hkscrc.params === 3 && currentContour) {
-          this.log(`    HKSCRC(3) - 절단 경로 계속`);
+          this.log(`    HKSCRC(3) - 절단 경로 계속 (레이저 ON)`);
           inCutting = true;
         }
-        // HKSCRC(4) 형태: 종료 (HKSTO와 유사)
+        // HKSCRC(4) 형태: 절단 경로 계속 (레이저 ON 유지)
         else if (hkscrc.params === 4 && currentContour) {
-          this.log(`    HKSCRC(4) - 잔재절단 종료`);
-          this.log(`      approachPath: ${currentContour.approachPath!.length}개 세그먼트`);
-          this.log(`      cuttingPath: ${currentContour.cuttingPath!.length}개 세그먼트`);
-          
-          // 현재 위치를 종료 위치로 설정
-          currentContour.endGCode = 0;
-          currentContour.endPosition = currentPosition;
-
-          // 전체 세그먼트 통합
-          currentContour.allSegments = [
-            ...(currentContour.leadIn?.path || []),
-            ...currentContour.approachPath!,
-            ...currentContour.cuttingPath!,
-          ];
-
-          contours.push(currentContour as Contour);
-          this.log(`  잔재절단 컨투어 완료: ${contours.length}번째, 전체 ${currentContour.allSegments.length}개 세그먼트`);
-          currentContour = null;
+          this.log(`    HKSCRC(4) - 절단 경로 계속 (레이저 ON)`);
+          inCutting = true;
+        }
+        // HKSCRC(5) 형태: 레이저 OFF (종료 준비)
+        else if (hkscrc.params === 5 && currentContour) {
+          this.log(`    HKSCRC(5) - 레이저 OFF`);
           inCutting = false;
         }
       }
@@ -592,7 +580,8 @@ export class MPFParser {
         // gCode: 0=추가구획없음, 1=직선, 2=시계방향원호, 3=반시계방향원호
         if (hksto.gCode > 0 && (hksto.x !== currentPosition.x || hksto.y !== currentPosition.y)) {
           const segmentType = hksto.gCode === 1 ? '직선' : hksto.gCode === 2 ? 'G2원호' : 'G3원호';
-          this.log(`    마지막 세그먼트 추가: ${segmentType} (${currentPosition.x.toFixed(3)},${currentPosition.y.toFixed(3)}) → (${hksto.x.toFixed(3)},${hksto.y.toFixed(3)})`);
+          const laserState = inCutting ? '레이저 ON' : '레이저 OFF';
+          this.log(`    HKSTO 추가 세그먼트: ${segmentType} (${currentPosition.x.toFixed(3)},${currentPosition.y.toFixed(3)}) → (${hksto.x.toFixed(3)},${hksto.y.toFixed(3)}) [${laserState}]`);
           if (hksto.gCode >= 2) {
             this.log(`      원호 파라미터: I=${hksto.i}, J=${hksto.j}`);
           }
@@ -604,11 +593,17 @@ export class MPFParser {
             hksto.j || 0
           );
           if (segment) {
-            currentContour.cuttingPath!.push(segment);
+            // 현재 레이저 상태에 따라 적절한 경로에 추가
+            if (inCutting) {
+              currentContour.cuttingPath!.push(segment);
+              this.log(`      cuttingPath에 추가 (레이저 ON)`);
+            } else {
+              currentContour.approachPath!.push(segment);
+              this.log(`      approachPath에 추가 (레이저 OFF)`);
+            }
             currentPosition = { x: hksto.x, y: hksto.y };
-            this.log(`      세그먼트 추가 성공! 타입: ${segment.type}`);
           } else {
-            this.log(`      세그먼트 추가 실패!`);
+            this.log(`      세그먼트 생성 실패!`);
           }
         } else if (hksto.gCode === 0) {
           this.log(`    HKSTO: 추가 구획 없음`);
