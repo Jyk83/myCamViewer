@@ -323,8 +323,9 @@ export function LaserViewer({
 
     // 파트 번호 표시 (바운딩 박스 중앙) - 옵션이 활성화된 경우만
     if (options.showPartLabels) {
-      const textSprite = createTextSprite(options.partIndex.toString(), Colors.partLabel, 24);
+      const textSprite = createTextSprite(options.partIndex.toString(), Colors.partLabel, 32);
       textSprite.position.set(partWidth / 2, partHeight / 2, 0.7);
+      textSprite.scale.set(16, 8, 1); // 더 큰 크기로 조정
       group.add(textSprite);
     }
 
@@ -376,9 +377,9 @@ export function LaserViewer({
       const actualCenterX = (bbox.minX + bbox.maxX) / 2;
       const actualTopY = bbox.maxY;
       
-      const contourLabel = createTextSprite(contourIndex.toString(), Colors.contourLabel, 10);
-      contourLabel.position.set(actualCenterX, actualTopY + 3, 0.6);
-      contourLabel.scale.set(5, 2.5, 1);
+      const contourLabel = createTextSprite(contourIndex.toString(), Colors.contourLabel, 20);
+      contourLabel.position.set(actualCenterX, actualTopY + 5, 0.6);
+      contourLabel.scale.set(8, 4, 1); // 더 큰 크기로 조정
       group.add(contourLabel);
       
       // 디버깅: 컨투어 번호 로그
@@ -462,21 +463,32 @@ export function LaserViewer({
   const createTextSprite = (text: string, color: string, fontSize: number): THREE.Sprite => {
     const canvas = document.createElement('canvas');
     const context = canvas.getContext('2d')!;
-    canvas.width = 128;
-    canvas.height = 64;
+    // 더 높은 해상도로 설정하여 선명하게 렌더링
+    canvas.width = 512;
+    canvas.height = 256;
+
+    // 반투명 배경 추가 (가독성 향상)
+    context.fillStyle = 'rgba(0, 0, 0, 0.5)';
+    context.fillRect(0, 0, canvas.width, canvas.height);
 
     // 텍스트 그리기
     context.fillStyle = color;
-    context.font = `bold ${fontSize * 4}px Arial`;
+    context.font = `bold ${fontSize * 8}px Arial`;
     context.textAlign = 'center';
     context.textBaseline = 'middle';
-    context.fillText(text, 64, 32);
+    context.fillText(text, canvas.width / 2, canvas.height / 2);
 
     // 텍스처 생성
     const texture = new THREE.CanvasTexture(canvas);
-    const material = new THREE.SpriteMaterial({ map: texture, transparent: true });
+    texture.needsUpdate = true;
+    const material = new THREE.SpriteMaterial({ 
+      map: texture, 
+      transparent: true,
+      depthTest: false, // 항상 위에 렌더링
+      depthWrite: false
+    });
     const sprite = new THREE.Sprite(material);
-    sprite.scale.set(8, 4, 1); // 적절한 크기로 조정
+    sprite.scale.set(8, 4, 1); // 기본 크기 (호출하는 곳에서 조정 가능)
 
     return sprite;
   };
