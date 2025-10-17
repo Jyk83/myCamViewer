@@ -27,6 +27,8 @@ function App() {
   const [showLeadIn, setShowLeadIn] = useState(true);
   const [showApproach, setShowApproach] = useState(true);
   const [showCutting, setShowCutting] = useState(true);
+  const [showPartLabels, setShowPartLabels] = useState(true);
+  const [showContourLabels, setShowContourLabels] = useState(true);
 
   const handleFileLoad = (content: string, name: string) => {
     try {
@@ -133,10 +135,14 @@ function App() {
                 showLeadIn={showLeadIn}
                 showApproach={showApproach}
                 showCutting={showCutting}
+                showPartLabels={showPartLabels}
+                showContourLabels={showContourLabels}
                 onTogglePiercing={() => setShowPiercing(!showPiercing)}
                 onToggleLeadIn={() => setShowLeadIn(!showLeadIn)}
                 onToggleApproach={() => setShowApproach(!showApproach)}
                 onToggleCutting={() => setShowCutting(!showCutting)}
+                onTogglePartLabels={() => setShowPartLabels(!showPartLabels)}
+                onToggleContourLabels={() => setShowContourLabels(!showContourLabels)}
               />
             </div>
 
@@ -181,6 +187,8 @@ function App() {
             showLeadIn={showLeadIn}
             showApproach={showApproach}
             showCutting={showCutting}
+            showPartLabels={showPartLabels}
+            showContourLabels={showContourLabels}
             viewMode="2D"
           />
         )}

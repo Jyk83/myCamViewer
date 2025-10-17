@@ -17,6 +17,8 @@ interface LaserViewerProps {
   showLeadIn?: boolean;
   showApproach?: boolean;
   showCutting?: boolean;
+  showPartLabels?: boolean;
+  showContourLabels?: boolean;
   viewMode?: '2D' | '3D';
 }
 
@@ -28,6 +30,8 @@ export function LaserViewer({
   showLeadIn = true,
   showApproach = true,
   showCutting = true,
+  showPartLabels = true,
+  showContourLabels = true,
   viewMode = '2D',
 }: LaserViewerProps) {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -149,6 +153,8 @@ export function LaserViewer({
         showLeadIn,
         showApproach,
         showCutting,
+        showPartLabels,
+        showContourLabels,
         isSelected: part.id === selectedPartId,
         partIndex: index + 1, // 1부터 시작하는 파트 번호
       });
@@ -156,7 +162,74 @@ export function LaserViewer({
 
     // 카메라 위치 조정
     fitCameraToWorkpiece(program.workpiece.width, program.workpiece.height);
-  }, [program, selectedPartId, selectedContourId, showPiercing, showLeadIn, showApproach, showCutting]);
+  }, [program, selectedPartId, selectedContourId, showPiercing, showLeadIn, showApproach, showCutting, showPartLabels, showContourLabels]);
+
+  /**
+   * 실제 경로 좌표로 컨투어 바운딩 박스 계산
+   * HKSTR의 contourWidth/Height가 아닌, 실제 그려진 경로의 좌표를 기반으로 계산
+   */
+  const calculateActualBoundingBox = (contour: Contour): { minX: number; minY: number; maxX: number; maxY: number } => {
+    let minX = Infinity;
+    let minY = Infinity;
+    let maxX = -Infinity;
+    let maxY = -Infinity;
+
+    // 피어싱 위치 포함
+    minX = Math.min(minX, contour.piercingPosition.x);
+    minY = Math.min(minY, contour.piercingPosition.y);
+    maxX = Math.max(maxX, contour.piercingPosition.x);
+    maxY = Math.max(maxY, contour.piercingPosition.y);
+
+    // Lead-in 경로 좌표 수집
+    if (contour.leadIn) {
+      contour.leadIn.path.forEach(segment => {
+        minX = Math.min(minX, segment.start.x, segment.end.x);
+        minY = Math.min(minY, segment.start.y, segment.end.y);
+        maxX = Math.max(maxX, segment.start.x, segment.end.x);
+        maxY = Math.max(maxY, segment.start.y, segment.end.y);
+      });
+    }
+
+    // Approach 경로 좌표 수집
+    contour.approachPath.forEach(segment => {
+      minX = Math.min(minX, segment.start.x, segment.end.x);
+      minY = Math.min(minY, segment.start.y, segment.end.y);
+      maxX = Math.max(maxX, segment.start.x, segment.end.x);
+      maxY = Math.max(maxY, segment.start.y, segment.end.y);
+    });
+
+    // Cutting 경로 좌표 수집
+    contour.cuttingPath.forEach(segment => {
+      minX = Math.min(minX, segment.start.x, segment.end.x);
+      minY = Math.min(minY, segment.start.y, segment.end.y);
+      maxX = Math.max(maxX, segment.start.x, segment.end.x);
+      maxY = Math.max(maxY, segment.start.y, segment.end.y);
+
+      // 원호인 경우 중심점과 반지름 고려
+      if (segment.type === 'arc') {
+        const centerX = segment.start.x + segment.i;
+        const centerY = segment.start.y + segment.j;
+        const radius = Math.sqrt(segment.i * segment.i + segment.j * segment.j);
+        
+        minX = Math.min(minX, centerX - radius);
+        minY = Math.min(minY, centerY - radius);
+        maxX = Math.max(maxX, centerX + radius);
+        maxY = Math.max(maxY, centerY + radius);
+      }
+    });
+
+    // 바운딩 박스가 없는 경우 (모든 좌표가 동일한 경우) 기본값 사용
+    if (minX === Infinity || maxX === -Infinity) {
+      return {
+        minX: contour.piercingPosition.x,
+        minY: contour.piercingPosition.y,
+        maxX: contour.piercingPosition.x + contour.boundingBox.width,
+        maxY: contour.piercingPosition.y + contour.boundingBox.height,
+      };
+    }
+
+    return { minX, minY, maxX, maxY };
+  };
 
   /**
    * 워크피스 그리기
@@ -203,6 +276,8 @@ export function LaserViewer({
       showLeadIn: boolean;
       showApproach: boolean;
       showCutting: boolean;
+      showPartLabels: boolean;
+      showContourLabels: boolean;
       isSelected: boolean;
       partIndex: number;
     }
@@ -246,10 +321,12 @@ export function LaserViewer({
       group.add(boundingBoxLine);
     }
 
-    // 파트 번호 표시 (바운딩 박스 중앙)
-    const textSprite = createTextSprite(options.partIndex.toString(), Colors.partLabel, 12);
-    textSprite.position.set(partWidth / 2, partHeight / 2, 0.7);
-    group.add(textSprite);
+    // 파트 번호 표시 (바운딩 박스 중앙) - 옵션이 활성화된 경우만
+    if (options.showPartLabels) {
+      const textSprite = createTextSprite(options.partIndex.toString(), Colors.partLabel, 12);
+      textSprite.position.set(partWidth / 2, partHeight / 2, 0.7);
+      group.add(textSprite);
+    }
 
     // 컨투어 그리기 (파트 내 인덱스 사용)
     part.contours.forEach((contour, index) => {
@@ -270,6 +347,7 @@ export function LaserViewer({
       showLeadIn: boolean;
       showApproach: boolean;
       showCutting: boolean;
+      showContourLabels: boolean;
     },
     contourIndex: number
   ) => {
@@ -291,15 +369,18 @@ export function LaserViewer({
       group.add(points);
     }
 
-    // 컨투어 번호 표시 (컨투어 중앙 상단)
-    // 피어싱이 있든 없든 항상 표시
-    const contourLabel = createTextSprite(contourIndex.toString(), Colors.contourLabel, 8);
-    // 컨투어 바운딩 박스 중앙 상단 계산
-    const contourCenterX = contour.piercingPosition.x + contour.boundingBox.width / 2;
-    const contourTopY = contour.piercingPosition.y + contour.boundingBox.height;
-    contourLabel.position.set(contourCenterX, contourTopY + 2, 0.6);
-    contourLabel.scale.set(4, 2, 1);
-    group.add(contourLabel);
+    // 컨투어 번호 표시 (실제 경로의 중앙 상단) - 옵션이 활성화된 경우만
+    if (options.showContourLabels) {
+      // 실제 경로 좌표로 바운딩 박스 계산
+      const bbox = calculateActualBoundingBox(contour);
+      const actualCenterX = (bbox.minX + bbox.maxX) / 2;
+      const actualTopY = bbox.maxY;
+      
+      const contourLabel = createTextSprite(contourIndex.toString(), Colors.contourLabel, 8);
+      contourLabel.position.set(actualCenterX, actualTopY + 2, 0.6);
+      contourLabel.scale.set(4, 2, 1);
+      group.add(contourLabel);
+    }
 
     // Lead-in 경로
     if (options.showLeadIn && contour.leadIn) {

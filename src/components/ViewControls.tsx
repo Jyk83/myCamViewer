@@ -8,10 +8,14 @@ interface ViewControlsProps {
   showLeadIn: boolean;
   showApproach: boolean;
   showCutting: boolean;
+  showPartLabels: boolean;
+  showContourLabels: boolean;
   onTogglePiercing: () => void;
   onToggleLeadIn: () => void;
   onToggleApproach: () => void;
   onToggleCutting: () => void;
+  onTogglePartLabels: () => void;
+  onToggleContourLabels: () => void;
 }
 
 export function ViewControls({
@@ -19,10 +23,14 @@ export function ViewControls({
   showLeadIn,
   showApproach,
   showCutting,
+  showPartLabels,
+  showContourLabels,
   onTogglePiercing,
   onToggleLeadIn,
   onToggleApproach,
   onToggleCutting,
+  onTogglePartLabels,
+  onToggleContourLabels,
 }: ViewControlsProps) {
   return (
     <div
@@ -61,6 +69,25 @@ export function ViewControls({
           color="#2196f3"
           checked={showCutting}
           onChange={onToggleCutting}
+        />
+      </div>
+
+      <h3 style={{ marginTop: '20px', marginBottom: '15px', color: '#333', fontSize: '16px' }}>
+        🏷️ 레이블 옵션
+      </h3>
+
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+        <ToggleButton
+          label="파트 번호"
+          color="#ffeb3b"
+          checked={showPartLabels}
+          onChange={onTogglePartLabels}
+        />
+        <ToggleButton
+          label="컨투어 번호"
+          color="#ffffff"
+          checked={showContourLabels}
+          onChange={onToggleContourLabels}
         />
       </div>
 
