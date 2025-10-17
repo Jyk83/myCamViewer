@@ -1,12 +1,18 @@
 /**
  * Path Segmentation Utilities
- * 경로 세그먼트 1mm 단위 분할 유틸리티
+ * 경로 세그먼트 분할 유틸리티 (기본 4mm 단위)
  */
 
 import type { PathSegment, PathPoint, Point2D } from '../types';
 
 /**
- * 직선 세그먼트를 1mm 단위로 분할
+ * 기본 분할 단위 (mm)
+ */
+export const DEFAULT_STEP_SIZE = 4;
+
+/**
+ * 직선 세그먼트를 지정된 단위로 분할
+ * @param stepSize 분할 단위 (mm), 기본값 4mm
  */
 export function segmentLine(
   segment: PathSegment,
@@ -14,7 +20,8 @@ export function segmentLine(
   partIndex: number,
   contourIndex: number,
   pathType: 'piercing' | 'leadIn' | 'approach' | 'cutting',
-  laserOn: boolean = true
+  laserOn: boolean = true,
+  stepSize: number = DEFAULT_STEP_SIZE
 ): PathPoint[] {
   if (segment.type !== 'line') return [];
 
@@ -23,8 +30,8 @@ export function segmentLine(
   const dy = end.y - start.y;
   const length = Math.sqrt(dx * dx + dy * dy);
 
-  // 1mm 단위로 분할
-  const numSteps = Math.ceil(length);
+  // 지정된 단위로 분할
+  const numSteps = Math.ceil(length / stepSize);
   const points: PathPoint[] = [];
 
   for (let i = 0; i <= numSteps; i++) {
@@ -47,7 +54,8 @@ export function segmentLine(
 }
 
 /**
- * 원호 세그먼트를 1mm 단위로 분할
+ * 원호 세그먼트를 지정된 단위로 분할
+ * @param stepSize 분할 단위 (mm), 기본값 4mm
  */
 export function segmentArc(
   segment: PathSegment,
@@ -55,7 +63,8 @@ export function segmentArc(
   partIndex: number,
   contourIndex: number,
   pathType: 'piercing' | 'leadIn' | 'approach' | 'cutting',
-  laserOn: boolean = true
+  laserOn: boolean = true,
+  stepSize: number = DEFAULT_STEP_SIZE
 ): PathPoint[] {
   if (segment.type !== 'arc') return [];
 
@@ -70,8 +79,8 @@ export function segmentArc(
   }
   const arcLength = Math.abs(angleSpan * radius);
 
-  // 1mm 단위로 분할
-  const numSteps = Math.ceil(arcLength);
+  // 지정된 단위로 분할
+  const numSteps = Math.ceil(arcLength / stepSize);
   const points: PathPoint[] = [];
 
   for (let i = 0; i <= numSteps; i++) {
@@ -95,7 +104,8 @@ export function segmentArc(
 }
 
 /**
- * 세그먼트를 1mm 단위로 분할 (자동 타입 감지)
+ * 세그먼트를 지정된 단위로 분할 (자동 타입 감지)
+ * @param stepSize 분할 단위 (mm), 기본값 4mm
  */
 export function segmentPath(
   segment: PathSegment,
@@ -103,31 +113,34 @@ export function segmentPath(
   partIndex: number,
   contourIndex: number,
   pathType: 'piercing' | 'leadIn' | 'approach' | 'cutting',
-  laserOn: boolean = true
+  laserOn: boolean = true,
+  stepSize: number = DEFAULT_STEP_SIZE
 ): PathPoint[] {
   if (segment.type === 'line') {
-    return segmentLine(segment, segmentIndex, partIndex, contourIndex, pathType, laserOn);
+    return segmentLine(segment, segmentIndex, partIndex, contourIndex, pathType, laserOn, stepSize);
   } else if (segment.type === 'arc') {
-    return segmentArc(segment, segmentIndex, partIndex, contourIndex, pathType, laserOn);
+    return segmentArc(segment, segmentIndex, partIndex, contourIndex, pathType, laserOn, stepSize);
   }
   return [];
 }
 
 /**
- * 여러 세그먼트를 순차적으로 1mm 단위로 분할
- * pathType과 laserOn을 인자로 받는 버전
+ * 여러 세그먼트를 순차적으로 지정된 단위로 분할
+ * pathType, laserOn, stepSize를 인자로 받는 버전
+ * @param stepSize 분할 단위 (mm), 기본값 4mm
  */
 export function segmentPathArray(
   segments: PathSegment[],
   partIndex: number,
   contourIndex: number,
   pathType: 'piercing' | 'leadIn' | 'approach' | 'cutting' = 'cutting',
-  laserOn: boolean = true
+  laserOn: boolean = true,
+  stepSize: number = DEFAULT_STEP_SIZE
 ): PathPoint[] {
   const allPoints: PathPoint[] = [];
 
   segments.forEach((segment, index) => {
-    const points = segmentPath(segment, index, partIndex, contourIndex, pathType, laserOn);
+    const points = segmentPath(segment, index, partIndex, contourIndex, pathType, laserOn, stepSize);
     allPoints.push(...points);
   });
 

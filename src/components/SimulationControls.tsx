@@ -11,6 +11,7 @@ interface SimulationControlsProps {
   onPause: () => void;
   onStop: () => void;
   onSpeedChange: (speed: number) => void;
+  onStepSizeChange: (stepSize: number) => void;
 }
 
 export function SimulationControls({
@@ -19,8 +20,9 @@ export function SimulationControls({
   onPause,
   onStop,
   onSpeedChange,
+  onStepSizeChange,
 }: SimulationControlsProps) {
-  const { isRunning, isPaused, currentPartIndex, currentContourIndex, currentPointIndex, totalPoints, speed } = simulationState;
+  const { isRunning, isPaused, currentPartIndex, currentContourIndex, currentPointIndex, totalPoints, speed, stepSize } = simulationState;
 
   // 진행률 계산
   const progress = totalPoints > 0 ? (currentPointIndex / totalPoints) * 100 : 0;
@@ -136,8 +138,9 @@ export function SimulationControls({
         </div>
       </div>
 
-      {/* 속도 조절 */}
-      <div style={{ backgroundColor: 'white', padding: '15px', borderRadius: '4px' }}>
+      {/* 속도 및 분할 단위 조절 */}
+      <div style={{ backgroundColor: 'white', padding: '15px', borderRadius: '4px', display: 'flex', flexDirection: 'column', gap: '15px' }}>
+        {/* 속도 조절 */}
         <label style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <span style={{ fontSize: '14px', color: '#333', fontWeight: 'bold' }}>
@@ -165,6 +168,39 @@ export function SimulationControls({
               </option>
             ))}
           </select>
+        </label>
+
+        {/* 분할 단위 조절 */}
+        <label style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <span style={{ fontSize: '14px', color: '#333', fontWeight: 'bold' }}>
+              📏 이동 단위
+            </span>
+            <span style={{ fontSize: '13px', color: '#ff9800', fontWeight: 'bold' }}>
+              {stepSize}mm
+            </span>
+          </div>
+
+          <input
+            type="number"
+            min="1"
+            max="10"
+            step="0.5"
+            value={stepSize}
+            onChange={(e) => onStepSizeChange(Number(e.target.value))}
+            disabled={isRunning || isPaused}
+            style={{
+              padding: '8px',
+              fontSize: '14px',
+              border: '1px solid #ddd',
+              borderRadius: '4px',
+              cursor: isRunning || isPaused ? 'not-allowed' : 'pointer',
+              backgroundColor: isRunning || isPaused ? '#f5f5f5' : 'white',
+            }}
+          />
+          <span style={{ fontSize: '12px', color: '#999' }}>
+            ℹ️ 경로를 재생성하므로 정지 상태에서만 변경 가능
+          </span>
         </label>
       </div>
 

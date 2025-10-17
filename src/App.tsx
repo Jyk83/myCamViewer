@@ -47,6 +47,7 @@ function App() {
     currentPointIndex: 0,
     totalPoints: 0,
     speed: 100,
+    stepSize: 4, // 기본 4mm 단위
     completedPaths: new Set(),
   });
 
@@ -156,6 +157,27 @@ function App() {
     }
   };
 
+  const handleSimulationStepSizeChange = (stepSize: number) => {
+    // 유효한 범위로 제한 (0.5mm ~ 10mm)
+    const clampedStepSize = Math.max(0.5, Math.min(10, stepSize));
+    
+    setSimulationState(prev => ({
+      ...prev,
+      stepSize: clampedStepSize,
+      // 변경 시 처음부터 다시 시작
+      currentPartIndex: 0,
+      currentContourIndex: 0,
+      currentPointIndex: 0,
+      completedPaths: new Set(),
+    }));
+
+    // 경로 재생성 필요 - 프로그램이 있으면 재로드
+    if (program) {
+      // 경로 재생성은 useEffect에서 자동으로 처리됨
+      console.log(`이동 단위 변경: ${clampedStepSize}mm`);
+    }
+  };
+
   // 컴포넌트 언마운트 시 타이머 정리
   useEffect(() => {
     return () => {
@@ -206,7 +228,8 @@ function App() {
             partIndex,
             contourIndex,
             'approach',
-            false  // 레이저 OFF
+            false,  // 레이저 OFF
+            simulationState.stepSize  // 분할 단위
           );
           // 파트 원점만큼 좌표 이동
           approachPoints.forEach(p => {
@@ -238,7 +261,8 @@ function App() {
               partIndex,
               contourIndex,
               'leadIn',
-              true  // 레이저 ON (절단)
+              true,  // 레이저 ON (절단)
+              simulationState.stepSize  // 분할 단위
             );
             // 파트 원점만큼 좌표 이동
             leadInPoints.forEach(p => {
@@ -254,7 +278,8 @@ function App() {
             partIndex,
             contourIndex,
             'cutting',
-            true
+            true,  // 레이저 ON
+            simulationState.stepSize  // 분할 단위
           );
           // 파트 원점만큼 좌표 이동
           cuttingPoints.forEach(p => {
@@ -410,6 +435,7 @@ function App() {
                 onPause={handleSimulationPause}
                 onStop={handleSimulationStop}
                 onSpeedChange={handleSimulationSpeedChange}
+                onStepSizeChange={handleSimulationStepSizeChange}
               />
             </div>
 

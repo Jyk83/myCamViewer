@@ -272,7 +272,7 @@ export const CuttingTypes: Record<number, string> = {
 // ========== 시뮬레이션 타입 ==========
 
 /**
- * 1mm 단위로 분할된 미세 경로 포인트
+ * 분할된 미세 경로 포인트 (기본 4mm 단위)
  */
 export interface PathPoint {
   position: Point2D;
@@ -295,6 +295,7 @@ export interface SimulationState {
   currentPointIndex: number;  // 현재 포인트 (0부터 시작)
   totalPoints: number;        // 전체 포인트 수
   speed: number;              // ms per step (100, 200, 500...)
+  stepSize: number;           // 경로 분할 단위 (mm, 기본 4mm)
   completedPaths: Set<string>; // "part-0-contour-1-point-50"
 }
 
