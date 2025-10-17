@@ -435,7 +435,7 @@ export class MPFParser {
       // HKSTR: 컨투어 시작
       if (cmd.type === 'HKSTR') {
         const hkstr = cmd as any;
-        this.log(`  컨투어 시작: 블록 ${currentBlockNumber}, 타입: ${hkstr.cuttingType}`);
+        this.log(`  컨투어 시작: 블록 ${currentBlockNumber}, piercingType=${hkstr.piercingType}, cuttingType=${hkstr.cuttingType}`);
         currentContour = {
           id: `contour-${currentBlockNumber}`,
           blockNumber: currentBlockNumber,
