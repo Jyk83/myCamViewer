@@ -13,6 +13,9 @@ import { parseMPFFile } from './parser/MPFParser';
 import type { MPFProgram } from './types';
 import './App.css';
 
+// @ts-ignore - 디버깅용 전역 변수
+window.lastProgram = null;
+
 function App() {
   const [program, setProgram] = useState<MPFProgram | null>(null);
   const [filename, setFilename] = useState<string>('');
@@ -28,12 +31,39 @@ function App() {
   const handleFileLoad = (content: string, name: string) => {
     try {
       setError(null);
+      console.log('=== MPF 파일 파싱 시작 ===');
+      console.log('파일명:', name);
+      console.log('파일 크기:', content.length, 'bytes');
+      
       const parsedProgram = parseMPFFile(content);
+      
+      console.log('=== 파싱 결과 ===');
+      console.log('버전:', parsedProgram.version);
+      console.log('재질:', parsedProgram.hkldb);
+      console.log('워크피스:', parsedProgram.workpiece);
+      console.log('네스팅 정보:', parsedProgram.nesting);
+      console.log('파트 수:', parsedProgram.parts.length);
+      console.log('파트 상세:', parsedProgram.parts);
+      
+      if (parsedProgram.parts.length > 0) {
+        console.log('첫 번째 파트:', parsedProgram.parts[0]);
+        if (parsedProgram.parts[0].contours.length > 0) {
+          console.log('첫 번째 컨투어:', parsedProgram.parts[0].contours[0]);
+        }
+      }
+      
       setProgram(parsedProgram);
       setFilename(name);
-      console.log('Parsed program:', parsedProgram);
+      
+      // 디버깅용 전역 저장
+      // @ts-ignore
+      window.lastProgram = parsedProgram;
+      console.log('window.lastProgram에 저장 완료');
+      console.log('=== 파싱 완료 ===');
     } catch (err) {
-      console.error('Parse error:', err);
+      console.error('=== 파싱 에러 ===');
+      console.error('에러:', err);
+      console.error('스택:', err instanceof Error ? err.stack : 'No stack trace');
       setError(err instanceof Error ? err.message : '파일 파싱 중 오류가 발생했습니다.');
       setProgram(null);
     }

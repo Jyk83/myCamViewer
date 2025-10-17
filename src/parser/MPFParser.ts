@@ -1,6 +1,6 @@
 /**
- * HK MPF File Parser
- * HK 레이저 절단 프로그램 파일 파서
+ * HK MPF File Parser (Enhanced with Debug Logging)
+ * HK 레이저 절단 프로그램 파일 파서 (디버그 로깅 강화)
  */
 
 import type {
@@ -24,6 +24,7 @@ export class MPFParser {
   private lines: string[] = [];
   private currentLine = 0;
   private commands: Command[] = [];
+  private debug = true; // 디버그 모드
 
   /**
    * MPF 파일 파싱
@@ -33,11 +34,23 @@ export class MPFParser {
     this.currentLine = 0;
     this.commands = [];
 
+    this.log('=== MPF 파서 시작 ===');
+    this.log(`총 라인 수: ${this.lines.length}`);
+
     // 모든 라인을 커맨드로 파싱
     this.parseAllCommands();
+    this.log(`파싱된 커맨드 수: ${this.commands.length}`);
 
     // 구조화된 데이터로 변환
-    return this.buildMPFProgram();
+    const program = this.buildMPFProgram();
+    this.log('=== MPF 파서 완료 ===');
+    return program;
+  }
+
+  private log(...args: any[]) {
+    if (this.debug) {
+      console.log('[MPFParser]', ...args);
+    }
   }
 
   /**
@@ -234,11 +247,22 @@ export class MPFParser {
    * MPF 프로그램 구조 생성
    */
   private buildMPFProgram(): MPFProgram {
+    this.log('프로그램 구조 생성 시작');
+    
     const version = this.extractVersion();
+    this.log('버전:', version);
+    
     const hkldb = this.extractHKLDB();
+    this.log('HKLDB:', hkldb);
+    
     const hkini = this.extractHKINI();
+    this.log('HKINI:', hkini);
+    
     const nesting = this.extractNesting();
+    this.log('네스팅 정보:', nesting.length, '개');
+    
     const parts = this.extractParts();
+    this.log('파트:', parts.length, '개');
 
     return {
       version,
@@ -319,6 +343,7 @@ export class MPFParser {
       }
     }
 
+    this.log('네스팅 정보 추출 완료:', nesting);
     return nesting;
   }
 
@@ -329,10 +354,16 @@ export class MPFParser {
     const parts: Part[] = [];
     const nesting = this.extractNesting();
 
+    this.log(`${nesting.length}개 파트 추출 시작`);
+
     for (const nest of nesting) {
+      this.log(`파트 ${nest.partCodeBlockNumber} 추출 중...`);
       const part = this.extractPart(nest);
       if (part) {
+        this.log(`  -> ${part.contours.length}개 컨투어 발견`);
         parts.push(part);
+      } else {
+        this.log(`  -> 파트를 찾을 수 없음!`);
       }
     }
 
@@ -343,23 +374,30 @@ export class MPFParser {
    * 개별 파트 추출
    */
   private extractPart(nest: NestingInfo): Part | null {
+    this.log(`파트 추출: 블록 ${nest.partCodeBlockNumber}`);
+    
     // 파트 시작 블록 찾기
     let startIdx = -1;
     for (let i = 0; i < this.commands.length; i++) {
       const cmd = this.commands[i];
       if (cmd.type === 'NBLOCK' && (cmd as NBlockCommand).blockNumber === nest.partCodeBlockNumber) {
         startIdx = i;
+        this.log(`  시작 인덱스: ${startIdx}`);
         break;
       }
     }
 
-    if (startIdx === -1) return null;
+    if (startIdx === -1) {
+      this.log(`  ERROR: 블록 번호 ${nest.partCodeBlockNumber}를 찾을 수 없음!`);
+      return null;
+    }
 
     // 컨투어 추출
     const contours: Contour[] = [];
     let currentContour: Partial<Contour> | null = null;
     let currentBlockNumber = nest.partCodeBlockNumber;
     let currentPosition: Point2D = { x: 0, y: 0 };
+    let inCutting = false;
 
     for (let i = startIdx; i < this.commands.length; i++) {
       const cmd = this.commands[i];
@@ -372,6 +410,7 @@ export class MPFParser {
       // HKSTR: 컨투어 시작
       if (cmd.type === 'HKSTR') {
         const hkstr = cmd as any;
+        this.log(`  컨투어 시작: 블록 ${currentBlockNumber}, 타입: ${hkstr.cuttingType}`);
         currentContour = {
           id: `contour-${currentBlockNumber}`,
           blockNumber: currentBlockNumber,
@@ -390,29 +429,45 @@ export class MPFParser {
           endPosition: { x: 0, y: 0 },
         };
         currentPosition = { x: hkstr.x, y: hkstr.y };
+        inCutting = false;
+      }
+
+      // HKPIE: 피어싱
+      if (cmd.type === 'HKPIE' && currentContour) {
+        this.log(`    피어싱 실행`);
       }
 
       // HKLEA: Lead-in 정보
       if (cmd.type === 'HKLEA' && currentContour) {
         const hklea = cmd as any;
-        if (hklea.gCode > 0) {
+        this.log(`    HKLEA: gCode=${hklea.gCode}, x=${hklea.x}, y=${hklea.y}`);
+        if (hklea.gCode > 0 && hklea.x !== 0 && hklea.y !== 0) {
           const segment = this.createSegment(
             hklea.gCode,
             currentPosition,
             { x: hklea.x, y: hklea.y },
-            hklea.i,
-            hklea.j
+            hklea.i || 0,
+            hklea.j || 0
           );
-          currentContour.leadIn = {
-            gCode: hklea.gCode,
-            path: segment ? [segment] : [],
-          };
-          currentPosition = { x: hklea.x, y: hklea.y };
+          if (segment) {
+            currentContour.leadIn = {
+              gCode: hklea.gCode,
+              path: [segment],
+            };
+            currentPosition = { x: hklea.x, y: hklea.y };
+            this.log(`    Lead-in 세그먼트 추가`);
+          }
         }
       }
 
+      // HKCUT: 절단 시작
+      if (cmd.type === 'HKCUT' && currentContour) {
+        this.log(`    절단 시작`);
+        inCutting = true;
+      }
+
       // G-code: 절단 경로
-      if (cmd.type === 'GCODE' && currentContour) {
+      if (cmd.type === 'GCODE' && currentContour && inCutting) {
         const gcode = cmd as GCodeCommand;
         if (gcode.x !== undefined && gcode.y !== undefined) {
           const segment = this.createSegment(
@@ -435,14 +490,16 @@ export class MPFParser {
         currentContour.endGCode = hksto.gCode;
         currentContour.endPosition = { x: hksto.x, y: hksto.y };
 
-        // 마지막 세그먼트 추가
-        if (hksto.gCode > 0) {
+        this.log(`    HKSTO: ${currentContour.cuttingPath!.length}개 세그먼트`);
+
+        // 마지막 세그먼트 추가 (HKSTO에 좌표가 있는 경우)
+        if (hksto.gCode > 0 && hksto.x !== currentPosition.x && hksto.y !== currentPosition.y) {
           const segment = this.createSegment(
             hksto.gCode,
             currentPosition,
             { x: hksto.x, y: hksto.y },
-            hksto.i,
-            hksto.j
+            hksto.i || 0,
+            hksto.j || 0
           );
           if (segment) {
             currentContour.cuttingPath!.push(segment);
@@ -457,22 +514,28 @@ export class MPFParser {
         ];
 
         contours.push(currentContour as Contour);
+        this.log(`  컨투어 완료: ${contours.length}번째`);
         currentContour = null;
+        inCutting = false;
       }
 
       // HKPED: 파트 종료
       if (cmd.type === 'HKPED') {
+        this.log(`  파트 종료`);
         break;
       }
     }
 
-    return {
+    const part: Part = {
       id: `part-${nest.partOriginBlockNumber}`,
       blockNumber: nest.partCodeBlockNumber,
       origin: nest.origin,
       rotation: nest.rotation,
       contours,
     };
+
+    this.log(`파트 추출 완료: ${contours.length}개 컨투어`);
+    return part;
   }
 
   /**
