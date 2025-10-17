@@ -252,8 +252,8 @@ export function LaserViewer({
    * 레이저 ON 구간만 그림 (laserOn === true)
    * 컨투어가 바뀌면 선 끊기
    * 
-   * **완료된 컨투어**: 밝은 빨간색 + 두꺼운 선 (이미 절단 완료)
-   * **현재 진행 중 컨투어**: 일반 빨간색 (진행 중)
+   * **완료된 컨투어**: 밝은 빨간색 + 두꺼운 선 (전체를 한 번에 그림 - 완전한 형상)
+   * **현재 진행 중 컨투어**: 일반 빨간색 (currentPointIndex까지만 그림)
    */
   const drawSimulationPath = (scene: THREE.Scene, pathPoints: PathPoint[], currentIndex: number) => {
     if (currentIndex < 0 || pathPoints.length === 0) return;
@@ -263,70 +263,73 @@ export function LaserViewer({
     const currentPartIndex = currentPoint.partIndex;
     const currentContourIndex = currentPoint.contourIndex;
 
-    // 2. 각 컨투어별로 그룹화하여 완료/진행중 구분
+    // 2. 전체 pathPoints를 컨투어별로 그룹화 (모든 포인트 포함)
     interface ContourGroup {
       partIndex: number;
       contourIndex: number;
-      points: PathPoint[];
-      isCompleted: boolean; // 이 컨투어가 완전히 완료되었는지
+      allPoints: PathPoint[];  // 이 컨투어의 전체 포인트 (완료된 경우 전부 그리기 위함)
+      startIndex: number;       // 전역 인덱스에서 시작 위치
+      endIndex: number;         // 전역 인덱스에서 끝 위치
     }
 
-    const contourGroups: ContourGroup[] = [];
-    let currentGroup: ContourGroup | null = null;
-
-    for (let i = 0; i <= currentIndex && i < pathPoints.length; i++) {
-      const point = pathPoints[i];
+    const contourMap = new Map<string, ContourGroup>();
+    
+    pathPoints.forEach((point, index) => {
+      const key = `${point.partIndex}-${point.contourIndex}`;
       
-      // 새 컨투어 시작
-      if (!currentGroup || 
-          point.partIndex !== currentGroup.partIndex || 
-          point.contourIndex !== currentGroup.contourIndex) {
-        
-        // 이전 그룹 저장
-        if (currentGroup) {
-          contourGroups.push(currentGroup);
-        }
-        
-        // 새 그룹 시작
-        currentGroup = {
+      if (!contourMap.has(key)) {
+        contourMap.set(key, {
           partIndex: point.partIndex,
           contourIndex: point.contourIndex,
-          points: [point],
-          isCompleted: false, // 일단 미완료로 시작
-        };
+          allPoints: [],
+          startIndex: index,
+          endIndex: index,
+        });
+      }
+      
+      const group = contourMap.get(key)!;
+      group.allPoints.push(point);
+      group.endIndex = index;
+    });
+
+    // 3. 컨투어를 시작 인덱스 순서대로 정렬
+    const sortedContours = Array.from(contourMap.values()).sort(
+      (a, b) => a.startIndex - b.startIndex
+    );
+
+    // 4. 각 컨투어 렌더링
+    sortedContours.forEach((contour, contourIdx) => {
+      // 완료 여부 판단: 현재 currentIndex가 이 컨투어의 끝을 넘어섰는가?
+      const isCompleted = currentIndex > contour.endIndex;
+      const isCurrentContour = 
+        currentPoint.partIndex === contour.partIndex && 
+        currentPoint.contourIndex === contour.contourIndex;
+
+      // 완료된 컨투어: 전체 포인트 사용
+      // 현재 진행 중 컨투어: currentIndex까지만 사용
+      let pointsToRender: PathPoint[] = [];
+      
+      if (isCompleted) {
+        // 완료된 컨투어: 전체를 그림 (완전한 형상)
+        pointsToRender = contour.allPoints;
+      } else if (isCurrentContour) {
+        // 현재 진행 중 컨투어: currentIndex까지만 그림
+        const currentContourOffset = currentIndex - contour.startIndex;
+        pointsToRender = contour.allPoints.slice(0, currentContourOffset + 1);
       } else {
-        // 같은 컨투어에 포인트 추가
-        currentGroup.points.push(point);
+        // 아직 도달하지 않은 컨투어: 그리지 않음
+        return;
       }
-    }
 
-    // 마지막 그룹 저장
-    if (currentGroup) {
-      contourGroups.push(currentGroup);
-    }
-
-    // 3. 마지막 그룹(현재 진행 중)을 제외한 모든 그룹은 완료된 것으로 표시
-    if (contourGroups.length > 0) {
-      for (let i = 0; i < contourGroups.length - 1; i++) {
-        contourGroups[i].isCompleted = true;
-      }
-      // 마지막 그룹은 진행 중
-      contourGroups[contourGroups.length - 1].isCompleted = false;
-    }
-
-    // 4. 각 컨투어 그룹을 렌더링
-    contourGroups.forEach(group => {
-      // 완료된 컨투어: 밝은 빨간색 + 두꺼운 선
-      // 진행 중 컨투어: 일반 빨간색 + 보통 선
-      const isCompleted = group.isCompleted;
-      const color = isCompleted ? '#ff3333' : '#ff0000'; // 완료: 밝은 빨강, 진행중: 어두운 빨강
-      const linewidth = isCompleted ? 6 : 4;              // 완료: 6px, 진행중: 4px
-      const zIndex = isCompleted ? 0.6 : 0.5;             // 완료: 위쪽, 진행중: 아래쪽
+      // 스타일 설정
+      const color = isCompleted ? '#ff3333' : '#ff0000';  // 완료: 밝은 빨강, 진행중: 어두운 빨강
+      const linewidth = isCompleted ? 6 : 4;               // 완료: 6px, 진행중: 4px
+      const zIndex = isCompleted ? 0.6 : 0.5;              // 완료: 위쪽, 진행중: 아래쪽
       
       // 레이저 ON 구간만 수집하여 연속된 세그먼트로 그리기
       let segmentPoints: THREE.Vector3[] = [];
       
-      group.points.forEach((point, idx) => {
+      pointsToRender.forEach((point, idx) => {
         if (point.laserOn) {
           // 레이저 ON: 포인트 추가
           segmentPoints.push(new THREE.Vector3(point.position.x, point.position.y, zIndex));
