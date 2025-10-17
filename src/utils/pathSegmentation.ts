@@ -158,10 +158,25 @@ export function segmentPathArray(
 ): PathPoint[] {
   const allPoints: PathPoint[] = [];
 
+  // 디버그: 원호 세그먼트 카운트
+  const arcCount = segments.filter(s => s.type === 'arc').length;
+  if (arcCount > 0 && partIndex === 0 && contourIndex < 5) {
+    console.log(`📊 Part${partIndex} Cont${contourIndex} ${pathType}: ${segments.length}개 세그먼트 (원호 ${arcCount}개)`);
+  }
+
   segments.forEach((segment, index) => {
     const points = segmentPath(segment, index, partIndex, contourIndex, pathType, laserOn, stepSize);
     allPoints.push(...points);
+    
+    // 디버그: 원호 세그먼트가 생성한 포인트 개수
+    if (segment.type === 'arc' && partIndex === 0 && contourIndex < 5) {
+      console.log(`  🔹 Seg${index} (arc): ${points.length}개 포인트 생성`);
+    }
   });
+
+  if (arcCount > 0 && partIndex === 0 && contourIndex < 5) {
+    console.log(`  ✅ 총 ${allPoints.length}개 포인트 생성됨`);
+  }
 
   return allPoints;
 }
