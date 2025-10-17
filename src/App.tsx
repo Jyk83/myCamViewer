@@ -195,16 +195,24 @@ function App() {
       // 시뮬레이션을 위한 전체 경로 세그먼트 분할
       const segmentedPaths: PathPoint[] = [];
       parsedProgram.parts.forEach((part, partIndex) => {
+        // 파트 원점 (HKOST)
+        const partOrigin = part.origin;
+        
         part.contours.forEach((contour, contourIndex) => {
-          // Lead-in path (optional)
+          // Lead-in path (optional) - 레이저 ON 진입 절단
           if (contour.leadIn) {
             const leadInPoints = segmentPathArray(
               contour.leadIn.path,
               partIndex,
               contourIndex,
               'leadIn',
-              true
+              true  // 레이저 ON (절단)
             );
+            // 파트 원점만큼 좌표 이동
+            leadInPoints.forEach(p => {
+              p.position.x += partOrigin.x;
+              p.position.y += partOrigin.y;
+            });
             segmentedPaths.push(...leadInPoints);
           }
           
@@ -216,6 +224,11 @@ function App() {
             'approach',
             false  // 레이저 OFF
           );
+          // 파트 원점만큼 좌표 이동
+          approachPoints.forEach(p => {
+            p.position.x += partOrigin.x;
+            p.position.y += partOrigin.y;
+          });
           segmentedPaths.push(...approachPoints);
           
           // Cutting path
@@ -226,6 +239,11 @@ function App() {
             'cutting',
             true
           );
+          // 파트 원점만큼 좌표 이동
+          cuttingPoints.forEach(p => {
+            p.position.x += partOrigin.x;
+            p.position.y += partOrigin.y;
+          });
           segmentedPaths.push(...cuttingPoints);
         });
       });
