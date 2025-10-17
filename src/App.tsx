@@ -94,7 +94,8 @@ function App() {
           };
         }
 
-        // 다음 포인트로 진행
+        // 다음 포인트로 진행 (PathPoint는 이미 stepSize 간격으로 생성되어 있음)
+        // 매 타이머 간격마다 1포인트씩 이동 = stepSize(mm) 거리 이동
         const nextIndex = prev.currentPointIndex + 1;
         const nextPoint = allPathPoints[nextIndex];
         
@@ -132,16 +133,15 @@ function App() {
       clearInterval(simulationTimerRef.current);
       simulationTimerRef.current = null;
     }
-    setSimulationState({
+    setSimulationState(prev => ({
+      ...prev,
       isRunning: false,
       isPaused: false,
       currentPartIndex: 0,
       currentContourIndex: 0,
       currentPointIndex: 0,
-      totalPoints: allPathPoints.length,
-      speed: 100,
       completedPaths: new Set(),
-    });
+    }));
   };
 
   const handleSimulationSpeedChange = (speed: number) => {
