@@ -143,13 +143,14 @@ export function LaserViewer({
     drawGrid(scene, program.workpiece.width, program.workpiece.height);
 
     // 파트 그리기
-    program.parts.forEach(part => {
+    program.parts.forEach((part, index) => {
       drawPart(scene, part, {
         showPiercing,
         showLeadIn,
         showApproach,
         showCutting,
         isSelected: part.id === selectedPartId,
+        partIndex: index + 1, // 1부터 시작하는 파트 번호
       });
     });
 
@@ -203,21 +204,28 @@ export function LaserViewer({
       showApproach: boolean;
       showCutting: boolean;
       isSelected: boolean;
+      partIndex: number;
     }
   ) => {
     const group = new THREE.Group();
     group.position.set(part.origin.x, part.origin.y, 0);
     group.rotation.z = (part.rotation * Math.PI) / 180;
 
-    // 원점 표시
-    const originGeometry = new THREE.CircleGeometry(2, 16);
+    // 원점 표시 (작은 빨간 점)
+    const originGeometry = new THREE.CircleGeometry(1.2, 16);
     const originMaterial = new THREE.MeshBasicMaterial({ color: new THREE.Color(Colors.partOrigin) });
     const originMarker = new THREE.Mesh(originGeometry, originMaterial);
+    originMarker.position.z = 0.6;
     group.add(originMarker);
 
+    // 파트 번호 표시 (텍스트 스프라이트)
+    const textSprite = createTextSprite(options.partIndex.toString(), Colors.partLabel, 12);
+    textSprite.position.set(5, 5, 0.7); // 원점 근처
+    group.add(textSprite);
+
     // 컨투어 그리기
-    part.contours.forEach(contour => {
-      drawContour(group, contour, options);
+    part.contours.forEach((contour, index) => {
+      drawContour(group, contour, options, index + 1);
     });
 
     scene.add(group);
@@ -234,15 +242,22 @@ export function LaserViewer({
       showLeadIn: boolean;
       showApproach: boolean;
       showCutting: boolean;
-    }
+    },
+    contourIndex: number
   ) => {
-    // 피어싱 위치 표시
+    // 피어싱 위치 표시 (작은 빨간 점)
     if (options.showPiercing && contour.piercingType > 0) {
-      const piercingGeometry = new THREE.CircleGeometry(1.5, 16);
+      const piercingGeometry = new THREE.CircleGeometry(0.8, 16);
       const piercingMaterial = new THREE.MeshBasicMaterial({ color: new THREE.Color(Colors.piercing) });
       const piercingMarker = new THREE.Mesh(piercingGeometry, piercingMaterial);
-      piercingMarker.position.set(contour.piercingPosition.x, contour.piercingPosition.y, 0.1);
+      piercingMarker.position.set(contour.piercingPosition.x, contour.piercingPosition.y, 0.5);
       group.add(piercingMarker);
+
+      // 컨투어 번호 표시 (피어싱 위치 근처)
+      const contourLabel = createTextSprite(contourIndex.toString(), Colors.contourLabel, 8);
+      contourLabel.position.set(contour.piercingPosition.x + 3, contour.piercingPosition.y + 3, 0.6);
+      contourLabel.scale.set(5, 2.5, 1); // 작게 표시
+      group.add(contourLabel);
     }
 
     // Lead-in 경로
@@ -314,6 +329,31 @@ export function LaserViewer({
     const geometry = new THREE.BufferGeometry().setFromPoints(points);
     const material = new THREE.LineBasicMaterial({ color: new THREE.Color(color), linewidth });
     return new THREE.Line(geometry, material);
+  };
+
+  /**
+   * 텍스트 스프라이트 생성 (Canvas를 텍스처로 사용)
+   */
+  const createTextSprite = (text: string, color: string, fontSize: number): THREE.Sprite => {
+    const canvas = document.createElement('canvas');
+    const context = canvas.getContext('2d')!;
+    canvas.width = 128;
+    canvas.height = 64;
+
+    // 텍스트 그리기
+    context.fillStyle = color;
+    context.font = `bold ${fontSize * 4}px Arial`;
+    context.textAlign = 'center';
+    context.textBaseline = 'middle';
+    context.fillText(text, 64, 32);
+
+    // 텍스처 생성
+    const texture = new THREE.CanvasTexture(canvas);
+    const material = new THREE.SpriteMaterial({ map: texture, transparent: true });
+    const sprite = new THREE.Sprite(material);
+    sprite.scale.set(8, 4, 1); // 적절한 크기로 조정
+
+    return sprite;
   };
 
   /**
