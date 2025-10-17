@@ -321,10 +321,11 @@ export function LaserViewer({
       group.add(boundingBoxLine);
     }
 
-    // 파트 번호 표시 (바운딩 박스 중앙) - 옵션이 활성화된 경우만
+    // 파트 번호 표시 (바운딩 박스 상단 중앙) - 옵션이 활성화된 경우만
     if (options.showPartLabels) {
       const textSprite = createTextSprite(options.partIndex.toString(), Colors.partLabel, 32);
-      textSprite.position.set(partWidth / 2, partHeight / 2, 0.7);
+      // 바운딩 박스 상단 중앙에 배치 (내부 컨투어와 겹치지 않도록)
+      textSprite.position.set(partWidth / 2, partHeight + 10, 1.0);
       textSprite.scale.set(16, 8, 1); // 더 큰 크기로 조정
       group.add(textSprite);
     }
@@ -370,20 +371,21 @@ export function LaserViewer({
       group.add(points);
     }
 
-    // 컨투어 번호 표시 (실제 경로의 중앙 상단) - 옵션이 활성화된 경우만
+    // 컨투어 번호 표시 (실제 경로의 중앙) - 옵션이 활성화된 경우만
     if (options.showContourLabels) {
       // 실제 경로 좌표로 바운딩 박스 계산
       const bbox = calculateActualBoundingBox(contour);
       const actualCenterX = (bbox.minX + bbox.maxX) / 2;
-      const actualTopY = bbox.maxY;
+      const actualCenterY = (bbox.minY + bbox.maxY) / 2;
       
-      const contourLabel = createTextSprite(contourIndex.toString(), Colors.contourLabel, 20);
-      contourLabel.position.set(actualCenterX, actualTopY + 5, 0.6);
-      contourLabel.scale.set(8, 4, 1); // 더 큰 크기로 조정
+      const contourLabel = createTextSprite(contourIndex.toString(), Colors.contourLabel, 24);
+      // 컨투어 중앙에 배치하고 Z 값을 높게 설정하여 항상 위에 표시
+      contourLabel.position.set(actualCenterX, actualCenterY, 2.0);
+      contourLabel.scale.set(6, 3, 1);
       group.add(contourLabel);
       
       // 디버깅: 컨투어 번호 로그
-      console.log(`컨투어 ${contourIndex}: 위치 (${actualCenterX.toFixed(2)}, ${actualTopY.toFixed(2)}), bbox:`, bbox);
+      console.log(`컨투어 ${contourIndex}: 위치 (${actualCenterX.toFixed(2)}, ${actualCenterY.toFixed(2)}), bbox:`, bbox);
     }
 
     // Lead-in 경로
@@ -467,9 +469,14 @@ export function LaserViewer({
     canvas.width = 512;
     canvas.height = 256;
 
-    // 반투명 배경 추가 (가독성 향상)
-    context.fillStyle = 'rgba(0, 0, 0, 0.5)';
+    // 진한 배경 추가 (가독성 향상)
+    context.fillStyle = 'rgba(0, 0, 0, 0.8)';
     context.fillRect(0, 0, canvas.width, canvas.height);
+
+    // 테두리 추가
+    context.strokeStyle = color;
+    context.lineWidth = 4;
+    context.strokeRect(2, 2, canvas.width - 4, canvas.height - 4);
 
     // 텍스트 그리기
     context.fillStyle = color;
@@ -489,6 +496,7 @@ export function LaserViewer({
     });
     const sprite = new THREE.Sprite(material);
     sprite.scale.set(8, 4, 1); // 기본 크기 (호출하는 곳에서 조정 가능)
+    sprite.renderOrder = 999; // 렌더링 순서를 가장 높게 설정
 
     return sprite;
   };
