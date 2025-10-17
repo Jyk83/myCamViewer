@@ -174,57 +174,72 @@ export function LaserViewer({
     let maxX = -Infinity;
     let maxY = -Infinity;
 
+    // 안전한 값 추가 헬퍼 함수
+    const addPoint = (x: number | undefined, y: number | undefined) => {
+      if (x !== undefined && y !== undefined && !isNaN(x) && !isNaN(y)) {
+        minX = Math.min(minX, x);
+        minY = Math.min(minY, y);
+        maxX = Math.max(maxX, x);
+        maxY = Math.max(maxY, y);
+      }
+    };
+
     // 피어싱 위치 포함
-    minX = Math.min(minX, contour.piercingPosition.x);
-    minY = Math.min(minY, contour.piercingPosition.y);
-    maxX = Math.max(maxX, contour.piercingPosition.x);
-    maxY = Math.max(maxY, contour.piercingPosition.y);
+    if (contour.piercingPosition) {
+      addPoint(contour.piercingPosition.x, contour.piercingPosition.y);
+    }
 
     // Lead-in 경로 좌표 수집
-    if (contour.leadIn) {
+    if (contour.leadIn && contour.leadIn.path) {
       contour.leadIn.path.forEach(segment => {
-        minX = Math.min(minX, segment.start.x, segment.end.x);
-        minY = Math.min(minY, segment.start.y, segment.end.y);
-        maxX = Math.max(maxX, segment.start.x, segment.end.x);
-        maxY = Math.max(maxY, segment.start.y, segment.end.y);
+        if (segment.start) addPoint(segment.start.x, segment.start.y);
+        if (segment.end) addPoint(segment.end.x, segment.end.y);
       });
     }
 
     // Approach 경로 좌표 수집
-    contour.approachPath.forEach(segment => {
-      minX = Math.min(minX, segment.start.x, segment.end.x);
-      minY = Math.min(minY, segment.start.y, segment.end.y);
-      maxX = Math.max(maxX, segment.start.x, segment.end.x);
-      maxY = Math.max(maxY, segment.start.y, segment.end.y);
-    });
+    if (contour.approachPath) {
+      contour.approachPath.forEach(segment => {
+        if (segment.start) addPoint(segment.start.x, segment.start.y);
+        if (segment.end) addPoint(segment.end.x, segment.end.y);
+      });
+    }
 
     // Cutting 경로 좌표 수집
-    contour.cuttingPath.forEach(segment => {
-      minX = Math.min(minX, segment.start.x, segment.end.x);
-      minY = Math.min(minY, segment.start.y, segment.end.y);
-      maxX = Math.max(maxX, segment.start.x, segment.end.x);
-      maxY = Math.max(maxY, segment.start.y, segment.end.y);
+    if (contour.cuttingPath) {
+      contour.cuttingPath.forEach(segment => {
+        if (segment.start) addPoint(segment.start.x, segment.start.y);
+        if (segment.end) addPoint(segment.end.x, segment.end.y);
 
-      // 원호인 경우 중심점과 반지름 고려
-      if (segment.type === 'arc') {
-        const centerX = segment.start.x + segment.i;
-        const centerY = segment.start.y + segment.j;
-        const radius = Math.sqrt(segment.i * segment.i + segment.j * segment.j);
-        
-        minX = Math.min(minX, centerX - radius);
-        minY = Math.min(minY, centerY - radius);
-        maxX = Math.max(maxX, centerX + radius);
-        maxY = Math.max(maxY, centerY + radius);
-      }
-    });
+        // 원호인 경우 중심점과 반지름 고려
+        if (segment.type === 'arc' && segment.start) {
+          const arcSegment = segment as any;
+          if (arcSegment.i !== undefined && arcSegment.j !== undefined) {
+            const centerX = segment.start.x + arcSegment.i;
+            const centerY = segment.start.y + arcSegment.j;
+            const radius = Math.sqrt(arcSegment.i * arcSegment.i + arcSegment.j * arcSegment.j);
+            
+            if (!isNaN(centerX) && !isNaN(centerY) && !isNaN(radius)) {
+              addPoint(centerX - radius, centerY - radius);
+              addPoint(centerX + radius, centerY + radius);
+            }
+          }
+        }
+      });
+    }
 
-    // 바운딩 박스가 없는 경우 (모든 좌표가 동일한 경우) 기본값 사용
-    if (minX === Infinity || maxX === -Infinity) {
+    // 바운딩 박스가 계산되지 않은 경우 HKSTR의 boundingBox 사용
+    if (minX === Infinity || maxX === -Infinity || isNaN(minX) || isNaN(maxX)) {
+      const fallbackX = contour.piercingPosition?.x || 0;
+      const fallbackY = contour.piercingPosition?.y || 0;
+      const width = contour.boundingBox?.width || 10;
+      const height = contour.boundingBox?.height || 10;
+      
       return {
-        minX: contour.piercingPosition.x,
-        minY: contour.piercingPosition.y,
-        maxX: contour.piercingPosition.x + contour.boundingBox.width,
-        maxY: contour.piercingPosition.y + contour.boundingBox.height,
+        minX: fallbackX,
+        minY: fallbackY,
+        maxX: fallbackX + width,
+        maxY: fallbackY + height,
       };
     }
 
@@ -377,13 +392,25 @@ export function LaserViewer({
       const actualCenterX = (bbox.minX + bbox.maxX) / 2;
       const actualTopY = bbox.maxY;
       
-      const contourLabel = createTextSprite(contourIndex.toString(), Colors.contourLabel, 12);
-      contourLabel.position.set(actualCenterX, actualTopY + 3, 0.8);
-      contourLabel.scale.set(5, 2.5, 1);
-      group.add(contourLabel);
+      // 디버깅: 컨투어 번호 및 경로 정보 로그
+      console.log(`컨투어 ${contourIndex}:`, {
+        위치: `(${actualCenterX.toFixed(2)}, ${actualTopY.toFixed(2)})`,
+        bbox,
+        piercingPos: contour.piercingPosition,
+        leadInCount: contour.leadIn?.path?.length || 0,
+        approachCount: contour.approachPath?.length || 0,
+        cuttingCount: contour.cuttingPath?.length || 0,
+      });
       
-      // 디버깅: 컨투어 번호 로그
-      console.log(`컨투어 ${contourIndex}: 위치 (${actualCenterX.toFixed(2)}, ${actualTopY.toFixed(2)}), bbox:`, bbox);
+      // 유효한 좌표인 경우에만 라벨 생성
+      if (!isNaN(actualCenterX) && !isNaN(actualTopY)) {
+        const contourLabel = createTextSprite(contourIndex.toString(), Colors.contourLabel, 12);
+        contourLabel.position.set(actualCenterX, actualTopY + 3, 0.8);
+        contourLabel.scale.set(5, 2.5, 1);
+        group.add(contourLabel);
+      } else {
+        console.warn(`컨투어 ${contourIndex}: 유효하지 않은 좌표 - 라벨 생성 스킵`);
+      }
     }
 
     // Lead-in 경로
