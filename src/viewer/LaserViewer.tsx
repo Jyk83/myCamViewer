@@ -33,7 +33,7 @@ export function LaserViewer({
   showCutting = true,
   showPartLabels = true,
   showContourLabels = true,
-  contourLabelSize = 18,
+  contourLabelSize = 24,
   viewMode = '2D',
 }: LaserViewerProps) {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -357,10 +357,10 @@ export function LaserViewer({
 
     // 파트 번호 표시 (바운딩 박스 중앙) - 옵션이 활성화된 경우만
     if (options.showPartLabels) {
-      const textSprite = createTextSprite(options.partIndex.toString(), Colors.partLabel, 20);
+      const textSprite = createTextSprite(options.partIndex.toString(), Colors.partLabel, 30); // 20 * 1.5 = 30
       textSprite.position.set(partWidth / 2, partHeight / 2, 0.7);
       // 스프라이트 크기는 월드 좌표로 설정 (줌에 따라 자동 조정됨)
-      textSprite.scale.set(10, 5, 1);
+      textSprite.scale.set(15, 7.5, 1); // 10 * 1.5 = 15, 5 * 1.5 = 7.5
       group.add(textSprite);
     }
 
@@ -406,29 +406,63 @@ export function LaserViewer({
       group.add(points);
     }
 
-    // 컨투어 번호 표시 (컨투어 상단 중앙) - 옵션이 활성화된 경우만
-    if (options.showContourLabels) {
-      // HKOST 원점 기준 바운딩 박스 계산
-      const bbox = calculateActualBoundingBox(contour);
-      const centerX = (bbox.minX + bbox.maxX) / 2;
-      const topY = bbox.maxY;
-      
-      // 디버깅: 컨투어 번호 및 경로 정보 로그
-      console.log(`컨투어 ${contourIndex}:`, {
-        위치: `(${centerX.toFixed(2)}, ${topY.toFixed(2)})`,
-        bbox,
-        piercingPos: contour.piercingPosition,
-        endPos: contour.endPosition,
-        leadInCount: contour.leadIn?.path?.length || 0,
-        approachCount: contour.approachPath?.length || 0,
-        cuttingCount: contour.cuttingPath?.length || 0,
+    // 바운딩 박스 계산 (항상 수행)
+    const bbox = calculateActualBoundingBox(contour);
+    const centerX = (bbox.minX + bbox.maxX) / 2;
+    const topY = bbox.maxY;
+    const bboxWidth = bbox.maxX - bbox.minX;
+    const bboxHeight = bbox.maxY - bbox.minY;
+    
+    // 디버깅: 컨투어 번호 및 경로 정보 로그
+    console.log(`컨투어 ${contourIndex}:`, {
+      위치: `(${centerX.toFixed(2)}, ${topY.toFixed(2)})`,
+      크기: `${bboxWidth.toFixed(2)} x ${bboxHeight.toFixed(2)}`,
+      bbox,
+      piercingPos: contour.piercingPosition,
+      endPos: contour.endPosition,
+      leadInCount: contour.leadIn?.path?.length || 0,
+      approachCount: contour.approachPath?.length || 0,
+      cuttingCount: contour.cuttingPath?.length || 0,
+    });
+    
+    // 컨투어 6번만 바운딩 박스 표시 (노란색 점선)
+    if (contourIndex === 6) {
+      const points = [
+        new THREE.Vector3(bbox.minX, bbox.minY, 0.6),
+        new THREE.Vector3(bbox.maxX, bbox.minY, 0.6),
+        new THREE.Vector3(bbox.maxX, bbox.maxY, 0.6),
+        new THREE.Vector3(bbox.minX, bbox.maxY, 0.6),
+        new THREE.Vector3(bbox.minX, bbox.minY, 0.6),
+      ];
+      const geometry = new THREE.BufferGeometry().setFromPoints(points);
+      const material = new THREE.LineDashedMaterial({
+        color: new THREE.Color(Colors.partLabel), // 노란색
+        linewidth: 2,
+        dashSize: 3,
+        gapSize: 2,
       });
+      const boundingBoxLine = new THREE.Line(geometry, material);
+      boundingBoxLine.computeLineDistances();
+      group.add(boundingBoxLine);
       
+      // 전역 변수에 컨투어 6번 정보 저장
+      // @ts-ignore
+      window.contour6Info = {
+        width: bboxWidth,
+        height: bboxHeight,
+        bbox: bbox,
+        centerX: centerX,
+        topY: topY,
+      };
+    }
+    
+    // 컨투어 번호 표시 - 옵션이 활성화된 경우만
+    if (options.showContourLabels) {
       // 유효한 좌표인 경우에만 라벨 생성
       if (!isNaN(centerX) && !isNaN(topY)) {
         const contourLabel = createTextSprite(contourIndex.toString(), Colors.contourLabel, options.contourLabelSize);
-        // 컨투어 상단 중앙에 마진 2 추가
-        contourLabel.position.set(centerX, topY + 2, 0.8);
+        // 컨투어 상단 중앙에 마진 1 추가
+        contourLabel.position.set(centerX, topY + 1, 0.8);
         // 크기를 폰트 사이즈에 비례하여 조정
         const scale = options.contourLabelSize / 3;
         contourLabel.scale.set(scale, scale / 2, 1);
