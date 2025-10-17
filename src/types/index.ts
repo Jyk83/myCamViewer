@@ -58,12 +58,12 @@ export interface HKCUTCommand {
 
 export interface HKSTOCommand {
   type: 'HKSTO';
-  gCode: number;
-  x: number;
-  y: number;
-  i: number;
-  j: number;
-  webOnOff: number;
+  gCode: number;      // 0: 추가 구획 없음, 1: G1 직선, 2: G2 시계방향 원호, 3: G3 반시계방향 원호
+  x: number;          // 리드인 종점의 X좌표
+  y: number;          // 리드인 종점의 Y좌표
+  i: number;          // 리드인 종점의 I좌표 (원호 중심의 X 오프셋)
+  j: number;          // 리드인 종점의 J좌표 (원호 중심의 Y 오프셋)
+  webOnOff: number;   // 0: CAM에서 마이크로 웹을 사용하지 않음, 1: CAM에서 마이크로 웹을 사용한 경우
 }
 
 export interface HKPEDCommand {

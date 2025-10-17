@@ -515,12 +515,16 @@ export class MPFParser {
         currentContour.endGCode = hksto.gCode;
         currentContour.endPosition = { x: hksto.x, y: hksto.y };
 
-        this.log(`    HKSTO: ${currentContour.cuttingPath!.length}개 세그먼트`);
+        this.log(`    HKSTO: gCode=${hksto.gCode}, ${currentContour.cuttingPath!.length}개 기존 세그먼트`);
 
         // 마지막 세그먼트 추가 (HKSTO에 좌표가 있는 경우)
-        // 조건: gCode가 있고, 현재 위치와 다른 경우 (x OR y가 다르면 추가)
+        // gCode: 0=추가구획없음, 1=직선, 2=시계방향원호, 3=반시계방향원호
         if (hksto.gCode > 0 && (hksto.x !== currentPosition.x || hksto.y !== currentPosition.y)) {
-          this.log(`    마지막 세그먼트 추가: G${hksto.gCode} (${currentPosition.x},${currentPosition.y}) → (${hksto.x},${hksto.y})`);
+          const segmentType = hksto.gCode === 1 ? '직선' : hksto.gCode === 2 ? 'G2원호' : 'G3원호';
+          this.log(`    마지막 세그먼트 추가: ${segmentType} (${currentPosition.x.toFixed(3)},${currentPosition.y.toFixed(3)}) → (${hksto.x.toFixed(3)},${hksto.y.toFixed(3)})`);
+          if (hksto.gCode >= 2) {
+            this.log(`      원호 파라미터: I=${hksto.i}, J=${hksto.j}`);
+          }
           const segment = this.createSegment(
             hksto.gCode,
             currentPosition,
@@ -531,7 +535,12 @@ export class MPFParser {
           if (segment) {
             currentContour.cuttingPath!.push(segment);
             currentPosition = { x: hksto.x, y: hksto.y };
+            this.log(`      세그먼트 추가 성공! 타입: ${segment.type}`);
+          } else {
+            this.log(`      세그먼트 추가 실패!`);
           }
+        } else if (hksto.gCode === 0) {
+          this.log(`    HKSTO: 추가 구획 없음`);
         }
 
         // 전체 세그먼트 통합
