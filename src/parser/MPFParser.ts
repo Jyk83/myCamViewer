@@ -481,7 +481,7 @@ export class MPFParser {
             endPosition: { x: 0, y: 0 },
           };
           currentPosition = { x: hkscrc.x, y: hkscrc.y };
-          inCutting = false; // HKSCRC 시작 시점은 레이저 OFF
+          inCutting = true; // HKSCRC(0) 시작부터 레이저 ON
         }
         // HKSCRC(1) 형태: 레이저 OFF 시작
         else if (hkscrc.params === 1 && currentContour) {
