@@ -250,15 +250,34 @@ export function LaserViewer({
   /**
    * 시뮬레이션 경로 그리기 (1mm 단위로 빨간색 경로)
    * 레이저 ON 구간만 그림 (laserOn === true)
+   * 컨투어가 바뀌면 선 끊기
    */
   const drawSimulationPath = (scene: THREE.Scene, pathPoints: PathPoint[], currentIndex: number) => {
     if (currentIndex < 0 || pathPoints.length === 0) return;
 
     // 레이저 ON 구간만 수집하여 연속된 세그먼트로 그리기
     let segmentPoints: THREE.Vector3[] = [];
+    let lastPartIndex = pathPoints[0]?.partIndex;
+    let lastContourIndex = pathPoints[0]?.contourIndex;
     
     for (let i = 0; i <= currentIndex && i < pathPoints.length; i++) {
       const point = pathPoints[i];
+      
+      // 컨투어가 바뀌면 이전 세그먼트 그리고 새로 시작
+      if (point.partIndex !== lastPartIndex || point.contourIndex !== lastContourIndex) {
+        if (segmentPoints.length > 1) {
+          const geometry = new THREE.BufferGeometry().setFromPoints(segmentPoints);
+          const material = new THREE.LineBasicMaterial({ 
+            color: new THREE.Color(Colors.simulated), 
+            linewidth: 4 
+          });
+          const line = new THREE.Line(geometry, material);
+          scene.add(line);
+        }
+        segmentPoints = [];
+        lastPartIndex = point.partIndex;
+        lastContourIndex = point.contourIndex;
+      }
       
       if (point.laserOn) {
         // 레이저 ON: 포인트 추가
