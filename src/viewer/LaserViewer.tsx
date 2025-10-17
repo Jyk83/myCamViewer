@@ -81,13 +81,69 @@ export function LaserViewer({
     const controls = new OrbitControls(camera, renderer.domElement);
     controls.enableRotate = viewMode === '3D';
     controls.enablePan = true;
-    controls.enableZoom = true;
+    controls.enableZoom = false; // 기본 줌 비활성화 (커스텀 핸들러 사용)
     controls.mouseButtons = {
       LEFT: THREE.MOUSE.PAN,
       MIDDLE: THREE.MOUSE.DOLLY,
       RIGHT: THREE.MOUSE.ROTATE,
     };
     controlsRef.current = controls;
+
+    // 마우스 위치 기준 줌 구현
+    const handleWheel = (event: WheelEvent) => {
+      event.preventDefault();
+
+      // 줌 속도 조정
+      const zoomSpeed = 0.1;
+      const delta = event.deltaY > 0 ? 1 + zoomSpeed : 1 - zoomSpeed;
+
+      // 마우스 위치를 정규화된 디바이스 좌표로 변환 (-1 to +1)
+      const rect = renderer.domElement.getBoundingClientRect();
+      const mouseX = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+      const mouseY = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+
+      // 마우스 위치의 월드 좌표 계산 (줌 전)
+      const vector = new THREE.Vector3(mouseX, mouseY, 0.5);
+      vector.unproject(camera);
+
+      // 카메라에서 마우스 위치로의 방향
+      const dir = vector.sub(camera.position).normalize();
+      const distance = (camera.position.z - 0) / dir.z;
+      const worldPos = camera.position.clone().add(dir.multiplyScalar(distance));
+
+      // 카메라 줌 조정 (Orthographic)
+      const newTop = camera.top * delta;
+      const newBottom = camera.bottom * delta;
+      const newLeft = camera.left * delta;
+      const newRight = camera.right * delta;
+
+      // 줌 제한 (너무 가깝거나 멀리 가지 않도록)
+      const maxZoom = 2000; // 최대 줌 아웃
+      const minZoom = 10; // 최대 줌 인
+      if (Math.abs(newTop) > minZoom && Math.abs(newTop) < maxZoom) {
+        // 줌 전후의 마우스 월드 좌표 차이 계산
+        const beforeZoomX = (mouseX * (camera.right - camera.left)) / 2;
+        const beforeZoomY = (mouseY * (camera.top - camera.bottom)) / 2;
+        const afterZoomX = (mouseX * (newRight - newLeft)) / 2;
+        const afterZoomY = (mouseY * (newTop - newBottom)) / 2;
+
+        // 타겟 이동 (마우스 위치가 고정되도록)
+        const offsetX = beforeZoomX - afterZoomX;
+        const offsetY = beforeZoomY - afterZoomY;
+        
+        controls.target.x += offsetX;
+        controls.target.y += offsetY;
+
+        // 카메라 프러스텀 업데이트
+        camera.top = newTop;
+        camera.bottom = newBottom;
+        camera.left = newLeft;
+        camera.right = newRight;
+        camera.updateProjectionMatrix();
+      }
+    };
+
+    renderer.domElement.addEventListener('wheel', handleWheel, { passive: false });
 
     // 조명 추가
     const ambientLight = new THREE.AmbientLight(0xffffff, 0.8);
@@ -125,6 +181,7 @@ export function LaserViewer({
     // Cleanup
     return () => {
       window.removeEventListener('resize', handleResize);
+      renderer.domElement.removeEventListener('wheel', handleWheel);
       container.removeChild(renderer.domElement);
       renderer.dispose();
     };
