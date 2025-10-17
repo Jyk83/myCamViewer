@@ -89,7 +89,7 @@ export function LaserViewer({
     };
     controlsRef.current = controls;
 
-    // 마우스 위치 기준 줌 구현
+    // 마우스 위치 기준 2D 줌 구현 (Orthographic Camera)
     const handleWheel = (event: WheelEvent) => {
       event.preventDefault();
 
@@ -102,16 +102,14 @@ export function LaserViewer({
       const mouseX = ((event.clientX - rect.left) / rect.width) * 2 - 1;
       const mouseY = -((event.clientY - rect.top) / rect.height) * 2 + 1;
 
-      // 마우스 위치의 월드 좌표 계산 (줌 전)
-      const vector = new THREE.Vector3(mouseX, mouseY, 0.5);
-      vector.unproject(camera);
+      // 줌 전 마우스의 월드 좌표 계산 (2D Orthographic 방식)
+      // Orthographic에서는 카메라 frustum과 target을 사용하여 직접 계산
+      const oldWidth = camera.right - camera.left;
+      const oldHeight = camera.top - camera.bottom;
+      const mouseWorldX = controls.target.x + (mouseX * oldWidth) / 2;
+      const mouseWorldY = controls.target.y + (mouseY * oldHeight) / 2;
 
-      // 카메라에서 마우스 위치로의 방향
-      const dir = vector.sub(camera.position).normalize();
-      const distance = (camera.position.z - 0) / dir.z;
-      const worldPos = camera.position.clone().add(dir.multiplyScalar(distance));
-
-      // 카메라 줌 조정 (Orthographic)
+      // 새로운 frustum 크기 계산
       const newTop = camera.top * delta;
       const newBottom = camera.bottom * delta;
       const newLeft = camera.left * delta;
@@ -121,25 +119,23 @@ export function LaserViewer({
       const maxZoom = 2000; // 최대 줌 아웃
       const minZoom = 10; // 최대 줌 인
       if (Math.abs(newTop) > minZoom && Math.abs(newTop) < maxZoom) {
-        // 줌 전후의 마우스 월드 좌표 차이 계산
-        const beforeZoomX = (mouseX * (camera.right - camera.left)) / 2;
-        const beforeZoomY = (mouseY * (camera.top - camera.bottom)) / 2;
-        const afterZoomX = (mouseX * (newRight - newLeft)) / 2;
-        const afterZoomY = (mouseY * (newTop - newBottom)) / 2;
-
-        // 타겟 이동 (마우스 위치가 고정되도록)
-        const offsetX = beforeZoomX - afterZoomX;
-        const offsetY = beforeZoomY - afterZoomY;
-        
-        controls.target.x += offsetX;
-        controls.target.y += offsetY;
-
         // 카메라 프러스텀 업데이트
         camera.top = newTop;
         camera.bottom = newBottom;
         camera.left = newLeft;
         camera.right = newRight;
         camera.updateProjectionMatrix();
+
+        // 줌 후 동일한 마우스 위치의 월드 좌표 계산
+        const newWidth = camera.right - camera.left;
+        const newHeight = camera.top - camera.bottom;
+        const newMouseWorldX = controls.target.x + (mouseX * newWidth) / 2;
+        const newMouseWorldY = controls.target.y + (mouseY * newHeight) / 2;
+
+        // 마우스 위치가 고정되도록 타겟 조정
+        controls.target.x += mouseWorldX - newMouseWorldX;
+        controls.target.y += mouseWorldY - newMouseWorldY;
+        controls.update();
       }
     };
 
