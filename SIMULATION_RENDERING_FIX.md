@@ -23,29 +23,61 @@ Modified `drawSimulationPath()` in `LaserViewer.tsx` to distinguish between:
    - Color: Bright red `#ff3333` (more visible)
    - Line width: 6px (thicker)
    - Z-index: 0.6 (rendered on top)
+   - **Renders ALL points**: Complete shape appears instantly
 
 2. **Current In-Progress Contour**:
    - Color: Normal red `#ff0000` (darker)
    - Line width: 4px (standard)
    - Z-index: 0.5 (rendered below)
+   - **Renders up to currentIndex**: Progressive drawing
+
+### Critical Fix: Complete Shape Rendering
+
+**Problem**: Initial implementation still rendered completed contours point-by-point up to currentIndex, causing diagonal artifacts.
+
+**Solution**: Pre-group ALL pathPoints by contour, then:
+- **Completed contours**: Use `allPoints` (full array) → instant complete shape
+- **In-progress contour**: Use `allPoints.slice(0, offset)` → progressive
 
 ### Algorithm
 
 ```typescript
-// 1. Group path points by (partIndex, contourIndex)
-const contourGroups: ContourGroup[] = [];
+// 1. Pre-group ALL pathPoints by (partIndex, contourIndex)
+const contourMap = new Map<string, ContourGroup>();
+pathPoints.forEach((point, index) => {
+  const key = `${point.partIndex}-${point.contourIndex}`;
+  if (!contourMap.has(key)) {
+    contourMap.set(key, {
+      partIndex, contourIndex,
+      allPoints: [],  // Store ALL points for this contour
+      startIndex: index,
+      endIndex: index,
+    });
+  }
+  contourMap.get(key)!.allPoints.push(point);
+  contourMap.get(key)!.endIndex = index;
+});
 
-// 2. Mark all groups except the last one as completed
-for (let i = 0; i < contourGroups.length - 1; i++) {
-  contourGroups[i].isCompleted = true;
-}
-
-// 3. Render each group with appropriate styling
-contourGroups.forEach(group => {
-  const color = group.isCompleted ? '#ff3333' : '#ff0000';
-  const linewidth = group.isCompleted ? 6 : 4;
-  const zIndex = group.isCompleted ? 0.6 : 0.5;
-  // ... render with these properties
+// 2. Determine completion status
+sortedContours.forEach(contour => {
+  const isCompleted = currentIndex > contour.endIndex;
+  
+  // 3. Select points to render
+  let pointsToRender: PathPoint[];
+  if (isCompleted) {
+    pointsToRender = contour.allPoints;  // ✅ FULL shape
+  } else if (isCurrentContour) {
+    const offset = currentIndex - contour.startIndex;
+    pointsToRender = contour.allPoints.slice(0, offset + 1);  // Partial
+  } else {
+    return; // Not reached yet
+  }
+  
+  // 4. Render with appropriate styling
+  const color = isCompleted ? '#ff3333' : '#ff0000';
+  const linewidth = isCompleted ? 6 : 4;
+  const zIndex = isCompleted ? 0.6 : 0.5;
+  // ... render lines
 });
 ```
 
@@ -109,10 +141,10 @@ Potential improvements:
 3. Completion percentage overlay per part
 4. Animation trail effect for the laser head
 
-## Git Commit
+## Git Commits
 
+### Initial Fix (commit 4dbd526)
 ```
-commit 4dbd526
 fix: Display all completed contours in bright red during fast simulation
 
 - Problem: When stepSize is large (10-100mm), simulation moves so fast that 
@@ -123,6 +155,33 @@ fix: Display all completed contours in bright red during fast simulation
 - Group path points by (partIndex, contourIndex) to identify completion status
 - All contours before the last one are marked as completed
 - Ensures all cut parts remain visible throughout simulation
+```
+
+### Critical Fix (commit 6d0dda5)
+```
+fix: Render completed contours as complete shapes, not partial paths
+
+Problem:
+- Completed contours were rendered point-by-point up to currentIndex
+- This caused diagonal/incomplete shapes even for fully completed contours
+- Visual effect: "대각선으로 처리되는 부분이 문제"
+
+Solution:
+- Pre-group all pathPoints by (partIndex, contourIndex) with full point arrays
+- Completed contours (currentIndex > endIndex): Render ALL points → complete shape
+- Current in-progress contour: Render only up to currentIndex → partial progress
+- Not-yet-reached contours: Skip rendering
+
+Algorithm:
+1. Build contourMap with startIndex/endIndex for each contour
+2. Determine completion: isCompleted = currentIndex > contour.endIndex
+3. Completed: use contour.allPoints (full shape rendered at once)
+4. In-progress: use contour.allPoints.slice(0, offset+1) (partial)
+
+Result:
+- Completed contours appear instantly as complete shapes (like initial file load)
+- No more diagonal artifacts
+- Fast simulation shows clean, complete previous work
 ```
 
 ## References
