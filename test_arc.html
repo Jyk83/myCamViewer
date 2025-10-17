@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Arc Segment Test</title>
+</head>
+<body>
+  <h1>Arc Segment Test</h1>
+  <pre id="output"></pre>
+  
+  <script type="module">
+    // Test arc segmentation
+    function segmentArc(center, radius, startAngle, endAngle, clockwise, stepSize = 10) {
+      // 호장 길이 계산
+      let angleSpan = endAngle - startAngle;
+      if (clockwise) {
+        if (angleSpan > 0) angleSpan -= 2 * Math.PI;
+      } else {
+        if (angleSpan < 0) angleSpan += 2 * Math.PI;
+      }
+      const arcLength = Math.abs(angleSpan * radius);
+      
+      // 지정된 단위로 분할
+      const numSteps = Math.ceil(arcLength / stepSize);
+      const points = [];
+      
+      for (let i = 0; i <= numSteps; i++) {
+        const t = numSteps > 0 ? i / numSteps : 0;
+        const angle = startAngle + t * angleSpan;
+        points.push({
+          x: center.x + radius * Math.cos(angle),
+          y: center.y + radius * Math.sin(angle),
+        });
+      }
+      
+      return points;
+    }
+    
+    // Test with G3 X-1. Y420.27 I-1. J0. from start X0. Y419.27
+    const start = { x: 0, y: 419.27 };
+    const end = { x: -1, y: 420.27 };
+    const i = -1, j = 0;
+    const center = { x: start.x + i, y: start.y + j };
+    const radius = Math.sqrt(i * i + j * j);
+    const startAngle = Math.atan2(start.y - center.y, start.x - center.x);
+    const endAngle = Math.atan2(end.y - center.y, end.x - center.x);
+    const clockwise = false; // G3
+    
+    const points = segmentArc(center, radius, startAngle, endAngle, clockwise, 10);
+    
+    const output = document.getElementById('output');
+    output.textContent = `G3 Arc Test:
+Start: (${start.x}, ${start.y})
+End: (${end.x}, ${end.y})
+I=${i}, J=${j}
+Center: (${center.x}, ${center.y})
+Radius: ${radius.toFixed(3)}
+Start Angle: ${(startAngle * 180 / Math.PI).toFixed(2)}°
+End Angle: ${(endAngle * 180 / Math.PI).toFixed(2)}°
+Arc Length: ${Math.abs((endAngle - startAngle) * radius).toFixed(3)}mm
+Number of points: ${points.length}
+
+Points:
+${points.map((p, i) => `  ${i}: (${p.x.toFixed(3)}, ${p.y.toFixed(3)})`).join('\n')}
+`;
+  </script>
+</body>
+</html>

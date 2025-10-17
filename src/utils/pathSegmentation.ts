@@ -83,6 +83,16 @@ export function segmentArc(
   const numSteps = Math.ceil(arcLength / stepSize);
   const points: PathPoint[] = [];
 
+  // 디버그 로그 (처음 3개 원호만)
+  if (segmentIndex < 3) {
+    console.log(`🔵 원호 세그먼트 분할: Part${partIndex} Cont${contourIndex} Seg${segmentIndex}`);
+    console.log(`  중심: (${center.x.toFixed(2)}, ${center.y.toFixed(2)}), 반지름: ${radius.toFixed(2)}`);
+    console.log(`  각도: ${(startAngle * 180 / Math.PI).toFixed(1)}° → ${(endAngle * 180 / Math.PI).toFixed(1)}°`);
+    console.log(`  방향: ${clockwise ? '시계(G2)' : '반시계(G3)'}`);
+    console.log(`  호장 길이: ${arcLength.toFixed(2)}mm, 분할: ${numSteps+1}개 포인트`);
+    console.log(`  레이저: ${laserOn ? 'ON' : 'OFF'}, 경로타입: ${pathType}`);
+  }
+
   for (let i = 0; i <= numSteps; i++) {
     const t = numSteps > 0 ? i / numSteps : 0;
     const angle = startAngle + t * angleSpan;
