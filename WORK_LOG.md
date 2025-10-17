@@ -171,7 +171,7 @@ const material = new THREE.MeshBasicMaterial({
 ```
 src/
 ├── types/index.ts          # 타입 정의 (MPFProgram, Part, Contour, Segment 등)
-├── parser/MPFParser.ts     # G-code 파싱 (G1/G2/G3 명령어)
+├── parser/MPFParser.ts     # G-code 파싱 (G0/G1/G2/G3 명령어)
 ├── viewer/LaserViewer.tsx  # Three.js 시각화 컴포넌트
 ├── components/
 │   ├── ViewControls.tsx    # 뷰어 옵션 UI
@@ -188,6 +188,9 @@ src/
 ### 파일 파싱
 - ✅ MPF 파일 로드 및 파싱
 - ✅ G-code 명령어 해석 (G0/G1/G2/G3)
+  - G0: 급속 이동 (레이저 OFF, 직선 이동)
+  - G1: 직선 보간 (레이저 ON, 직선 절단)
+  - G2/G3: 원호 보간 (레이저 ON)
 - ✅ 원호 중심점 계산 (I/J 오프셋)
 - ✅ 바운딩 박스 계산
 
@@ -410,11 +413,14 @@ chore: 빌드, 설정 파일 수정
 - [Sprite](https://threejs.org/docs/#api/en/objects/Sprite)
 
 ### G-code 참고
-- G0: 급속 이동
-- G1: 직선 보간
-- G2: 시계방향 원호 보간
-- G3: 반시계방향 원호 보간
-- I/J: 원호 중심점 오프셋 (상대 좌표)
+- **G0**: 급속 이동 (레이저 OFF, 직선 이동) - 빠른 위치 이동용
+- **G1**: 직선 보간 (레이저 ON, 직선 절단) - 실제 절단 수행
+- **G2**: 시계방향 원호 보간 (레이저 ON)
+- **G3**: 반시계방향 원호 보간 (레이저 ON)
+- **I/J**: 원호 중심점 오프셋 (상대 좌표)
+
+**중요**: G0와 G1 모두 직선 이동이지만, G0는 레이저를 끄고 이동만 하는 반면,
+G1은 레이저를 켜고 실제 절단을 수행합니다.
 
 ---
 
