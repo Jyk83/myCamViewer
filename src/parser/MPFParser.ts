@@ -611,6 +611,8 @@ export class MPFParser {
         clockwise: gCode === 2,
         startAngle,
         endAngle,
+        i, // X축 오프셋 추가
+        j, // Y축 오프셋 추가
       };
     }
 

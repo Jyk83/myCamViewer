@@ -215,21 +215,18 @@ export function LaserViewer({
         if (segment.end) addPoint(segment.end.x, segment.end.y);
 
         // 원호인 경우 정확한 바운딩 박스 계산
-        if (segment.type === 'arc' && segment.start && segment.end) {
-          const arcSegment = segment as any;
-          if (arcSegment.i !== undefined && arcSegment.j !== undefined) {
-            // 중심점 계산
-            const centerX = segment.start.x + arcSegment.i;
-            const centerY = segment.start.y + arcSegment.j;
-            const radius = Math.sqrt(arcSegment.i * arcSegment.i + arcSegment.j * arcSegment.j);
-            
-            if (!isNaN(centerX) && !isNaN(centerY) && !isNaN(radius)) {
-              // 원의 바운딩 박스 = 중심점 ± 반지름
-              addPoint(centerX - radius, centerY - radius);
-              addPoint(centerX + radius, centerY - radius);
-              addPoint(centerX - radius, centerY + radius);
-              addPoint(centerX + radius, centerY + radius);
-            }
+        if (segment.type === 'arc') {
+          // 이미 파싱된 center와 radius 사용
+          const centerX = segment.center.x;
+          const centerY = segment.center.y;
+          const radius = segment.radius;
+          
+          if (!isNaN(centerX) && !isNaN(centerY) && !isNaN(radius)) {
+            // 원의 바운딩 박스 = 중심점 ± 반지름
+            addPoint(centerX - radius, centerY - radius);
+            addPoint(centerX + radius, centerY - radius);
+            addPoint(centerX - radius, centerY + radius);
+            addPoint(centerX + radius, centerY + radius);
           }
         }
       });
@@ -424,20 +421,22 @@ export function LaserViewer({
       console.log('=== 컨투어 6번 상세 분석 ===');
       console.log('Cutting Path Segments:', contour.cuttingPath?.length || 0);
       contour.cuttingPath?.forEach((seg, idx) => {
-        console.log(`  Segment ${idx}:`, {
-          type: seg.type,
-          start: seg.start,
-          end: seg.end,
-          ...(seg.type === 'arc' && {
-            i: (seg as any).i,
-            j: (seg as any).j,
-            center: seg.type === 'arc' ? {
-              x: seg.start.x + (seg as any).i,
-              y: seg.start.y + (seg as any).j,
-            } : null,
-            radius: seg.type === 'arc' ? Math.sqrt((seg as any).i ** 2 + (seg as any).j ** 2) : null,
-          })
-        });
+        if (seg.type === 'arc') {
+          console.log(`  Segment ${idx} (arc):`, {
+            start: seg.start,
+            end: seg.end,
+            center: seg.center,
+            radius: seg.radius,
+            i: seg.i,
+            j: seg.j,
+            clockwise: seg.clockwise,
+          });
+        } else {
+          console.log(`  Segment ${idx} (line):`, {
+            start: seg.start,
+            end: seg.end,
+          });
+        }
       });
     }
     

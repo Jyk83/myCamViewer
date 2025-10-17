@@ -147,6 +147,8 @@ export interface ArcSegment {
   clockwise: boolean; // G2: true (CW), G3: false (CCW)
   startAngle: number;
   endAngle: number;
+  i: number; // X축 오프셋 (중심점까지의 X 거리)
+  j: number; // Y축 오프셋 (중심점까지의 Y 거리)
 }
 
 export type PathSegment = LineSegment | ArcSegment;
