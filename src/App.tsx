@@ -47,7 +47,7 @@ function App() {
     currentPointIndex: 0,
     totalPoints: 0,
     speed: 100,
-    stepSize: 4, // 기본 4mm 단위
+    stepSize: 10, // 기본 10mm 단위
     completedPaths: new Set(),
   });
 
@@ -158,8 +158,8 @@ function App() {
   };
 
   const handleSimulationStepSizeChange = (stepSize: number) => {
-    // 유효한 범위로 제한 (0.5mm ~ 10mm)
-    const clampedStepSize = Math.max(0.5, Math.min(10, stepSize));
+    // 유효한 범위로 제한 (0.5mm ~ 100mm)
+    const clampedStepSize = Math.max(0.5, Math.min(100, stepSize));
     
     setSimulationState(prev => ({
       ...prev,

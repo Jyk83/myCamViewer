@@ -1,6 +1,6 @@
 /**
  * Path Segmentation Utilities
- * 경로 세그먼트 분할 유틸리티 (기본 4mm 단위)
+ * 경로 세그먼트 분할 유틸리티 (기본 10mm 단위)
  */
 
 import type { PathSegment, PathPoint, Point2D } from '../types';
@@ -8,11 +8,11 @@ import type { PathSegment, PathPoint, Point2D } from '../types';
 /**
  * 기본 분할 단위 (mm)
  */
-export const DEFAULT_STEP_SIZE = 4;
+export const DEFAULT_STEP_SIZE = 10;
 
 /**
  * 직선 세그먼트를 지정된 단위로 분할
- * @param stepSize 분할 단위 (mm), 기본값 4mm
+ * @param stepSize 분할 단위 (mm), 기본값 10mm
  */
 export function segmentLine(
   segment: PathSegment,
@@ -55,7 +55,7 @@ export function segmentLine(
 
 /**
  * 원호 세그먼트를 지정된 단위로 분할
- * @param stepSize 분할 단위 (mm), 기본값 4mm
+ * @param stepSize 분할 단위 (mm), 기본값 10mm
  */
 export function segmentArc(
   segment: PathSegment,
@@ -105,7 +105,7 @@ export function segmentArc(
 
 /**
  * 세그먼트를 지정된 단위로 분할 (자동 타입 감지)
- * @param stepSize 분할 단위 (mm), 기본값 4mm
+ * @param stepSize 분할 단위 (mm), 기본값 10mm
  */
 export function segmentPath(
   segment: PathSegment,
@@ -127,7 +127,7 @@ export function segmentPath(
 /**
  * 여러 세그먼트를 순차적으로 지정된 단위로 분할
  * pathType, laserOn, stepSize를 인자로 받는 버전
- * @param stepSize 분할 단위 (mm), 기본값 4mm
+ * @param stepSize 분할 단위 (mm), 기본값 10mm
  */
 export function segmentPathArray(
   segments: PathSegment[],

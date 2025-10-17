@@ -184,8 +184,8 @@ export function SimulationControls({
           <input
             type="number"
             min="1"
-            max="10"
-            step="0.5"
+            max="100"
+            step="1"
             value={stepSize}
             onChange={(e) => onStepSizeChange(Number(e.target.value))}
             disabled={isRunning || isPaused}
@@ -199,7 +199,7 @@ export function SimulationControls({
             }}
           />
           <span style={{ fontSize: '12px', color: '#999' }}>
-            ℹ️ 경로를 재생성하므로 정지 상태에서만 변경 가능
+            ℹ️ 경로를 재생성하므로 정지 상태에서만 변경 가능 (1~100mm)
           </span>
         </label>
       </div>
