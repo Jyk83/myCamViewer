@@ -30,13 +30,13 @@ export interface HKOSTCommand {
 
 export interface HKSTRCommand {
   type: 'HKSTR';
-  piercingType: number;
-  cuttingType: number;
-  x: number;
-  y: number;
-  toolCompensation: number;
-  contourWidth: number;
-  contourHeight: number;
+  piercingType: number;       // 0: 피어싱 없음 (내부 컨투어 등), 1: 일반 피어싱
+  cuttingType: number;        // 1: 일반 절단, 2: 펄스 절단, 10: 마킹(각인), 11: 반복 절단
+  x: number;                  // 컨투어 시작 X좌표 (피어싱 위치)
+  y: number;                  // 컨투어 시작 Y좌표 (피어싱 위치)
+  toolCompensation: number;   // 공구 보정 (0: 없음, 7: 왼쪽, 8: 오른쪽)
+  contourWidth: number;       // 컨투어 바운딩 박스 폭
+  contourHeight: number;      // 컨투어 바운딩 박스 높이
 }
 
 export interface HKPIECommand {

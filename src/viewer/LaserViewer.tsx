@@ -247,18 +247,19 @@ export function LaserViewer({
   ) => {
     // 피어싱 위치 표시 (작은 빨간 점)
     if (options.showPiercing && contour.piercingType > 0) {
-      const piercingGeometry = new THREE.CircleGeometry(0.8, 16);
+      const piercingGeometry = new THREE.CircleGeometry(1.0, 16);
       const piercingMaterial = new THREE.MeshBasicMaterial({ color: new THREE.Color(Colors.piercing) });
       const piercingMarker = new THREE.Mesh(piercingGeometry, piercingMaterial);
       piercingMarker.position.set(contour.piercingPosition.x, contour.piercingPosition.y, 0.5);
       group.add(piercingMarker);
-
-      // 컨투어 번호 표시 (피어싱 위치 근처)
-      const contourLabel = createTextSprite(contourIndex.toString(), Colors.contourLabel, 8);
-      contourLabel.position.set(contour.piercingPosition.x + 3, contour.piercingPosition.y + 3, 0.6);
-      contourLabel.scale.set(5, 2.5, 1); // 작게 표시
-      group.add(contourLabel);
     }
+
+    // 컨투어 번호 표시 (HKSTR 위치 근처)
+    // 피어싱이 있든 없든 항상 표시
+    const contourLabel = createTextSprite(contourIndex.toString(), Colors.contourLabel, 8);
+    contourLabel.position.set(contour.piercingPosition.x + 3, contour.piercingPosition.y + 3, 0.6);
+    contourLabel.scale.set(5, 2.5, 1);
+    group.add(contourLabel);
 
     // Lead-in 경로
     if (options.showLeadIn && contour.leadIn) {
