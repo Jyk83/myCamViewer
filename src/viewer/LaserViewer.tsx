@@ -305,6 +305,14 @@ export function LaserViewer({
         currentPoint.partIndex === contour.partIndex && 
         currentPoint.contourIndex === contour.contourIndex;
 
+      // 디버깅 로그 (첫 10개 컨투어만)
+      if (contourIdx < 10) {
+        console.log(`컨투어 [Part${contour.partIndex} Cont${contour.contourIndex}]: ` +
+                    `startIdx=${contour.startIndex}, endIdx=${contour.endIndex}, ` +
+                    `currentIdx=${currentIndex}, isCompleted=${isCompleted}, ` +
+                    `isCurrent=${isCurrentContour}, totalPoints=${contour.allPoints.length}`);
+      }
+
       // 완료된 컨투어: 전체 포인트 사용
       // 현재 진행 중 컨투어: currentIndex까지만 사용
       let pointsToRender: PathPoint[] = [];
@@ -312,12 +320,21 @@ export function LaserViewer({
       if (isCompleted) {
         // 완료된 컨투어: 전체를 그림 (완전한 형상)
         pointsToRender = contour.allPoints;
+        if (contourIdx < 10) {
+          console.log(`  → 완료됨: ${pointsToRender.length}개 포인트 렌더링 (전체)`);
+        }
       } else if (isCurrentContour) {
         // 현재 진행 중 컨투어: currentIndex까지만 그림
         const currentContourOffset = currentIndex - contour.startIndex;
         pointsToRender = contour.allPoints.slice(0, currentContourOffset + 1);
+        if (contourIdx < 10) {
+          console.log(`  → 진행중: ${pointsToRender.length}개 포인트 렌더링 (부분, offset=${currentContourOffset})`);
+        }
       } else {
         // 아직 도달하지 않은 컨투어: 그리지 않음
+        if (contourIdx < 10) {
+          console.log(`  → 스킵: 아직 도달 안함`);
+        }
         return;
       }
 
@@ -335,7 +352,7 @@ export function LaserViewer({
           segmentPoints.push(new THREE.Vector3(point.position.x, point.position.y, zIndex));
         } else {
           // 레이저 OFF: 이전까지 모은 포인트들로 라인 그리기
-          if (segmentPoints.length > 1) {
+          if (segmentPoints.length >= 2) {  // >= 2로 변경 (최소 2개 포인트 필요)
             const geometry = new THREE.BufferGeometry().setFromPoints(segmentPoints);
             const material = new THREE.LineBasicMaterial({ 
               color: new THREE.Color(color), 
@@ -343,6 +360,18 @@ export function LaserViewer({
             });
             const line = new THREE.Line(geometry, material);
             scene.add(line);
+          } else if (segmentPoints.length === 1) {
+            // 단일 포인트인 경우 작은 점으로 표시
+            const pointGeometry = new THREE.BufferGeometry();
+            pointGeometry.setAttribute('position', new THREE.Float32BufferAttribute([
+              segmentPoints[0].x, segmentPoints[0].y, segmentPoints[0].z
+            ], 3));
+            const pointMaterial = new THREE.PointsMaterial({ 
+              color: new THREE.Color(color), 
+              size: linewidth 
+            });
+            const pointMesh = new THREE.Points(pointGeometry, pointMaterial);
+            scene.add(pointMesh);
           }
           // 새 세그먼트 시작
           segmentPoints = [];
@@ -350,7 +379,7 @@ export function LaserViewer({
       });
       
       // 마지막 세그먼트 그리기
-      if (segmentPoints.length > 1) {
+      if (segmentPoints.length >= 2) {
         const geometry = new THREE.BufferGeometry().setFromPoints(segmentPoints);
         const material = new THREE.LineBasicMaterial({ 
           color: new THREE.Color(color), 
@@ -358,6 +387,18 @@ export function LaserViewer({
         });
         const line = new THREE.Line(geometry, material);
         scene.add(line);
+      } else if (segmentPoints.length === 1) {
+        // 단일 포인트인 경우 작은 점으로 표시
+        const pointGeometry = new THREE.BufferGeometry();
+        pointGeometry.setAttribute('position', new THREE.Float32BufferAttribute([
+          segmentPoints[0].x, segmentPoints[0].y, segmentPoints[0].z
+        ], 3));
+        const pointMaterial = new THREE.PointsMaterial({ 
+          color: new THREE.Color(color), 
+          size: linewidth 
+        });
+        const pointMesh = new THREE.Points(pointGeometry, pointMaterial);
+        scene.add(pointMesh);
       }
     });
 
