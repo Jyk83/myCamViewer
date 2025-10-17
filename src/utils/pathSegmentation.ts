@@ -79,17 +79,26 @@ export function segmentArc(
   }
   const arcLength = Math.abs(angleSpan * radius);
 
-  // 지정된 단위로 분할
-  const numSteps = Math.ceil(arcLength / stepSize);
+  // 원호는 두 가지 기준으로 분할:
+  // 1. 거리 기준: arcLength / stepSize
+  // 2. 각도 기준: 최소 5도마다 1개 포인트 (매끄러운 곡선)
+  const stepsByDistance = Math.ceil(arcLength / stepSize);
+  const stepsByAngle = Math.ceil(Math.abs(angleSpan) / (5 * Math.PI / 180)); // 5도마다
+  const minSteps = 8; // 원호는 최소 8개 포인트 (매끄러운 곡선 보장)
+  
+  // 세 가지 중 가장 큰 값 사용 (가장 세밀한 분할)
+  const numSteps = Math.max(stepsByDistance, stepsByAngle, minSteps);
   const points: PathPoint[] = [];
 
   // 디버그 로그 (처음 3개 원호만)
   if (segmentIndex < 3) {
     console.log(`🔵 원호 세그먼트 분할: Part${partIndex} Cont${contourIndex} Seg${segmentIndex}`);
     console.log(`  중심: (${center.x.toFixed(2)}, ${center.y.toFixed(2)}), 반지름: ${radius.toFixed(2)}`);
-    console.log(`  각도: ${(startAngle * 180 / Math.PI).toFixed(1)}° → ${(endAngle * 180 / Math.PI).toFixed(1)}°`);
+    console.log(`  각도: ${(startAngle * 180 / Math.PI).toFixed(1)}° → ${(endAngle * 180 / Math.PI).toFixed(1)}° (${(Math.abs(angleSpan) * 180 / Math.PI).toFixed(1)}°)`);
     console.log(`  방향: ${clockwise ? '시계(G2)' : '반시계(G3)'}`);
-    console.log(`  호장 길이: ${arcLength.toFixed(2)}mm, 분할: ${numSteps+1}개 포인트`);
+    console.log(`  호장 길이: ${arcLength.toFixed(2)}mm`);
+    console.log(`  분할 기준: 거리=${stepsByDistance}, 각도=${stepsByAngle}, 최소=${minSteps} → 사용=${numSteps}`);
+    console.log(`  생성 포인트: ${numSteps+1}개`);
     console.log(`  레이저: ${laserOn ? 'ON' : 'OFF'}, 경로타입: ${pathType}`);
   }
 
