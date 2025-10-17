@@ -1,10 +1,10 @@
-# ⚡ HK Laser Cutting Viewer
+# 🎬 TraceViewer
 
-**HK 레이저 절단 프로그램 시각화 도구**
+**HK 레이저 절단 실시간 트레이스 뷰어**
 
-Siemens Sinumerik ONE NCU1760을 사용하는 HK 레이저 절단 장비의 MPF 파트 프로그램 파일을 시각화하는 웹 기반 뷰어입니다.
+Siemens Sinumerik ONE NCU1760을 사용하는 HK 레이저 절단 장비의 MPF 프로그램 파일을 시각화하고 실시간 절단 상태를 추적하는 웹 기반 뷰어입니다.
 
-![HK Laser Viewer](https://img.shields.io/badge/HK-Laser%20Viewer-blue)
+![TraceViewer](https://img.shields.io/badge/TraceViewer-Real--time%20Trace-red)
 ![React](https://img.shields.io/badge/React-19.x-61DAFB?logo=react)
 ![TypeScript](https://img.shields.io/badge/TypeScript-5.x-3178C6?logo=typescript)
 ![Three.js](https://img.shields.io/badge/Three.js-0.180-000000?logo=three.js)
@@ -21,6 +21,12 @@ Siemens Sinumerik ONE NCU1760을 사용하는 HK 레이저 절단 장비의 MPF 
   - 어프로치 경로 (Approach Path)
   - 절단 경로 (Cutting Path)
   - 마킹 경로 (Marking Path)
+
+### 🎬 실시간 트레이스 기능 (개발 예정)
+- **⏯️ 시뮬레이션 모드**: 절단 과정 시뮬레이션 (100ms 간격 조정 가능)
+- **🔴 실시간 트레이스**: 1mm 단위 경로 진행 상황 표시
+- **📍 레이저 헤드 추적**: 현재 절단 위치 실시간 표시
+- **🌐 실시간 데이터 연동**: 실제 장비와 WebSocket/API 연동
 
 ### 🛠️ 지원하는 HK 함수
 ```
