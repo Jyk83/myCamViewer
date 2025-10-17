@@ -3,10 +3,10 @@
  * Three.js 기반 레이저 절단 경로 시각화
  */
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef } from 'react';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
-import type { MPFProgram, Part, Contour, PathSegment } from '../types';
+import type { MPFProgram, Part, Contour, PathSegment, SimulationState, PathPoint } from '../types';
 import { Colors } from '../types';
 
 interface LaserViewerProps {
@@ -24,6 +24,8 @@ interface LaserViewerProps {
   debugPartNumber?: number;
   debugContourNumber?: number;
   viewMode?: '2D' | '3D';
+  simulationState?: SimulationState;
+  allPathPoints?: PathPoint[];
 }
 
 export function LaserViewer({
@@ -41,6 +43,8 @@ export function LaserViewer({
   debugPartNumber = 1,
   debugContourNumber = 1,
   viewMode = '2D',
+  simulationState,
+  allPathPoints = [],
 }: LaserViewerProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const sceneRef = useRef<THREE.Scene | null>(null);

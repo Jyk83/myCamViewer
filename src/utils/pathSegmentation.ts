@@ -3,7 +3,7 @@
  * 경로 세그먼트 1mm 단위 분할 유틸리티
  */
 
-import { PathSegment, PathPoint, Point2D } from '../types';
+import type { PathSegment, PathPoint, Point2D } from '../types';
 
 /**
  * 직선 세그먼트를 1mm 단위로 분할
@@ -105,10 +105,11 @@ export function segmentPath(
 
 /**
  * 여러 세그먼트를 순차적으로 1mm 단위로 분할
+ * pathType과 laserOn을 인자로 받는 버전
  */
 export function segmentPathArray(
   segments: PathSegment[],
-  pathType: 'piercing' | 'leadIn' | 'approach' | 'cutting',
+  pathType: 'piercing' | 'leadIn' | 'approach' | 'cutting' = 'cutting',
   laserOn: boolean = true
 ): PathPoint[] {
   const allPoints: PathPoint[] = [];
@@ -119,6 +120,14 @@ export function segmentPathArray(
   });
 
   return allPoints;
+}
+
+/**
+ * 여러 세그먼트를 순차적으로 1mm 단위로 분할
+ * 간단 버전 - segments만 받음 (기본값: cutting path, laser on)
+ */
+export function segmentSegments(segments: PathSegment[]): PathPoint[] {
+  return segmentPathArray(segments, 'cutting', true);
 }
 
 /**

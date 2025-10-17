@@ -3,7 +3,8 @@
  * MPF 파일 업로드 컴포넌트
  */
 
-import { useRef, ChangeEvent } from 'react';
+import { useRef } from 'react';
+import type { ChangeEvent } from 'react';
 
 interface FileUploaderProps {
   onFileLoad: (content: string, filename: string) => void;

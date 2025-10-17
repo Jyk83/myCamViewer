@@ -3,7 +3,7 @@
  * 시뮬레이션 제어 컴포넌트
  */
 
-import { SimulationState } from '../types';
+import type { SimulationState } from '../types';
 
 interface SimulationControlsProps {
   simulationState: SimulationState;

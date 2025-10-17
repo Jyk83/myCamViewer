@@ -3,14 +3,16 @@
  * HK 레이저 절단 뷰어 메인 애플리케이션
  */
 
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { FileUploader } from './components/FileUploader';
 import { ProgramInfo } from './components/ProgramInfo';
 import { ViewControls } from './components/ViewControls';
 import { PartsList } from './components/PartsList';
+import { SimulationControls } from './components/SimulationControls';
 import { LaserViewer } from './viewer/LaserViewer';
 import { parseMPFFile } from './parser/MPFParser';
-import type { MPFProgram } from './types';
+import { segmentPathArray } from './utils/pathSegmentation';
+import type { MPFProgram, SimulationState, PathPoint } from './types';
 import './App.css';
 
 // @ts-ignore - 디버깅용 전역 변수
@@ -36,6 +38,22 @@ function App() {
   const [debugPartNumber, setDebugPartNumber] = useState(1);
   const [debugContourNumber, setDebugContourNumber] = useState(6);
 
+  // 시뮬레이션 상태
+  const [simulationState, setSimulationState] = useState<SimulationState>({
+    isRunning: false,
+    isPaused: false,
+    currentPartIndex: 0,
+    currentContourIndex: 0,
+    currentPointIndex: 0,
+    totalPoints: 0,
+    speed: 100,
+    completedPaths: new Set(),
+  });
+
+  // 시뮬레이션 데이터 (1mm 단위로 분할된 전체 경로)
+  const [allPathPoints, setAllPathPoints] = useState<PathPoint[]>([]);
+  const simulationTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
   // 컨투어 번호 표시 토글 핸들러 (디버그 바운딩 박스도 함께 제어)
   const handleToggleContourLabels = () => {
     if (showContourLabels) {
@@ -44,6 +62,106 @@ function App() {
     }
     setShowContourLabels(!showContourLabels);
   };
+
+  // 시뮬레이션 컨트롤 핸들러
+  const handleSimulationPlay = () => {
+    if (allPathPoints.length === 0) return;
+
+    setSimulationState(prev => ({
+      ...prev,
+      isRunning: true,
+      isPaused: false,
+    }));
+
+    // 타이머 시작
+    if (simulationTimerRef.current) {
+      clearInterval(simulationTimerRef.current);
+    }
+
+    simulationTimerRef.current = setInterval(() => {
+      setSimulationState(prev => {
+        // 이미 끝까지 진행했으면 중지
+        if (prev.currentPointIndex >= allPathPoints.length - 1) {
+          if (simulationTimerRef.current) {
+            clearInterval(simulationTimerRef.current);
+            simulationTimerRef.current = null;
+          }
+          return {
+            ...prev,
+            isRunning: false,
+            isPaused: false,
+          };
+        }
+
+        // 다음 포인트로 진행
+        const nextIndex = prev.currentPointIndex + 1;
+        const nextPoint = allPathPoints[nextIndex];
+        
+        // 완료된 경로 추가
+        const newCompletedPaths = new Set(prev.completedPaths);
+        newCompletedPaths.add(
+          `part-${nextPoint.segmentIndex}-contour-${nextPoint.segmentIndex}-point-${nextIndex}`
+        );
+
+        return {
+          ...prev,
+          currentPointIndex: nextIndex,
+          completedPaths: newCompletedPaths,
+        };
+      });
+    }, simulationState.speed);
+  };
+
+  const handleSimulationPause = () => {
+    if (simulationTimerRef.current) {
+      clearInterval(simulationTimerRef.current);
+      simulationTimerRef.current = null;
+    }
+    setSimulationState(prev => ({
+      ...prev,
+      isRunning: false,
+      isPaused: true,
+    }));
+  };
+
+  const handleSimulationStop = () => {
+    if (simulationTimerRef.current) {
+      clearInterval(simulationTimerRef.current);
+      simulationTimerRef.current = null;
+    }
+    setSimulationState({
+      isRunning: false,
+      isPaused: false,
+      currentPartIndex: 0,
+      currentContourIndex: 0,
+      currentPointIndex: 0,
+      totalPoints: allPathPoints.length,
+      speed: 100,
+      completedPaths: new Set(),
+    });
+  };
+
+  const handleSimulationSpeedChange = (speed: number) => {
+    setSimulationState(prev => ({
+      ...prev,
+      speed,
+    }));
+
+    // 실행 중이면 타이머 재시작
+    if (simulationState.isRunning && !simulationState.isPaused) {
+      handleSimulationPause();
+      setTimeout(() => handleSimulationPlay(), 10);
+    }
+  };
+
+  // 컴포넌트 언마운트 시 타이머 정리
+  useEffect(() => {
+    return () => {
+      if (simulationTimerRef.current) {
+        clearInterval(simulationTimerRef.current);
+      }
+    };
+  }, []);
 
   const handleFileLoad = (content: string, name: string) => {
     try {
@@ -72,11 +190,37 @@ function App() {
       setProgram(parsedProgram);
       setFilename(name);
       
+      // 시뮬레이션을 위한 전체 경로 세그먼트 분할
+      const segmentedPaths: PathPoint[] = [];
+      for (const part of parsedProgram.parts) {
+        for (const contour of part.contours) {
+          // Lead-in path (optional)
+          if (contour.leadIn) {
+            const leadInPoints = segmentPathArray(contour.leadIn.path, 'leadIn', true);
+            segmentedPaths.push(...leadInPoints);
+          }
+          
+          // Approach path
+          const approachPoints = segmentPathArray(contour.approachPath, 'approach', true);
+          segmentedPaths.push(...approachPoints);
+          
+          // Cutting path
+          const cuttingPoints = segmentPathArray(contour.cuttingPath, 'cutting', true);
+          segmentedPaths.push(...cuttingPoints);
+        }
+      }
+      setAllPathPoints(segmentedPaths);
+      setSimulationState(prev => ({
+        ...prev,
+        totalPoints: segmentedPaths.length,
+      }));
+
       // 디버깅용 전역 저장
       // @ts-ignore
       window.lastProgram = parsedProgram;
       console.log('window.lastProgram에 저장 완료');
       console.log('=== 파싱 완료 ===');
+      console.log('전체 경로 포인트 수:', segmentedPaths.length);
     } catch (err) {
       console.error('=== 파싱 에러 ===');
       console.error('에러:', err);
@@ -169,6 +313,17 @@ function App() {
               />
             </div>
 
+            {/* 시뮬레이션 컨트롤 */}
+            <div style={{ padding: '0 20px' }}>
+              <SimulationControls
+                simulationState={simulationState}
+                onPlay={handleSimulationPlay}
+                onPause={handleSimulationPause}
+                onStop={handleSimulationStop}
+                onSpeedChange={handleSimulationSpeedChange}
+              />
+            </div>
+
             {/* 파트 목록 */}
             <div style={{ padding: '0 20px 20px 20px' }}>
               <PartsList
@@ -217,6 +372,8 @@ function App() {
             debugPartNumber={debugPartNumber}
             debugContourNumber={debugContourNumber}
             viewMode="2D"
+            simulationState={simulationState}
+            allPathPoints={allPathPoints}
           />
         )}
       </div>
