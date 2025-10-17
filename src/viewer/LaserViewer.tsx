@@ -211,8 +211,8 @@ export function LaserViewer({
     group.position.set(part.origin.x, part.origin.y, 0);
     group.rotation.z = (part.rotation * Math.PI) / 180;
 
-    // 원점 표시 (작은 빨간 점)
-    const originGeometry = new THREE.CircleGeometry(1.2, 16);
+    // 원점 표시 (매우 작은 빨간 점)
+    const originGeometry = new THREE.CircleGeometry(0.5, 16);
     const originMaterial = new THREE.MeshBasicMaterial({ color: new THREE.Color(Colors.partOrigin) });
     const originMarker = new THREE.Mesh(originGeometry, originMaterial);
     originMarker.position.z = 0.6;
@@ -223,7 +223,7 @@ export function LaserViewer({
     textSprite.position.set(5, 5, 0.7); // 원점 근처
     group.add(textSprite);
 
-    // 컨투어 그리기
+    // 컨투어 그리기 (파트 내 인덱스 사용)
     part.contours.forEach((contour, index) => {
       drawContour(group, contour, options, index + 1);
     });
@@ -245,9 +245,9 @@ export function LaserViewer({
     },
     contourIndex: number
   ) => {
-    // 피어싱 위치 표시 (작은 빨간 점)
+    // 피어싱 위치 표시 (매우 작은 빨간 점)
     if (options.showPiercing && contour.piercingType > 0) {
-      const piercingGeometry = new THREE.CircleGeometry(1.0, 16);
+      const piercingGeometry = new THREE.CircleGeometry(0.5, 16);
       const piercingMaterial = new THREE.MeshBasicMaterial({ color: new THREE.Color(Colors.piercing) });
       const piercingMarker = new THREE.Mesh(piercingGeometry, piercingMaterial);
       piercingMarker.position.set(contour.piercingPosition.x, contour.piercingPosition.y, 0.5);
