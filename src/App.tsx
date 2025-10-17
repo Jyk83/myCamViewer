@@ -208,13 +208,13 @@ function App() {
             segmentedPaths.push(...leadInPoints);
           }
           
-          // Approach path
+          // Approach path (HKSTR - 레이저 OFF 이동)
           const approachPoints = segmentPathArray(
             contour.approachPath,
             partIndex,
             contourIndex,
             'approach',
-            true
+            false  // 레이저 OFF
           );
           segmentedPaths.push(...approachPoints);
           

@@ -249,19 +249,39 @@ export function LaserViewer({
 
   /**
    * 시뮬레이션 경로 그리기 (1mm 단위로 빨간색 경로)
+   * 레이저 ON 구간만 그림 (laserOn === true)
    */
   const drawSimulationPath = (scene: THREE.Scene, pathPoints: PathPoint[], currentIndex: number) => {
     if (currentIndex < 0 || pathPoints.length === 0) return;
 
-    // 현재까지 완료된 포인트들로 경로 생성
-    const points: THREE.Vector3[] = [];
+    // 레이저 ON 구간만 수집하여 연속된 세그먼트로 그리기
+    let segmentPoints: THREE.Vector3[] = [];
+    
     for (let i = 0; i <= currentIndex && i < pathPoints.length; i++) {
       const point = pathPoints[i];
-      points.push(new THREE.Vector3(point.position.x, point.position.y, 0.5));
+      
+      if (point.laserOn) {
+        // 레이저 ON: 포인트 추가
+        segmentPoints.push(new THREE.Vector3(point.position.x, point.position.y, 0.5));
+      } else {
+        // 레이저 OFF: 이전까지 모은 포인트들로 라인 그리기
+        if (segmentPoints.length > 1) {
+          const geometry = new THREE.BufferGeometry().setFromPoints(segmentPoints);
+          const material = new THREE.LineBasicMaterial({ 
+            color: new THREE.Color(Colors.simulated), 
+            linewidth: 4 
+          });
+          const line = new THREE.Line(geometry, material);
+          scene.add(line);
+        }
+        // 새 세그먼트 시작
+        segmentPoints = [];
+      }
     }
-
-    if (points.length > 1) {
-      const geometry = new THREE.BufferGeometry().setFromPoints(points);
+    
+    // 마지막 세그먼트 그리기
+    if (segmentPoints.length > 1) {
+      const geometry = new THREE.BufferGeometry().setFromPoints(segmentPoints);
       const material = new THREE.LineBasicMaterial({ 
         color: new THREE.Color(Colors.simulated), 
         linewidth: 4 
@@ -609,44 +629,33 @@ export function LaserViewer({
       }
     }
 
-    // 시뮬레이션 모드 체크
-    const isSimulationActive = simulationState && (simulationState.isRunning || simulationState.isPaused);
-    
-    // 시뮬레이션 중에는 원래 경로를 숨기고 시뮬레이션 경로만 표시
-    if (isSimulationActive) {
-      // 시뮬레이션 중에는 경로를 그리지 않음 (drawSimulationPath가 처리)
-      // 단, 라벨과 피어싱 포인트는 표시
+    // 원본 경로는 항상 그리기 (시뮬레이션 중에도 유지)
+    // Lead-in 경로
+    if (options.showLeadIn && contour.leadIn) {
+      contour.leadIn.path.forEach((segment) => {
+        const line = createSegmentLine(segment, Colors.leadIn, 2);
+        line.position.z = 0.2;
+        group.add(line);
+      });
     }
 
-    // 시뮬레이션이 활성화되지 않았을 때만 일반 경로 그리기
-    if (!isSimulationActive) {
-      // Lead-in 경로
-      if (options.showLeadIn && contour.leadIn) {
-        contour.leadIn.path.forEach((segment) => {
-          const line = createSegmentLine(segment, Colors.leadIn, 2);
-          line.position.z = 0.2;
-          group.add(line);
-        });
-      }
+    // Approach 경로
+    if (options.showApproach && contour.approachPath.length > 0) {
+      contour.approachPath.forEach((segment) => {
+        const line = createSegmentLine(segment, Colors.approach, 2);
+        line.position.z = 0.3;
+        group.add(line);
+      });
+    }
 
-      // Approach 경로
-      if (options.showApproach && contour.approachPath.length > 0) {
-        contour.approachPath.forEach((segment) => {
-          const line = createSegmentLine(segment, Colors.approach, 2);
-          line.position.z = 0.3;
-          group.add(line);
-        });
-      }
-
-      // Cutting 경로
-      if (options.showCutting && contour.cuttingPath.length > 0) {
-        const defaultColor = contour.cuttingType === 10 ? Colors.marking : Colors.cutting;
-        contour.cuttingPath.forEach((segment) => {
-          const line = createSegmentLine(segment, defaultColor, 3);
-          line.position.z = 0.4;
-          group.add(line);
-        });
-      }
+    // Cutting 경로
+    if (options.showCutting && contour.cuttingPath.length > 0) {
+      const defaultColor = contour.cuttingType === 10 ? Colors.marking : Colors.cutting;
+      contour.cuttingPath.forEach((segment) => {
+        const line = createSegmentLine(segment, defaultColor, 3);
+        line.position.z = 0.4;
+        group.add(line);
+      });
     }
   };
 
