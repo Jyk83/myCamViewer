@@ -211,12 +211,12 @@ export function LaserViewer({
     group.position.set(part.origin.x, part.origin.y, 0);
     group.rotation.z = (part.rotation * Math.PI) / 180;
 
-    // 원점 표시 (매우 작은 빨간 점)
-    const originGeometry = new THREE.CircleGeometry(0.5, 16);
-    const originMaterial = new THREE.MeshBasicMaterial({ color: new THREE.Color(Colors.partOrigin) });
-    const originMarker = new THREE.Mesh(originGeometry, originMaterial);
-    originMarker.position.z = 0.6;
-    group.add(originMarker);
+    // 원점 표시는 하지 않음 (데이터는 group.position에 유지됨)
+    // const originGeometry = new THREE.CircleGeometry(0.5, 16);
+    // const originMaterial = new THREE.MeshBasicMaterial({ color: new THREE.Color(Colors.partOrigin) });
+    // const originMarker = new THREE.Mesh(originGeometry, originMaterial);
+    // originMarker.position.z = 0.6;
+    // group.add(originMarker);
 
     // 파트 번호 표시 (텍스트 스프라이트)
     const textSprite = createTextSprite(options.partIndex.toString(), Colors.partLabel, 12);
