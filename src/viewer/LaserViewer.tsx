@@ -165,8 +165,8 @@ export function LaserViewer({
   }, [program, selectedPartId, selectedContourId, showPiercing, showLeadIn, showApproach, showCutting, showPartLabels, showContourLabels]);
 
   /**
-   * 실제 경로 좌표로 컨투어 바운딩 박스 계산
-   * HKSTR의 contourWidth/Height가 아닌, 실제 그려진 경로의 좌표를 기반으로 계산
+   * 컨투어 바운딩 박스 계산 (HKOST 원점 기준)
+   * HKSTR 이동 이후 HKSTO까지의 모든 경로 좌표에서 min/max 계산
    */
   const calculateActualBoundingBox = (contour: Contour): { minX: number; minY: number; maxX: number; maxY: number } => {
     let minX = Infinity;
@@ -184,12 +184,12 @@ export function LaserViewer({
       }
     };
 
-    // 피어싱 위치 포함
+    // HKSTR 피어싱 위치부터 시작 (컨투어 로컬 좌표 0,0 기준)
     if (contour.piercingPosition) {
       addPoint(contour.piercingPosition.x, contour.piercingPosition.y);
     }
 
-    // Lead-in 경로 좌표 수집
+    // Lead-in 경로 (HKLEA)
     if (contour.leadIn && contour.leadIn.path) {
       contour.leadIn.path.forEach(segment => {
         if (segment.start) addPoint(segment.start.x, segment.start.y);
@@ -197,7 +197,7 @@ export function LaserViewer({
       });
     }
 
-    // Approach 경로 좌표 수집
+    // Approach 경로 (HKCUT 전)
     if (contour.approachPath) {
       contour.approachPath.forEach(segment => {
         if (segment.start) addPoint(segment.start.x, segment.start.y);
@@ -205,13 +205,13 @@ export function LaserViewer({
       });
     }
 
-    // Cutting 경로 좌표 수집
+    // Cutting 경로 (HKCUT 이후 ~ HKSTO 전)
     if (contour.cuttingPath) {
       contour.cuttingPath.forEach(segment => {
         if (segment.start) addPoint(segment.start.x, segment.start.y);
         if (segment.end) addPoint(segment.end.x, segment.end.y);
 
-        // 원호인 경우 중심점과 반지름 고려
+        // 원호인 경우 정확한 바운딩 박스를 위해 극단값 계산
         if (segment.type === 'arc' && segment.start) {
           const arcSegment = segment as any;
           if (arcSegment.i !== undefined && arcSegment.j !== undefined) {
@@ -220,26 +220,33 @@ export function LaserViewer({
             const radius = Math.sqrt(arcSegment.i * arcSegment.i + arcSegment.j * arcSegment.j);
             
             if (!isNaN(centerX) && !isNaN(centerY) && !isNaN(radius)) {
-              addPoint(centerX - radius, centerY - radius);
-              addPoint(centerX + radius, centerY + radius);
+              // 원의 극단점 4개 추가
+              addPoint(centerX - radius, centerY);
+              addPoint(centerX + radius, centerY);
+              addPoint(centerX, centerY - radius);
+              addPoint(centerX, centerY + radius);
             }
           }
         }
       });
     }
 
+    // HKSTO 종료 위치
+    if (contour.endPosition) {
+      addPoint(contour.endPosition.x, contour.endPosition.y);
+    }
+
     // 바운딩 박스가 계산되지 않은 경우 HKSTR의 boundingBox 사용
     if (minX === Infinity || maxX === -Infinity || isNaN(minX) || isNaN(maxX)) {
-      const fallbackX = contour.piercingPosition?.x || 0;
-      const fallbackY = contour.piercingPosition?.y || 0;
+      // HKSTR의 피어싱 위치를 (0, 0)으로 하고 boundingBox 크기 사용
       const width = contour.boundingBox?.width || 10;
       const height = contour.boundingBox?.height || 10;
       
       return {
-        minX: fallbackX,
-        minY: fallbackY,
-        maxX: fallbackX + width,
-        maxY: fallbackY + height,
+        minX: 0,
+        minY: 0,
+        maxX: width,
+        maxY: height,
       };
     }
 
@@ -340,6 +347,7 @@ export function LaserViewer({
     if (options.showPartLabels) {
       const textSprite = createTextSprite(options.partIndex.toString(), Colors.partLabel, 20);
       textSprite.position.set(partWidth / 2, partHeight / 2, 0.7);
+      // 스프라이트 크기는 월드 좌표로 설정 (줌에 따라 자동 조정됨)
       textSprite.scale.set(10, 5, 1);
       group.add(textSprite);
     }
@@ -385,28 +393,30 @@ export function LaserViewer({
       group.add(points);
     }
 
-    // 컨투어 번호 표시 (실제 경로의 상단 중앙) - 옵션이 활성화된 경우만
+    // 컨투어 번호 표시 (컨투어 상단 중앙) - 옵션이 활성화된 경우만
     if (options.showContourLabels) {
-      // 실제 경로 좌표로 바운딩 박스 계산
+      // HKOST 원점 기준 바운딩 박스 계산
       const bbox = calculateActualBoundingBox(contour);
-      const actualCenterX = (bbox.minX + bbox.maxX) / 2;
-      const actualTopY = bbox.maxY;
+      const centerX = (bbox.minX + bbox.maxX) / 2;
+      const topY = bbox.maxY;
       
       // 디버깅: 컨투어 번호 및 경로 정보 로그
       console.log(`컨투어 ${contourIndex}:`, {
-        위치: `(${actualCenterX.toFixed(2)}, ${actualTopY.toFixed(2)})`,
+        위치: `(${centerX.toFixed(2)}, ${topY.toFixed(2)})`,
         bbox,
         piercingPos: contour.piercingPosition,
+        endPos: contour.endPosition,
         leadInCount: contour.leadIn?.path?.length || 0,
         approachCount: contour.approachPath?.length || 0,
         cuttingCount: contour.cuttingPath?.length || 0,
       });
       
       // 유효한 좌표인 경우에만 라벨 생성
-      if (!isNaN(actualCenterX) && !isNaN(actualTopY)) {
+      if (!isNaN(centerX) && !isNaN(topY)) {
         const contourLabel = createTextSprite(contourIndex.toString(), Colors.contourLabel, 12);
-        contourLabel.position.set(actualCenterX, actualTopY + 3, 0.8);
-        contourLabel.scale.set(5, 2.5, 1);
+        // 컨투어 상단 중앙에 마진 2 추가
+        contourLabel.position.set(centerX, topY + 2, 0.8);
+        contourLabel.scale.set(4, 2, 1);
         group.add(contourLabel);
       } else {
         console.warn(`컨투어 ${contourIndex}: 유효하지 않은 좌표 - 라벨 생성 스킵`);
