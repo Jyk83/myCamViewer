@@ -270,14 +270,16 @@ export const CuttingTypes: Record<number, string> = {
 // ========== 색상 정의 ==========
 
 export const Colors = {
-  workpiece: '#f0f0f0',
-  workpieceBorder: '#333333',
-  partOrigin: '#ff0000',
-  piercing: '#ff6b6b',
-  leadIn: '#ffa500',
-  approach: '#4ecdc4',
-  cutting: '#2196f3',
-  marking: '#9c27b0',
-  selected: '#ffeb3b',
-  grid: '#e0e0e0',
+  workpiece: '#1a3a3a',        // 어두운 청록색 배경
+  workpieceBorder: '#66d9d9',  // 밝은 청록색 테두리 (점선)
+  partOrigin: '#ff3333',       // 빨간색 원점
+  piercing: '#ff3333',         // 빨간색 피어싱 포인트
+  leadIn: '#00ffff',           // 시안 Lead-in
+  approach: '#00ffff',         // 시안 Approach
+  cutting: '#00ffff',          // 시안 절단 경로
+  marking: '#ff00ff',          // 마젠타 마킹
+  selected: '#ffff00',         // 노란색 선택
+  grid: '#2a4a4a',             // 어두운 그리드
+  partLabel: '#ffff00',        // 노란색 파트 레이블
+  contourLabel: '#ffffff',     // 흰색 컨투어 레이블
 };

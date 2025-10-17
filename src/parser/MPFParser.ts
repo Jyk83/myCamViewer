@@ -518,7 +518,9 @@ export class MPFParser {
         this.log(`    HKSTO: ${currentContour.cuttingPath!.length}개 세그먼트`);
 
         // 마지막 세그먼트 추가 (HKSTO에 좌표가 있는 경우)
-        if (hksto.gCode > 0 && hksto.x !== currentPosition.x && hksto.y !== currentPosition.y) {
+        // 조건: gCode가 있고, 현재 위치와 다른 경우 (x OR y가 다르면 추가)
+        if (hksto.gCode > 0 && (hksto.x !== currentPosition.x || hksto.y !== currentPosition.y)) {
+          this.log(`    마지막 세그먼트 추가: G${hksto.gCode} (${currentPosition.x},${currentPosition.y}) → (${hksto.x},${hksto.y})`);
           const segment = this.createSegment(
             hksto.gCode,
             currentPosition,
@@ -528,6 +530,7 @@ export class MPFParser {
           );
           if (segment) {
             currentContour.cuttingPath!.push(segment);
+            currentPosition = { x: hksto.x, y: hksto.y };
           }
         }
 
