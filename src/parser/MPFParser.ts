@@ -481,16 +481,22 @@ export class MPFParser {
             endPosition: { x: 0, y: 0 },
           };
           currentPosition = { x: hkscrc.x, y: hkscrc.y };
-          inCutting = true; // 잔재절단은 시작부터 레이저 ON
+          inCutting = false; // HKSCRC 시작 시점은 레이저 OFF
         }
-        // HKSCRC(3) 형태: 절단 경로 시작 (HKCUT과 유사)
-        else if (hkscrc.params === 3 && currentContour) {
-          this.log(`    HKSCRC(3) - 잔재절단 경로 시작`);
+        // HKSCRC(1) 형태: 레이저 OFF 시작
+        else if (hkscrc.params === 1 && currentContour) {
+          this.log(`    HKSCRC(1) - 레이저 OFF`);
+          inCutting = false;
+        }
+        // HKSCRC(2) 형태: 레이저 ON 시작
+        else if (hkscrc.params === 2 && currentContour) {
+          this.log(`    HKSCRC(2) - 레이저 ON`);
           inCutting = true;
         }
-        // HKSCRC(1), HKSCRC(2) 형태: 중간 마커 (무시)
-        else if (hkscrc.params === 1 || hkscrc.params === 2) {
-          this.log(`    HKSCRC(${hkscrc.params}) - 경로 마커`);
+        // HKSCRC(3) 형태: 절단 경로 계속 (레이저 ON 유지)
+        else if (hkscrc.params === 3 && currentContour) {
+          this.log(`    HKSCRC(3) - 절단 경로 계속`);
+          inCutting = true;
         }
         // HKSCRC(4) 형태: 종료 (HKSTO와 유사)
         else if (hkscrc.params === 4 && currentContour) {
