@@ -240,7 +240,7 @@ export function LaserViewer({
 
     // 카메라 위치 조정
     fitCameraToWorkpiece(program.workpiece.width, program.workpiece.height);
-  }, [program, selectedPartId, selectedContourId, showPiercing, showLeadIn, showApproach, showCutting, showPartLabels, showContourLabels, contourLabelSize, showDebugBoundingBox, debugPartNumber, debugContourNumber]);
+  }, [program, selectedPartId, selectedContourId, showPiercing, showLeadIn, showApproach, showCutting, showPartLabels, showContourLabels, contourLabelSize, showDebugBoundingBox, debugPartNumber, debugContourNumber, simulationState]);
 
   /**
    * 컨투어 바운딩 박스 계산 (HKOST 원점 기준)
@@ -567,10 +567,46 @@ export function LaserViewer({
       }
     }
 
+    // 시뮬레이션 상태 확인 함수
+    const isContourCompleted = (): boolean => {
+      if (!simulationState || (!simulationState.isRunning && !simulationState.isPaused)) {
+        return false; // 시뮬레이션이 실행되지 않았으면 false
+      }
+      
+      // 현재 파트/컨투어가 완전히 지나갔는지 확인
+      if (partIndex < simulationState.currentPartIndex) {
+        return true; // 이전 파트는 모두 완료
+      }
+      if (partIndex === simulationState.currentPartIndex && contourIndex < simulationState.currentContourIndex) {
+        return true; // 같은 파트의 이전 컨투어는 완료
+      }
+      return false; // 현재 진행 중이거나 아직 도달하지 않은 컨투어
+    };
+    
+    const isCurrentContour = (): boolean => {
+      if (!simulationState || (!simulationState.isRunning && !simulationState.isPaused)) {
+        return false;
+      }
+      return partIndex === simulationState.currentPartIndex && 
+             contourIndex === simulationState.currentContourIndex;
+    };
+    
+    const getCurrentSegmentColor = (defaultColor: string): string => {
+      if (isContourCompleted()) {
+        return Colors.simulated; // 완료된 컨투어는 모두 빨간색
+      }
+      if (isCurrentContour()) {
+        // 현재 진행 중인 컨투어 - 부분적으로 빨간색 (나중에 세그먼트별로 세밀하게 처리 가능)
+        return defaultColor; // 일단 기본 색상 유지
+      }
+      return defaultColor; // 아직 시작 안 한 컨투어
+    };
+
     // Lead-in 경로
     if (options.showLeadIn && contour.leadIn) {
-      contour.leadIn.path.forEach(segment => {
-        const line = createSegmentLine(segment, Colors.leadIn, 2);
+      contour.leadIn.path.forEach((segment) => {
+        const color = getCurrentSegmentColor(Colors.leadIn);
+        const line = createSegmentLine(segment, color, 2);
         line.position.z = 0.2;
         group.add(line);
       });
@@ -578,8 +614,9 @@ export function LaserViewer({
 
     // Approach 경로
     if (options.showApproach && contour.approachPath.length > 0) {
-      contour.approachPath.forEach(segment => {
-        const line = createSegmentLine(segment, Colors.approach, 2);
+      contour.approachPath.forEach((segment) => {
+        const color = getCurrentSegmentColor(Colors.approach);
+        const line = createSegmentLine(segment, color, 2);
         line.position.z = 0.3;
         group.add(line);
       });
@@ -587,8 +624,9 @@ export function LaserViewer({
 
     // Cutting 경로
     if (options.showCutting && contour.cuttingPath.length > 0) {
-      const color = contour.cuttingType === 10 ? Colors.marking : Colors.cutting;
-      contour.cuttingPath.forEach(segment => {
+      const defaultColor = contour.cuttingType === 10 ? Colors.marking : Colors.cutting;
+      contour.cuttingPath.forEach((segment) => {
+        const color = getCurrentSegmentColor(defaultColor);
         const line = createSegmentLine(segment, color, 3);
         line.position.z = 0.4;
         group.add(line);
