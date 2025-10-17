@@ -33,7 +33,7 @@ export function LaserViewer({
   showCutting = true,
   showPartLabels = true,
   showContourLabels = true,
-  contourLabelSize = 12,
+  contourLabelSize = 18,
   viewMode = '2D',
 }: LaserViewerProps) {
   const containerRef = useRef<HTMLDivElement>(null);

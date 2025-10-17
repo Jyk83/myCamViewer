@@ -29,7 +29,7 @@ function App() {
   const [showCutting, setShowCutting] = useState(true);
   const [showPartLabels, setShowPartLabels] = useState(true);
   const [showContourLabels, setShowContourLabels] = useState(true);
-  const [contourLabelSize, setContourLabelSize] = useState(12); // 컨투어 라벨 폰트 크기
+  const [contourLabelSize, setContourLabelSize] = useState(18); // 컨투어 라벨 폰트 크기 (기본값: 18)
 
   const handleFileLoad = (content: string, name: string) => {
     try {
