@@ -305,12 +305,13 @@ export function LaserViewer({
         currentPoint.partIndex === contour.partIndex && 
         currentPoint.contourIndex === contour.contourIndex;
 
-      // 디버깅 로그 (첫 10개 컨투어만)
-      if (contourIdx < 10) {
-        console.log(`컨투어 [Part${contour.partIndex} Cont${contour.contourIndex}]: ` +
-                    `startIdx=${contour.startIndex}, endIdx=${contour.endIndex}, ` +
-                    `currentIdx=${currentIndex}, isCompleted=${isCompleted}, ` +
-                    `isCurrent=${isCurrentContour}, totalPoints=${contour.allPoints.length}`);
+      // 디버깅 로그 - 모든 컨투어 출력 (시뮬레이션 시작 시 한 번만)
+      if (currentIndex === 0 || (currentIndex > 0 && contourIdx < 20)) {
+        console.log(`[${isCompleted ? '✅완료' : isCurrentContour ? '▶️진행중' : '⏸️대기'}] ` +
+                    `Part${contour.partIndex} Cont${contour.contourIndex}: ` +
+                    `idx[${contour.startIndex}→${contour.endIndex}], ` +
+                    `current=${currentIndex}, ` +
+                    `points=${contour.allPoints.length}`);
       }
 
       // 완료된 컨투어: 전체 포인트 사용
@@ -320,21 +321,12 @@ export function LaserViewer({
       if (isCompleted) {
         // 완료된 컨투어: 전체를 그림 (완전한 형상)
         pointsToRender = contour.allPoints;
-        if (contourIdx < 10) {
-          console.log(`  → 완료됨: ${pointsToRender.length}개 포인트 렌더링 (전체)`);
-        }
       } else if (isCurrentContour) {
         // 현재 진행 중 컨투어: currentIndex까지만 그림
         const currentContourOffset = currentIndex - contour.startIndex;
         pointsToRender = contour.allPoints.slice(0, currentContourOffset + 1);
-        if (contourIdx < 10) {
-          console.log(`  → 진행중: ${pointsToRender.length}개 포인트 렌더링 (부분, offset=${currentContourOffset})`);
-        }
       } else {
         // 아직 도달하지 않은 컨투어: 그리지 않음
-        if (contourIdx < 10) {
-          console.log(`  → 스킵: 아직 도달 안함`);
-        }
         return;
       }
 
