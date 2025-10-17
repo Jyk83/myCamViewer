@@ -276,9 +276,11 @@ export const CuttingTypes: Record<number, string> = {
  */
 export interface PathPoint {
   position: Point2D;
-  segmentIndex: number;      // 원본 세그먼트 인덱스
+  partIndex: number;          // 파트 인덱스 (0부터 시작)
+  contourIndex: number;       // 컨투어 인덱스 (0부터 시작)
+  segmentIndex: number;       // 원본 세그먼트 인덱스
   progress: number;           // 세그먼트 내 진행률 (0.0 ~ 1.0)
-  laserOn: boolean;          // 레이저 상태 (G0: false, G1/G2/G3: true)
+  laserOn: boolean;           // 레이저 상태 (G0: false, G1/G2/G3: true)
   pathType: 'piercing' | 'leadIn' | 'approach' | 'cutting';
 }
 

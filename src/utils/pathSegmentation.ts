@@ -11,6 +11,8 @@ import type { PathSegment, PathPoint, Point2D } from '../types';
 export function segmentLine(
   segment: PathSegment,
   segmentIndex: number,
+  partIndex: number,
+  contourIndex: number,
   pathType: 'piercing' | 'leadIn' | 'approach' | 'cutting',
   laserOn: boolean = true
 ): PathPoint[] {
@@ -32,6 +34,8 @@ export function segmentLine(
         x: start.x + t * dx,
         y: start.y + t * dy,
       },
+      partIndex,
+      contourIndex,
       segmentIndex,
       progress: t,
       laserOn,
@@ -48,6 +52,8 @@ export function segmentLine(
 export function segmentArc(
   segment: PathSegment,
   segmentIndex: number,
+  partIndex: number,
+  contourIndex: number,
   pathType: 'piercing' | 'leadIn' | 'approach' | 'cutting',
   laserOn: boolean = true
 ): PathPoint[] {
@@ -76,6 +82,8 @@ export function segmentArc(
         x: center.x + radius * Math.cos(angle),
         y: center.y + radius * Math.sin(angle),
       },
+      partIndex,
+      contourIndex,
       segmentIndex,
       progress: t,
       laserOn,
@@ -92,13 +100,15 @@ export function segmentArc(
 export function segmentPath(
   segment: PathSegment,
   segmentIndex: number,
+  partIndex: number,
+  contourIndex: number,
   pathType: 'piercing' | 'leadIn' | 'approach' | 'cutting',
   laserOn: boolean = true
 ): PathPoint[] {
   if (segment.type === 'line') {
-    return segmentLine(segment, segmentIndex, pathType, laserOn);
+    return segmentLine(segment, segmentIndex, partIndex, contourIndex, pathType, laserOn);
   } else if (segment.type === 'arc') {
-    return segmentArc(segment, segmentIndex, pathType, laserOn);
+    return segmentArc(segment, segmentIndex, partIndex, contourIndex, pathType, laserOn);
   }
   return [];
 }
@@ -109,25 +119,19 @@ export function segmentPath(
  */
 export function segmentPathArray(
   segments: PathSegment[],
+  partIndex: number,
+  contourIndex: number,
   pathType: 'piercing' | 'leadIn' | 'approach' | 'cutting' = 'cutting',
   laserOn: boolean = true
 ): PathPoint[] {
   const allPoints: PathPoint[] = [];
 
   segments.forEach((segment, index) => {
-    const points = segmentPath(segment, index, pathType, laserOn);
+    const points = segmentPath(segment, index, partIndex, contourIndex, pathType, laserOn);
     allPoints.push(...points);
   });
 
   return allPoints;
-}
-
-/**
- * 여러 세그먼트를 순차적으로 1mm 단위로 분할
- * 간단 버전 - segments만 받음 (기본값: cutting path, laser on)
- */
-export function segmentSegments(segments: PathSegment[]): PathPoint[] {
-  return segmentPathArray(segments, 'cutting', true);
 }
 
 /**

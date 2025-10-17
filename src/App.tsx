@@ -97,14 +97,16 @@ function App() {
         const nextIndex = prev.currentPointIndex + 1;
         const nextPoint = allPathPoints[nextIndex];
         
-        // 완료된 경로 추가
+        // 완료된 경로 추가 (createPathId 사용)
         const newCompletedPaths = new Set(prev.completedPaths);
         newCompletedPaths.add(
-          `part-${nextPoint.segmentIndex}-contour-${nextPoint.segmentIndex}-point-${nextIndex}`
+          `part-${nextPoint.partIndex}-contour-${nextPoint.contourIndex}-point-${nextIndex}`
         );
 
         return {
           ...prev,
+          currentPartIndex: nextPoint.partIndex,
+          currentContourIndex: nextPoint.contourIndex,
           currentPointIndex: nextIndex,
           completedPaths: newCompletedPaths,
         };
@@ -192,23 +194,41 @@ function App() {
       
       // 시뮬레이션을 위한 전체 경로 세그먼트 분할
       const segmentedPaths: PathPoint[] = [];
-      for (const part of parsedProgram.parts) {
-        for (const contour of part.contours) {
+      parsedProgram.parts.forEach((part, partIndex) => {
+        part.contours.forEach((contour, contourIndex) => {
           // Lead-in path (optional)
           if (contour.leadIn) {
-            const leadInPoints = segmentPathArray(contour.leadIn.path, 'leadIn', true);
+            const leadInPoints = segmentPathArray(
+              contour.leadIn.path,
+              partIndex,
+              contourIndex,
+              'leadIn',
+              true
+            );
             segmentedPaths.push(...leadInPoints);
           }
           
           // Approach path
-          const approachPoints = segmentPathArray(contour.approachPath, 'approach', true);
+          const approachPoints = segmentPathArray(
+            contour.approachPath,
+            partIndex,
+            contourIndex,
+            'approach',
+            true
+          );
           segmentedPaths.push(...approachPoints);
           
           // Cutting path
-          const cuttingPoints = segmentPathArray(contour.cuttingPath, 'cutting', true);
+          const cuttingPoints = segmentPathArray(
+            contour.cuttingPath,
+            partIndex,
+            contourIndex,
+            'cutting',
+            true
+          );
           segmentedPaths.push(...cuttingPoints);
-        }
-      }
+        });
+      });
       setAllPathPoints(segmentedPaths);
       setSimulationState(prev => ({
         ...prev,
