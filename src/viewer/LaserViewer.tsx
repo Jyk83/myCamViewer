@@ -238,9 +238,51 @@ export function LaserViewer({
       });
     });
 
+    // 시뮬레이션 경로 그리기 (1mm 단위 실시간)
+    if (simulationState && (simulationState.isRunning || simulationState.isPaused) && allPathPoints.length > 0) {
+      drawSimulationPath(scene, allPathPoints, simulationState.currentPointIndex);
+    }
+
     // 카메라 위치 조정
     fitCameraToWorkpiece(program.workpiece.width, program.workpiece.height);
   }, [program, selectedPartId, selectedContourId, showPiercing, showLeadIn, showApproach, showCutting, showPartLabels, showContourLabels, contourLabelSize, showDebugBoundingBox, debugPartNumber, debugContourNumber, simulationState]);
+
+  /**
+   * 시뮬레이션 경로 그리기 (1mm 단위로 빨간색 경로)
+   */
+  const drawSimulationPath = (scene: THREE.Scene, pathPoints: PathPoint[], currentIndex: number) => {
+    if (currentIndex < 0 || pathPoints.length === 0) return;
+
+    // 현재까지 완료된 포인트들로 경로 생성
+    const points: THREE.Vector3[] = [];
+    for (let i = 0; i <= currentIndex && i < pathPoints.length; i++) {
+      const point = pathPoints[i];
+      points.push(new THREE.Vector3(point.position.x, point.position.y, 0.5));
+    }
+
+    if (points.length > 1) {
+      const geometry = new THREE.BufferGeometry().setFromPoints(points);
+      const material = new THREE.LineBasicMaterial({ 
+        color: new THREE.Color(Colors.simulated), 
+        linewidth: 4 
+      });
+      const line = new THREE.Line(geometry, material);
+      scene.add(line);
+    }
+
+    // 현재 위치에 레이저 헤드 마커 표시 (노란색 원)
+    if (currentIndex >= 0 && currentIndex < pathPoints.length) {
+      const currentPoint = pathPoints[currentIndex];
+      const headGeometry = new THREE.CircleGeometry(3, 16);
+      const headMaterial = new THREE.MeshBasicMaterial({ 
+        color: new THREE.Color(Colors.laserHead),
+        side: THREE.DoubleSide
+      });
+      const headMarker = new THREE.Mesh(headGeometry, headMaterial);
+      headMarker.position.set(currentPoint.position.x, currentPoint.position.y, 1.0);
+      scene.add(headMarker);
+    }
+  };
 
   /**
    * 컨투어 바운딩 박스 계산 (HKOST 원점 기준)
@@ -567,70 +609,44 @@ export function LaserViewer({
       }
     }
 
-    // 시뮬레이션 상태 확인 함수
-    const isContourCompleted = (): boolean => {
-      if (!simulationState || (!simulationState.isRunning && !simulationState.isPaused)) {
-        return false; // 시뮬레이션이 실행되지 않았으면 false
-      }
-      
-      // 현재 파트/컨투어가 완전히 지나갔는지 확인
-      if (partIndex < simulationState.currentPartIndex) {
-        return true; // 이전 파트는 모두 완료
-      }
-      if (partIndex === simulationState.currentPartIndex && contourIndex < simulationState.currentContourIndex) {
-        return true; // 같은 파트의 이전 컨투어는 완료
-      }
-      return false; // 현재 진행 중이거나 아직 도달하지 않은 컨투어
-    };
+    // 시뮬레이션 모드 체크
+    const isSimulationActive = simulationState && (simulationState.isRunning || simulationState.isPaused);
     
-    const isCurrentContour = (): boolean => {
-      if (!simulationState || (!simulationState.isRunning && !simulationState.isPaused)) {
-        return false;
-      }
-      return partIndex === simulationState.currentPartIndex && 
-             contourIndex === simulationState.currentContourIndex;
-    };
-    
-    const getCurrentSegmentColor = (defaultColor: string): string => {
-      if (isContourCompleted()) {
-        return Colors.simulated; // 완료된 컨투어는 모두 빨간색
-      }
-      if (isCurrentContour()) {
-        // 현재 진행 중인 컨투어 - 부분적으로 빨간색 (나중에 세그먼트별로 세밀하게 처리 가능)
-        return defaultColor; // 일단 기본 색상 유지
-      }
-      return defaultColor; // 아직 시작 안 한 컨투어
-    };
-
-    // Lead-in 경로
-    if (options.showLeadIn && contour.leadIn) {
-      contour.leadIn.path.forEach((segment) => {
-        const color = getCurrentSegmentColor(Colors.leadIn);
-        const line = createSegmentLine(segment, color, 2);
-        line.position.z = 0.2;
-        group.add(line);
-      });
+    // 시뮬레이션 중에는 원래 경로를 숨기고 시뮬레이션 경로만 표시
+    if (isSimulationActive) {
+      // 시뮬레이션 중에는 경로를 그리지 않음 (drawSimulationPath가 처리)
+      // 단, 라벨과 피어싱 포인트는 표시
     }
 
-    // Approach 경로
-    if (options.showApproach && contour.approachPath.length > 0) {
-      contour.approachPath.forEach((segment) => {
-        const color = getCurrentSegmentColor(Colors.approach);
-        const line = createSegmentLine(segment, color, 2);
-        line.position.z = 0.3;
-        group.add(line);
-      });
-    }
+    // 시뮬레이션이 활성화되지 않았을 때만 일반 경로 그리기
+    if (!isSimulationActive) {
+      // Lead-in 경로
+      if (options.showLeadIn && contour.leadIn) {
+        contour.leadIn.path.forEach((segment) => {
+          const line = createSegmentLine(segment, Colors.leadIn, 2);
+          line.position.z = 0.2;
+          group.add(line);
+        });
+      }
 
-    // Cutting 경로
-    if (options.showCutting && contour.cuttingPath.length > 0) {
-      const defaultColor = contour.cuttingType === 10 ? Colors.marking : Colors.cutting;
-      contour.cuttingPath.forEach((segment) => {
-        const color = getCurrentSegmentColor(defaultColor);
-        const line = createSegmentLine(segment, color, 3);
-        line.position.z = 0.4;
-        group.add(line);
-      });
+      // Approach 경로
+      if (options.showApproach && contour.approachPath.length > 0) {
+        contour.approachPath.forEach((segment) => {
+          const line = createSegmentLine(segment, Colors.approach, 2);
+          line.position.z = 0.3;
+          group.add(line);
+        });
+      }
+
+      // Cutting 경로
+      if (options.showCutting && contour.cuttingPath.length > 0) {
+        const defaultColor = contour.cuttingType === 10 ? Colors.marking : Colors.cutting;
+        contour.cuttingPath.forEach((segment) => {
+          const line = createSegmentLine(segment, defaultColor, 3);
+          line.position.z = 0.4;
+          group.add(line);
+        });
+      }
     }
   };
 
