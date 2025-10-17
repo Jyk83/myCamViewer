@@ -261,7 +261,7 @@ export class MPFParser {
     const nesting = this.extractNesting();
     this.log('네스팅 정보:', nesting.length, '개');
     
-    const parts = this.extractParts();
+    const parts = this.extractParts(nesting);  // 네스팅 정보 전달
     this.log('파트:', parts.length, '개');
 
     return {
@@ -350,9 +350,8 @@ export class MPFParser {
   /**
    * 파트 정보 추출
    */
-  private extractParts(): Part[] {
+  private extractParts(nesting: NestingInfo[]): Part[] {
     const parts: Part[] = [];
-    const nesting = this.extractNesting();
 
     this.log(`${nesting.length}개 파트 추출 시작`);
 
