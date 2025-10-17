@@ -219,17 +219,19 @@ export function LaserViewer({
     // group.add(originMarker);
 
     // 파트 바운딩 박스 그리기 (마지막 컨투어의 바운딩 박스 사용)
+    let partWidth = 0;
+    let partHeight = 0;
     if (part.contours.length > 0) {
       const lastContour = part.contours[part.contours.length - 1];
-      const width = lastContour.boundingBox.width;
-      const height = lastContour.boundingBox.height;
+      partWidth = lastContour.boundingBox.width;
+      partHeight = lastContour.boundingBox.height;
       
       // 노란색 점선 박스
       const points = [
         new THREE.Vector3(0, 0, -0.5),
-        new THREE.Vector3(width, 0, -0.5),
-        new THREE.Vector3(width, height, -0.5),
-        new THREE.Vector3(0, height, -0.5),
+        new THREE.Vector3(partWidth, 0, -0.5),
+        new THREE.Vector3(partWidth, partHeight, -0.5),
+        new THREE.Vector3(0, partHeight, -0.5),
         new THREE.Vector3(0, 0, -0.5),
       ];
       const geometry = new THREE.BufferGeometry().setFromPoints(points);
@@ -244,9 +246,9 @@ export function LaserViewer({
       group.add(boundingBoxLine);
     }
 
-    // 파트 번호 표시 (텍스트 스프라이트)
+    // 파트 번호 표시 (바운딩 박스 중앙)
     const textSprite = createTextSprite(options.partIndex.toString(), Colors.partLabel, 12);
-    textSprite.position.set(5, 5, 0.7); // 원점 근처
+    textSprite.position.set(partWidth / 2, partHeight / 2, 0.7);
     group.add(textSprite);
 
     // 컨투어 그리기 (파트 내 인덱스 사용)
@@ -271,20 +273,32 @@ export function LaserViewer({
     },
     contourIndex: number
   ) => {
-    // 피어싱 위치 표시 (매우 작은 빨간 점)
+    // 피어싱 위치 표시 (작은 빨간 점 - Points로 표시)
     if (options.showPiercing && contour.piercingType > 0) {
-      const piercingGeometry = new THREE.CircleGeometry(0.3, 16);
-      const piercingMaterial = new THREE.MeshBasicMaterial({ color: new THREE.Color(Colors.piercing) });
-      const piercingMarker = new THREE.Mesh(piercingGeometry, piercingMaterial);
-      piercingMarker.position.set(contour.piercingPosition.x, contour.piercingPosition.y, 0.5);
-      group.add(piercingMarker);
+      const geometry = new THREE.BufferGeometry();
+      const vertices = new Float32Array([
+        contour.piercingPosition.x,
+        contour.piercingPosition.y,
+        0.5
+      ]);
+      geometry.setAttribute('position', new THREE.BufferAttribute(vertices, 3));
+      const material = new THREE.PointsMaterial({
+        color: new THREE.Color(Colors.piercing),
+        size: 2,
+        sizeAttenuation: false
+      });
+      const points = new THREE.Points(geometry, material);
+      group.add(points);
     }
 
-    // 컨투어 번호 표시 (HKSTR 위치 근처)
+    // 컨투어 번호 표시 (컨투어 중앙 상단)
     // 피어싱이 있든 없든 항상 표시
     const contourLabel = createTextSprite(contourIndex.toString(), Colors.contourLabel, 8);
-    contourLabel.position.set(contour.piercingPosition.x + 3, contour.piercingPosition.y + 3, 0.6);
-    contourLabel.scale.set(5, 2.5, 1);
+    // 컨투어 바운딩 박스 중앙 상단 계산
+    const contourCenterX = contour.piercingPosition.x + contour.boundingBox.width / 2;
+    const contourTopY = contour.piercingPosition.y + contour.boundingBox.height;
+    contourLabel.position.set(contourCenterX, contourTopY + 2, 0.6);
+    contourLabel.scale.set(4, 2, 1);
     group.add(contourLabel);
 
     // Lead-in 경로
