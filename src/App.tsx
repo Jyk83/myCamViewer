@@ -199,6 +199,38 @@ function App() {
         const partOrigin = part.origin;
         
         part.contours.forEach((contour, contourIndex) => {
+          // Approach path (HKSTR 이동 - 레이저 OFF)
+          // 이전 컨투어의 HKSTO 위치에서 현재 컨투어의 HKSTR 위치까지
+          const approachPoints = segmentPathArray(
+            contour.approachPath,
+            partIndex,
+            contourIndex,
+            'approach',
+            false  // 레이저 OFF
+          );
+          // 파트 원점만큼 좌표 이동
+          approachPoints.forEach(p => {
+            p.position.x += partOrigin.x;
+            p.position.y += partOrigin.y;
+          });
+          segmentedPaths.push(...approachPoints);
+          
+          // 피어싱 포인트 (HKSTR 위치, HKPIE 실행)
+          // 레이저 ON 시작점
+          const piercingPoint: PathPoint = {
+            position: {
+              x: contour.piercingPosition.x + partOrigin.x,
+              y: contour.piercingPosition.y + partOrigin.y,
+            },
+            partIndex,
+            contourIndex,
+            segmentIndex: -1,  // 피어싱은 세그먼트가 아님
+            progress: 0,
+            laserOn: true,  // 레이저 ON 시작
+            pathType: 'piercing',
+          };
+          segmentedPaths.push(piercingPoint);
+          
           // Lead-in path (optional) - 레이저 ON 진입 절단
           if (contour.leadIn) {
             const leadInPoints = segmentPathArray(
@@ -216,21 +248,6 @@ function App() {
             segmentedPaths.push(...leadInPoints);
           }
           
-          // Approach path (HKSTR - 레이저 OFF 이동)
-          const approachPoints = segmentPathArray(
-            contour.approachPath,
-            partIndex,
-            contourIndex,
-            'approach',
-            false  // 레이저 OFF
-          );
-          // 파트 원점만큼 좌표 이동
-          approachPoints.forEach(p => {
-            p.position.x += partOrigin.x;
-            p.position.y += partOrigin.y;
-          });
-          segmentedPaths.push(...approachPoints);
-          
           // Cutting path
           const cuttingPoints = segmentPathArray(
             contour.cuttingPath,
@@ -245,6 +262,21 @@ function App() {
             p.position.y += partOrigin.y;
           });
           segmentedPaths.push(...cuttingPoints);
+          
+          // HKSTO 종료 포인트 - 레이저 OFF
+          const endPoint: PathPoint = {
+            position: {
+              x: contour.endPosition.x + partOrigin.x,
+              y: contour.endPosition.y + partOrigin.y,
+            },
+            partIndex,
+            contourIndex,
+            segmentIndex: -2,  // HKSTO 마커
+            progress: 1,
+            laserOn: false,  // 레이저 OFF
+            pathType: 'cutting',
+          };
+          segmentedPaths.push(endPoint);
         });
       });
       setAllPathPoints(segmentedPaths);
