@@ -22,10 +22,10 @@ export function SimulationControls({
   onSpeedChange,
   onStepSizeChange,
 }: SimulationControlsProps) {
-  const { isRunning, isPaused, currentPartIndex, currentContourIndex, currentPointIndex, totalPoints, speed, stepSize } = simulationState;
+  const { isRunning, isPaused, currentPartIndex, currentContourIndex, currentDistance, totalDistance, speed, stepSize } = simulationState;
 
-  // 진행률 계산
-  const progress = totalPoints > 0 ? (currentPointIndex / totalPoints) * 100 : 0;
+  // 진행률 계산 (거리 기반)
+  const progress = totalDistance > 0 ? (currentDistance / totalDistance) * 100 : 0;
 
   // 속도 옵션 (ms per step)
   const speedOptions = [
@@ -113,7 +113,7 @@ export function SimulationControls({
             파트 {currentPartIndex + 1}, 컨투어 {currentContourIndex + 1}
           </span>
           <span style={{ fontSize: '13px', color: '#666', fontWeight: 'bold' }}>
-            {currentPointIndex} / {totalPoints} ({progress.toFixed(1)}%)
+            {currentDistance.toFixed(1)} / {totalDistance.toFixed(1)} mm ({progress.toFixed(1)}%)
           </span>
         </div>
 

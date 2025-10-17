@@ -293,9 +293,10 @@ export interface SimulationState {
   currentPartIndex: number;   // 현재 파트 (0부터 시작)
   currentContourIndex: number;// 현재 컨투어 (0부터 시작)
   currentPointIndex: number;  // 현재 포인트 (0부터 시작)
-  totalPoints: number;        // 전체 포인트 수
+  currentDistance: number;    // 현재 진행 거리 (mm)
+  totalDistance: number;      // 전체 경로 거리 (mm)
   speed: number;              // ms per step (100, 200, 500...)
-  stepSize: number;           // 경로 분할 단위 (mm, 기본 10mm, 최대 100mm)
+  stepSize: number;           // 타이머당 이동 거리 (mm, 기본 10mm, 최대 100mm)
   completedPaths: Set<string>; // "part-0-contour-1-point-50"
 }
 

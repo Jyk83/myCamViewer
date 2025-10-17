@@ -45,9 +45,10 @@ function App() {
     currentPartIndex: 0,
     currentContourIndex: 0,
     currentPointIndex: 0,
-    totalPoints: 0,
+    currentDistance: 0,  // 현재 진행 거리
+    totalDistance: 0,    // 전체 경로 거리
     speed: 100,
-    stepSize: 10, // 기본 10mm 단위
+    stepSize: 10, // 기본 10mm, 타이머당 이동 거리
     completedPaths: new Set(),
   });
 
@@ -81,35 +82,73 @@ function App() {
 
     simulationTimerRef.current = setInterval(() => {
       setSimulationState(prev => {
+        // 거리 기반 시뮬레이션: 매 타이머마다 stepSize(mm)만큼 진행
+        const targetDistance = prev.currentDistance + prev.stepSize;
+        
         // 이미 끝까지 진행했으면 중지
-        if (prev.currentPointIndex >= allPathPoints.length - 1) {
+        if (targetDistance >= prev.totalDistance || prev.currentPointIndex >= allPathPoints.length - 1) {
           if (simulationTimerRef.current) {
             clearInterval(simulationTimerRef.current);
             simulationTimerRef.current = null;
           }
           return {
             ...prev,
+            currentDistance: prev.totalDistance,
             isRunning: false,
             isPaused: false,
           };
         }
 
-        // 다음 포인트로 진행 (PathPoint는 이미 stepSize 간격으로 생성되어 있음)
-        // 매 타이머 간격마다 1포인트씩 이동 = stepSize(mm) 거리 이동
-        const nextIndex = prev.currentPointIndex + 1;
-        const nextPoint = allPathPoints[nextIndex];
+        // targetDistance에 해당하는 포인트 찾기
+        let nextIndex = prev.currentPointIndex;
+        let accumulatedDistance = prev.currentDistance;
         
-        // 완료된 경로 추가 (createPathId 사용)
+        // 현재 위치에서 stepSize만큼 진행한 포인트 찾기
+        while (nextIndex < allPathPoints.length - 1) {
+          const currentPoint = allPathPoints[nextIndex];
+          const nextPoint = allPathPoints[nextIndex + 1];
+          
+          const dx = nextPoint.position.x - currentPoint.position.x;
+          const dy = nextPoint.position.y - currentPoint.position.y;
+          const segmentDistance = Math.sqrt(dx * dx + dy * dy);
+          
+          // 다음 세그먼트를 포함해도 목표 거리를 넘지 않으면 계속 진행
+          if (accumulatedDistance + segmentDistance <= targetDistance) {
+            accumulatedDistance += segmentDistance;
+            nextIndex++;
+          } else {
+            // 목표 거리 도달
+            break;
+          }
+        }
+        
+        // 최소 1 포인트는 이동 (정체 방지)
+        if (nextIndex === prev.currentPointIndex && nextIndex < allPathPoints.length - 1) {
+          nextIndex = prev.currentPointIndex + 1;
+          const currentPoint = allPathPoints[prev.currentPointIndex];
+          const nextPoint = allPathPoints[nextIndex];
+          const dx = nextPoint.position.x - currentPoint.position.x;
+          const dy = nextPoint.position.y - currentPoint.position.y;
+          accumulatedDistance += Math.sqrt(dx * dx + dy * dy);
+        }
+        
+        const currentPoint = allPathPoints[nextIndex];
+        
+        // 완료된 경로 추가 (현재부터 다음까지 모든 포인트)
         const newCompletedPaths = new Set(prev.completedPaths);
-        newCompletedPaths.add(
-          `part-${nextPoint.partIndex}-contour-${nextPoint.contourIndex}-point-${nextIndex}`
-        );
+        for (let i = prev.currentPointIndex; i <= nextIndex; i++) {
+          const point = allPathPoints[i];
+          newCompletedPaths.add(
+            `part-${point.partIndex}-contour-${point.contourIndex}-point-${i}`
+          );
+        }
 
         return {
           ...prev,
-          currentPartIndex: nextPoint.partIndex,
-          currentContourIndex: nextPoint.contourIndex,
+          currentPartIndex: currentPoint.partIndex,
+          currentContourIndex: currentPoint.contourIndex,
           currentPointIndex: nextIndex,
+          currentDistance: accumulatedDistance,
           completedPaths: newCompletedPaths,
         };
       });
@@ -140,6 +179,7 @@ function App() {
       currentPartIndex: 0,
       currentContourIndex: 0,
       currentPointIndex: 0,
+      currentDistance: 0,
       completedPaths: new Set(),
     }));
   };
@@ -158,8 +198,8 @@ function App() {
   };
 
   const handleSimulationStepSizeChange = (stepSize: number) => {
-    // 유효한 범위로 제한 (0.5mm ~ 100mm)
-    const clampedStepSize = Math.max(0.5, Math.min(100, stepSize));
+    // 유효한 범위로 제한 (1mm ~ 100mm)
+    const clampedStepSize = Math.max(1, Math.min(100, stepSize));
     
     setSimulationState(prev => ({
       ...prev,
@@ -168,13 +208,14 @@ function App() {
       currentPartIndex: 0,
       currentContourIndex: 0,
       currentPointIndex: 0,
+      currentDistance: 0,
       completedPaths: new Set(),
     }));
 
     // 경로 재생성 필요 - 프로그램이 있으면 재로드
     if (program) {
       // 경로 재생성은 useEffect에서 자동으로 처리됨
-      console.log(`이동 단위 변경: ${clampedStepSize}mm`);
+      console.log(`이동 단위 변경: ${clampedStepSize}mm (타이머당 이동 거리)`);
     }
   };
 
@@ -323,10 +364,22 @@ function App() {
           segmentedPaths.push(partEndPoint);
         }
       });
+      
+      // 전체 경로 거리 계산 (mm)
+      let totalDistance = 0;
+      for (let i = 0; i < segmentedPaths.length - 1; i++) {
+        const p1 = segmentedPaths[i];
+        const p2 = segmentedPaths[i + 1];
+        const dx = p2.position.x - p1.position.x;
+        const dy = p2.position.y - p1.position.y;
+        totalDistance += Math.sqrt(dx * dx + dy * dy);
+      }
+      
       setAllPathPoints(segmentedPaths);
       setSimulationState(prev => ({
         ...prev,
-        totalPoints: segmentedPaths.length,
+        totalDistance: totalDistance,
+        currentDistance: 0,
       }));
 
       // 디버깅용 전역 저장
@@ -335,6 +388,7 @@ function App() {
       console.log('window.lastProgram에 저장 완료');
       console.log('=== 파싱 완료 ===');
       console.log('전체 경로 포인트 수:', segmentedPaths.length);
+      console.log('전체 경로 거리:', totalDistance.toFixed(2), 'mm');
     } catch (err) {
       console.error('=== 파싱 에러 ===');
       console.error('에러:', err);
