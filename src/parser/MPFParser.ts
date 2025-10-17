@@ -67,7 +67,7 @@ export class MPFParser {
   }
 
   /**
-   * 한 줄 파싱
+   * 한 줄 파싱 (N 블록 번호와 명령어가 한 줄에 있는 경우도 처리)
    */
   private parseLine(line: string): Command | null {
     // 주석 처리
@@ -78,14 +78,25 @@ export class MPFParser {
       } as CommentCommand;
     }
 
-    // N 블록 번호
+    // N 블록 번호 처리 (다른 명령어와 함께 있을 수 있음)
     if (line.match(/^N\d+/)) {
-      const match = line.match(/^N(\d+)/);
+      const match = line.match(/^N(\d+)\s*(.*)/);
       if (match) {
-        return {
+        const blockNumber = parseInt(match[1]);
+        const remainder = match[2].trim();
+        
+        // N 블록 커맨드 추가
+        this.commands.push({
           type: 'NBLOCK',
-          blockNumber: parseInt(match[1]),
-        } as NBlockCommand;
+          blockNumber: blockNumber,
+        } as NBlockCommand);
+        
+        // 남은 부분이 있으면 재귀적으로 파싱
+        if (remainder.length > 0) {
+          return this.parseLine(remainder);
+        }
+        
+        return null; // 이미 commands에 추가했으므로 null 반환
       }
     }
 
