@@ -547,8 +547,8 @@ export class MPFParser {
         inCutting = true;
       }
 
-      // G-code: 절단 경로 (HKCUT 이후 모든 G-code)
-      if (cmd.type === 'GCODE' && currentContour && inCutting) {
+      // G-code: 경로 처리 (접근 경로 또는 절단 경로)
+      if (cmd.type === 'GCODE' && currentContour) {
         const gcode = cmd as GCodeCommand;
         if (gcode.x !== undefined && gcode.y !== undefined) {
           const segment = this.createSegment(
@@ -559,7 +559,13 @@ export class MPFParser {
             gcode.j || 0
           );
           if (segment) {
-            currentContour.cuttingPath!.push(segment);
+            if (inCutting) {
+              // HKCUT 또는 HKSCRC(3) 이후: 절단 경로
+              currentContour.cuttingPath!.push(segment);
+            } else {
+              // HKCUT 또는 HKSCRC(3) 이전: 접근 경로
+              currentContour.approachPath!.push(segment);
+            }
           }
           currentPosition = { x: gcode.x, y: gcode.y };
         }
