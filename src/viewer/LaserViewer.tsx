@@ -412,9 +412,10 @@ export function LaserViewer({
       boundingBoxLine.computeLineDistances(); // 점선 렌더링에 필요
       group.add(boundingBoxLine);
       
-      // 파트 번호 텍스트 (바운딩 박스 중앙)
+      // 파트 번호 텍스트 (바운딩 박스 중앙에서 오프셋)
       const textSprite = createTextSprite(options.partIndex.toString(), Colors.partLabel, 24);
-      textSprite.position.set(partWidth / 2, partHeight / 2, 0.7);
+      // 중앙 위치에서 x-5, y+5 오프셋 적용
+      textSprite.position.set(partWidth / 2 - 5, partHeight / 2 + 5, 0.7);
       // 스프라이트 크기는 월드 좌표로 설정 (줌에 따라 자동 조정됨)
       textSprite.scale.set(12, 6, 1);
       group.add(textSprite);
