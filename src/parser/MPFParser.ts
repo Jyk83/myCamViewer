@@ -457,6 +457,62 @@ export class MPFParser {
         inCutting = false;
       }
 
+      // HKSCRC: 잔재절단 컨투어 시작
+      if (cmd.type === 'HKSCRC') {
+        const hkscrc = cmd as any;
+        // HKSCRC(0,1,x,y) 형태: 잔재절단 시작
+        if (hkscrc.cuttingType !== undefined && hkscrc.x !== undefined && hkscrc.y !== undefined) {
+          this.log(`  잔재절단 컨투어 시작: 블록 ${currentBlockNumber}, cuttingType=${hkscrc.cuttingType}, cuttingKind=${hkscrc.cuttingKind}`);
+          currentContour = {
+            id: `contour-${currentBlockNumber}`,
+            blockNumber: currentBlockNumber,
+            piercingType: 0, // 잔재절단은 피어싱 없음
+            cuttingType: hkscrc.cuttingType || 1,
+            piercingPosition: { x: hkscrc.x, y: hkscrc.y },
+            toolCompensation: 0,
+            boundingBox: {
+              width: 0,
+              height: 0,
+            },
+            approachPath: [],
+            cuttingPath: [],
+            allSegments: [],
+            endGCode: 0,
+            endPosition: { x: 0, y: 0 },
+          };
+          currentPosition = { x: hkscrc.x, y: hkscrc.y };
+          inCutting = false;
+        }
+        // HKSCRC(3) 형태: 절단 경로 시작 (HKCUT과 유사)
+        else if (hkscrc.params === 3 && currentContour) {
+          this.log(`    HKSCRC(3) - 잔재절단 경로 시작`);
+          inCutting = true;
+        }
+        // HKSCRC(1), HKSCRC(2) 형태: 중간 마커 (무시)
+        else if (hkscrc.params === 1 || hkscrc.params === 2) {
+          this.log(`    HKSCRC(${hkscrc.params}) - 경로 마커`);
+        }
+        // HKSCRC(4) 형태: 종료 (HKSTO와 유사)
+        else if (hkscrc.params === 4 && currentContour) {
+          this.log(`    HKSCRC(4) - 잔재절단 종료, ${currentContour.cuttingPath!.length}개 세그먼트`);
+          // 현재 위치를 종료 위치로 설정
+          currentContour.endGCode = 0;
+          currentContour.endPosition = currentPosition;
+
+          // 전체 세그먼트 통합
+          currentContour.allSegments = [
+            ...(currentContour.leadIn?.path || []),
+            ...currentContour.approachPath!,
+            ...currentContour.cuttingPath!,
+          ];
+
+          contours.push(currentContour as Contour);
+          this.log(`  잔재절단 컨투어 완료: ${contours.length}번째`);
+          currentContour = null;
+          inCutting = false;
+        }
+      }
+
       // HKPIE: 피어싱
       if (cmd.type === 'HKPIE' && currentContour) {
         this.log(`    피어싱 실행`);
