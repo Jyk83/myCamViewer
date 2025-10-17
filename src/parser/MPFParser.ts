@@ -110,8 +110,12 @@ export class MPFParser {
     if (!funcMatch) return null;
 
     const funcName = funcMatch[1];
+    
+    // 괄호가 없는 경우도 처리 (예: HKPPP)
     const argsMatch = line.match(/\(([^)]*)\)/);
     const args = argsMatch ? argsMatch[1].split(',').map(a => a.trim()) : [];
+    
+    this.log(`HK 함수 파싱: ${funcName}, 인자: ${args.length}개`);
 
     switch (funcName) {
       case 'HKLDB':
@@ -314,8 +318,10 @@ export class MPFParser {
    * 네스팅 정보 추출
    */
   private extractNesting(): NestingInfo[] {
+    this.log('=== 네스팅 정보 추출 시작 ===');
     const nesting: NestingInfo[] = [];
     let currentBlockNumber = 0;
+    let hkostCount = 0;
 
     for (let i = 0; i < this.commands.length; i++) {
       const cmd = this.commands[i];
@@ -323,11 +329,14 @@ export class MPFParser {
       // N 블록 번호 확인
       if (cmd.type === 'NBLOCK') {
         currentBlockNumber = (cmd as NBlockCommand).blockNumber;
+        this.log(`  N블록: ${currentBlockNumber}`);
       }
 
       // HKOST 발견
       if (cmd.type === 'HKOST') {
         const hkost = cmd as HKOSTCommand;
+        hkostCount++;
+        this.log(`  HKOST #${hkostCount}: 블록=${currentBlockNumber}, 파트코드=${hkost.partNumber}`);
         nesting.push({
           partOriginBlockNumber: currentBlockNumber,
           origin: { x: hkost.x, y: hkost.y },
@@ -337,13 +346,19 @@ export class MPFParser {
         });
       }
 
+      // HKPPP 확인 (디버깅용)
+      if (cmd.type === 'HKPPP') {
+        this.log(`  HKPPP 발견`);
+      }
+
       // HKEND 발견 시 네스팅 정보 종료
       if (cmd.type === 'HKEND') {
+        this.log(`  HKEND 발견 - 네스팅 종료`);
         break;
       }
     }
 
-    this.log('네스팅 정보 추출 완료:', nesting);
+    this.log(`=== 네스팅 정보 추출 완료: ${nesting.length}개 ===`);
     return nesting;
   }
 
