@@ -218,6 +218,32 @@ export function LaserViewer({
     // originMarker.position.z = 0.6;
     // group.add(originMarker);
 
+    // 파트 바운딩 박스 그리기 (마지막 컨투어의 바운딩 박스 사용)
+    if (part.contours.length > 0) {
+      const lastContour = part.contours[part.contours.length - 1];
+      const width = lastContour.boundingBox.width;
+      const height = lastContour.boundingBox.height;
+      
+      // 노란색 점선 박스
+      const points = [
+        new THREE.Vector3(0, 0, -0.5),
+        new THREE.Vector3(width, 0, -0.5),
+        new THREE.Vector3(width, height, -0.5),
+        new THREE.Vector3(0, height, -0.5),
+        new THREE.Vector3(0, 0, -0.5),
+      ];
+      const geometry = new THREE.BufferGeometry().setFromPoints(points);
+      const material = new THREE.LineDashedMaterial({
+        color: new THREE.Color(Colors.partLabel), // 노란색
+        linewidth: 1,
+        dashSize: 3,
+        gapSize: 2,
+      });
+      const boundingBoxLine = new THREE.Line(geometry, material);
+      boundingBoxLine.computeLineDistances(); // 점선 렌더링에 필요
+      group.add(boundingBoxLine);
+    }
+
     // 파트 번호 표시 (텍스트 스프라이트)
     const textSprite = createTextSprite(options.partIndex.toString(), Colors.partLabel, 12);
     textSprite.position.set(5, 5, 0.7); // 원점 근처
