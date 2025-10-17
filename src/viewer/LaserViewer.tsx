@@ -409,6 +409,7 @@ export function LaserViewer({
     // 디버깅: 컨투어 번호 및 경로 정보 로그
     console.log(`컨투어 ${contourIndex}:`, {
       위치: `(${centerX.toFixed(2)}, ${topY.toFixed(2)})`,
+      라벨위치Y: `${(topY + 2).toFixed(2)}`,
       크기: `${bboxWidth.toFixed(2)} x ${bboxHeight.toFixed(2)}`,
       bbox,
       piercingPos: contour.piercingPosition,
@@ -417,6 +418,28 @@ export function LaserViewer({
       approachCount: contour.approachPath?.length || 0,
       cuttingCount: contour.cuttingPath?.length || 0,
     });
+    
+    // 컨투어 6번 상세 디버깅
+    if (contourIndex === 6) {
+      console.log('=== 컨투어 6번 상세 분석 ===');
+      console.log('Cutting Path Segments:', contour.cuttingPath?.length || 0);
+      contour.cuttingPath?.forEach((seg, idx) => {
+        console.log(`  Segment ${idx}:`, {
+          type: seg.type,
+          start: seg.start,
+          end: seg.end,
+          ...(seg.type === 'arc' && {
+            i: (seg as any).i,
+            j: (seg as any).j,
+            center: seg.type === 'arc' ? {
+              x: seg.start.x + (seg as any).i,
+              y: seg.start.y + (seg as any).j,
+            } : null,
+            radius: seg.type === 'arc' ? Math.sqrt((seg as any).i ** 2 + (seg as any).j ** 2) : null,
+          })
+        });
+      });
+    }
     
     // 컨투어 6번만 바운딩 박스 표시 (노란색 점선)
     if (contourIndex === 6) {
