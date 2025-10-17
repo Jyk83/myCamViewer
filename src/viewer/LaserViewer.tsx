@@ -391,15 +391,18 @@ export function LaserViewer({
     // originMarker.position.z = 0.6;
     // group.add(originMarker);
 
-    // 파트 바운딩 박스 그리기 (마지막 컨투어의 바운딩 박스 사용)
+    // 파트 크기 계산 (마지막 컨투어의 바운딩 박스 사용)
     let partWidth = 0;
     let partHeight = 0;
     if (part.contours.length > 0) {
       const lastContour = part.contours[part.contours.length - 1];
       partWidth = lastContour.boundingBox.width;
       partHeight = lastContour.boundingBox.height;
-      
-      // 노란색 점선 박스
+    }
+
+    // 파트 번호 표시 옵션이 활성화된 경우
+    if (options.showPartLabels) {
+      // 노란색 점선 박스 (파트 바운딩 박스)
       const points = [
         new THREE.Vector3(0, 0, -0.5),
         new THREE.Vector3(partWidth, 0, -0.5),
@@ -417,10 +420,8 @@ export function LaserViewer({
       const boundingBoxLine = new THREE.Line(geometry, material);
       boundingBoxLine.computeLineDistances(); // 점선 렌더링에 필요
       group.add(boundingBoxLine);
-    }
-
-    // 파트 번호 표시 (바운딩 박스 중앙) - 옵션이 활성화된 경우만
-    if (options.showPartLabels) {
+      
+      // 파트 번호 텍스트 (바운딩 박스 중앙)
       const textSprite = createTextSprite(options.partIndex.toString(), Colors.partLabel, 24);
       textSprite.position.set(partWidth / 2, partHeight / 2, 0.7);
       // 스프라이트 크기는 월드 좌표로 설정 (줌에 따라 자동 조정됨)

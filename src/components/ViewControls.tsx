@@ -147,38 +147,40 @@ export function ViewControls({
         )}
       </div>
 
-      {/* 디버그/검증 옵션 */}
-      <h3 style={{ marginTop: '20px', marginBottom: '15px', color: '#333', fontSize: '16px' }}>
-        🔍 디버그 옵션
-      </h3>
+      {/* 디버그/검증 옵션 - 컨투어 번호 표시가 활성화된 경우만 표시 */}
+      {showContourLabels && (
+        <>
+          <h3 style={{ marginTop: '20px', marginBottom: '15px', color: '#333', fontSize: '16px' }}>
+            🔍 디버그 옵션
+          </h3>
 
-      <div style={{ 
-        padding: '15px', 
-        backgroundColor: 'white', 
-        borderRadius: '4px',
-        border: '2px dashed #ff9800'
-      }}>
-        <label
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            marginBottom: '15px',
-            cursor: 'pointer',
-            userSelect: 'none',
-          }}
-        >
-          <input
-            type="checkbox"
-            checked={showDebugBoundingBox}
-            onChange={onToggleDebugBoundingBox}
-            style={{ marginRight: '10px', cursor: 'pointer' }}
-          />
-          <span style={{ fontSize: '14px', color: '#333', fontWeight: 'bold' }}>
-            바운딩 박스 표시
-          </span>
-        </label>
+          <div style={{ 
+            padding: '15px', 
+            backgroundColor: 'white', 
+            borderRadius: '4px',
+            border: '2px dashed #ff9800'
+          }}>
+            <label
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                marginBottom: '15px',
+                cursor: 'pointer',
+                userSelect: 'none',
+              }}
+            >
+              <input
+                type="checkbox"
+                checked={showDebugBoundingBox}
+                onChange={onToggleDebugBoundingBox}
+                style={{ marginRight: '10px', cursor: 'pointer' }}
+              />
+              <span style={{ fontSize: '14px', color: '#333', fontWeight: 'bold' }}>
+                바운딩 박스 표시
+              </span>
+            </label>
 
-        {showDebugBoundingBox && (
+            {showDebugBoundingBox && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
             <div>
               <label style={{ 
@@ -239,7 +241,9 @@ export function ViewControls({
             </div>
           </div>
         )}
-      </div>
+          </div>
+        </>
+      )}
 
       <div style={{ marginTop: '20px', padding: '15px', backgroundColor: 'white', borderRadius: '4px' }}>
         <h4 style={{ margin: '0 0 10px 0', fontSize: '14px', color: '#555' }}>

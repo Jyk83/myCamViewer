@@ -36,6 +36,15 @@ function App() {
   const [debugPartNumber, setDebugPartNumber] = useState(1);
   const [debugContourNumber, setDebugContourNumber] = useState(6);
 
+  // 컨투어 번호 표시 토글 핸들러 (디버그 바운딩 박스도 함께 제어)
+  const handleToggleContourLabels = () => {
+    if (showContourLabels) {
+      // 컨투어 번호를 끄면 디버그 바운딩 박스도 함께 끔
+      setShowDebugBoundingBox(false);
+    }
+    setShowContourLabels(!showContourLabels);
+  };
+
   const handleFileLoad = (content: string, name: string) => {
     try {
       setError(null);
@@ -152,7 +161,7 @@ function App() {
                 onToggleApproach={() => setShowApproach(!showApproach)}
                 onToggleCutting={() => setShowCutting(!showCutting)}
                 onTogglePartLabels={() => setShowPartLabels(!showPartLabels)}
-                onToggleContourLabels={() => setShowContourLabels(!showContourLabels)}
+                onToggleContourLabels={handleToggleContourLabels}
                 onContourLabelSizeChange={setContourLabelSize}
                 onToggleDebugBoundingBox={() => setShowDebugBoundingBox(!showDebugBoundingBox)}
                 onDebugPartNumberChange={setDebugPartNumber}
