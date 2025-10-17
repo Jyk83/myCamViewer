@@ -278,6 +278,25 @@ function App() {
           };
           segmentedPaths.push(endPoint);
         });
+        
+        // HKPED: 파트 종료 포인트 - 레이저 OFF
+        // 마지막 컨투어의 종료 위치를 사용
+        if (part.contours.length > 0) {
+          const lastContour = part.contours[part.contours.length - 1];
+          const partEndPoint: PathPoint = {
+            position: {
+              x: lastContour.endPosition.x + partOrigin.x,
+              y: lastContour.endPosition.y + partOrigin.y,
+            },
+            partIndex,
+            contourIndex: part.contours.length - 1,
+            segmentIndex: -3,  // HKPED 마커
+            progress: 1,
+            laserOn: false,  // 레이저 OFF (파트 종료)
+            pathType: 'cutting',
+          };
+          segmentedPaths.push(partEndPoint);
+        }
       });
       setAllPathPoints(segmentedPaths);
       setSimulationState(prev => ({
