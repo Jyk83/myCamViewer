@@ -11,6 +11,9 @@ interface ViewControlsProps {
   showPartLabels: boolean;
   showContourLabels: boolean;
   contourLabelSize: number;
+  showDebugBoundingBox: boolean;
+  debugPartNumber: number;
+  debugContourNumber: number;
   onTogglePiercing: () => void;
   onToggleLeadIn: () => void;
   onToggleApproach: () => void;
@@ -18,6 +21,9 @@ interface ViewControlsProps {
   onTogglePartLabels: () => void;
   onToggleContourLabels: () => void;
   onContourLabelSizeChange: (size: number) => void;
+  onToggleDebugBoundingBox: () => void;
+  onDebugPartNumberChange: (num: number) => void;
+  onDebugContourNumberChange: (num: number) => void;
 }
 
 export function ViewControls({
@@ -28,6 +34,9 @@ export function ViewControls({
   showPartLabels,
   showContourLabels,
   contourLabelSize,
+  showDebugBoundingBox,
+  debugPartNumber,
+  debugContourNumber,
   onTogglePiercing,
   onToggleLeadIn,
   onToggleApproach,
@@ -35,6 +44,9 @@ export function ViewControls({
   onTogglePartLabels,
   onToggleContourLabels,
   onContourLabelSizeChange,
+  onToggleDebugBoundingBox,
+  onDebugPartNumberChange,
+  onDebugContourNumberChange,
 }: ViewControlsProps) {
   return (
     <div
@@ -131,6 +143,100 @@ export function ViewControls({
                 style={{ width: '100%', cursor: 'pointer' }}
               />
             </label>
+          </div>
+        )}
+      </div>
+
+      {/* 디버그/검증 옵션 */}
+      <h3 style={{ marginTop: '20px', marginBottom: '15px', color: '#333', fontSize: '16px' }}>
+        🔍 디버그 옵션
+      </h3>
+
+      <div style={{ 
+        padding: '15px', 
+        backgroundColor: 'white', 
+        borderRadius: '4px',
+        border: '2px dashed #ff9800'
+      }}>
+        <label
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            marginBottom: '15px',
+            cursor: 'pointer',
+            userSelect: 'none',
+          }}
+        >
+          <input
+            type="checkbox"
+            checked={showDebugBoundingBox}
+            onChange={onToggleDebugBoundingBox}
+            style={{ marginRight: '10px', cursor: 'pointer' }}
+          />
+          <span style={{ fontSize: '14px', color: '#333', fontWeight: 'bold' }}>
+            바운딩 박스 표시
+          </span>
+        </label>
+
+        {showDebugBoundingBox && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+            <div>
+              <label style={{ 
+                display: 'block',
+                fontSize: '13px',
+                color: '#666',
+                marginBottom: '6px'
+              }}>
+                파트 번호
+              </label>
+              <input
+                type="number"
+                min="1"
+                value={debugPartNumber}
+                onChange={(e) => onDebugPartNumberChange(Math.max(1, Number(e.target.value)))}
+                style={{
+                  width: '100%',
+                  padding: '8px',
+                  fontSize: '14px',
+                  border: '1px solid #ddd',
+                  borderRadius: '4px',
+                  boxSizing: 'border-box'
+                }}
+              />
+            </div>
+            <div>
+              <label style={{ 
+                display: 'block',
+                fontSize: '13px',
+                color: '#666',
+                marginBottom: '6px'
+              }}>
+                컨투어 번호
+              </label>
+              <input
+                type="number"
+                min="1"
+                value={debugContourNumber}
+                onChange={(e) => onDebugContourNumberChange(Math.max(1, Number(e.target.value)))}
+                style={{
+                  width: '100%',
+                  padding: '8px',
+                  fontSize: '14px',
+                  border: '1px solid #ddd',
+                  borderRadius: '4px',
+                  boxSizing: 'border-box'
+                }}
+              />
+            </div>
+            <div style={{
+              padding: '10px',
+              backgroundColor: '#fff3e0',
+              borderRadius: '4px',
+              fontSize: '12px',
+              color: '#e65100'
+            }}>
+              ℹ️ 파트 {debugPartNumber}, 컨투어 {debugContourNumber}의 바운딩 박스를 노란색 점선으로 표시합니다.
+            </div>
           </div>
         )}
       </div>

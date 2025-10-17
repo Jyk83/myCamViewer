@@ -30,6 +30,11 @@ function App() {
   const [showPartLabels, setShowPartLabels] = useState(true);
   const [showContourLabels, setShowContourLabels] = useState(true);
   const [contourLabelSize, setContourLabelSize] = useState(24); // 컨투어 라벨 폰트 크기 (기본값: 24)
+  
+  // 디버그/검증용 바운딩 박스
+  const [showDebugBoundingBox, setShowDebugBoundingBox] = useState(false);
+  const [debugPartNumber, setDebugPartNumber] = useState(1);
+  const [debugContourNumber, setDebugContourNumber] = useState(6);
 
   const handleFileLoad = (content: string, name: string) => {
     try {
@@ -139,6 +144,9 @@ function App() {
                 showPartLabels={showPartLabels}
                 showContourLabels={showContourLabels}
                 contourLabelSize={contourLabelSize}
+                showDebugBoundingBox={showDebugBoundingBox}
+                debugPartNumber={debugPartNumber}
+                debugContourNumber={debugContourNumber}
                 onTogglePiercing={() => setShowPiercing(!showPiercing)}
                 onToggleLeadIn={() => setShowLeadIn(!showLeadIn)}
                 onToggleApproach={() => setShowApproach(!showApproach)}
@@ -146,6 +154,9 @@ function App() {
                 onTogglePartLabels={() => setShowPartLabels(!showPartLabels)}
                 onToggleContourLabels={() => setShowContourLabels(!showContourLabels)}
                 onContourLabelSizeChange={setContourLabelSize}
+                onToggleDebugBoundingBox={() => setShowDebugBoundingBox(!showDebugBoundingBox)}
+                onDebugPartNumberChange={setDebugPartNumber}
+                onDebugContourNumberChange={setDebugContourNumber}
               />
             </div>
 
@@ -193,6 +204,9 @@ function App() {
             showPartLabels={showPartLabels}
             showContourLabels={showContourLabels}
             contourLabelSize={contourLabelSize}
+            showDebugBoundingBox={showDebugBoundingBox}
+            debugPartNumber={debugPartNumber}
+            debugContourNumber={debugContourNumber}
             viewMode="2D"
           />
         )}

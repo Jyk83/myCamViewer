@@ -20,6 +20,9 @@ interface LaserViewerProps {
   showPartLabels?: boolean;
   showContourLabels?: boolean;
   contourLabelSize?: number;
+  showDebugBoundingBox?: boolean;
+  debugPartNumber?: number;
+  debugContourNumber?: number;
   viewMode?: '2D' | '3D';
 }
 
@@ -34,6 +37,9 @@ export function LaserViewer({
   showPartLabels = true,
   showContourLabels = true,
   contourLabelSize = 24,
+  showDebugBoundingBox = false,
+  debugPartNumber = 1,
+  debugContourNumber = 1,
   viewMode = '2D',
 }: LaserViewerProps) {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -220,6 +226,9 @@ export function LaserViewer({
         showPartLabels,
         showContourLabels,
         contourLabelSize,
+        showDebugBoundingBox,
+        debugPartNumber,
+        debugContourNumber,
         isSelected: part.id === selectedPartId,
         partIndex: index + 1, // 1부터 시작하는 파트 번호
       });
@@ -227,7 +236,7 @@ export function LaserViewer({
 
     // 카메라 위치 조정
     fitCameraToWorkpiece(program.workpiece.width, program.workpiece.height);
-  }, [program, selectedPartId, selectedContourId, showPiercing, showLeadIn, showApproach, showCutting, showPartLabels, showContourLabels, contourLabelSize]);
+  }, [program, selectedPartId, selectedContourId, showPiercing, showLeadIn, showApproach, showCutting, showPartLabels, showContourLabels, contourLabelSize, showDebugBoundingBox, debugPartNumber, debugContourNumber]);
 
   /**
    * 컨투어 바운딩 박스 계산 (HKOST 원점 기준)
@@ -364,6 +373,9 @@ export function LaserViewer({
       showPartLabels: boolean;
       showContourLabels: boolean;
       contourLabelSize: number;
+      showDebugBoundingBox: boolean;
+      debugPartNumber: number;
+      debugContourNumber: number;
       isSelected: boolean;
       partIndex: number;
     }
@@ -418,7 +430,7 @@ export function LaserViewer({
 
     // 컨투어 그리기 (파트 내 인덱스 사용)
     part.contours.forEach((contour, index) => {
-      drawContour(group, contour, options, index + 1);
+      drawContour(group, contour, options, index + 1, options.partIndex);
     });
 
     scene.add(group);
@@ -437,8 +449,12 @@ export function LaserViewer({
       showCutting: boolean;
       showContourLabels: boolean;
       contourLabelSize: number;
+      showDebugBoundingBox: boolean;
+      debugPartNumber: number;
+      debugContourNumber: number;
     },
-    contourIndex: number
+    contourIndex: number,
+    partIndex: number
   ) => {
     // 피어싱 위치 표시 (작은 빨간 점 - Points로 표시)
     if (options.showPiercing && contour.piercingType > 0) {
@@ -465,22 +481,27 @@ export function LaserViewer({
     const bboxWidth = bbox.maxX - bbox.minX;
     const bboxHeight = bbox.maxY - bbox.minY;
     
-    // 디버깅: 컨투어 번호 및 경로 정보 로그
-    console.log(`컨투어 ${contourIndex}:`, {
-      위치: `(${centerX.toFixed(2)}, ${topY.toFixed(2)})`,
-      라벨위치Y: `${(topY + 2).toFixed(2)}`,
-      크기: `${bboxWidth.toFixed(2)} x ${bboxHeight.toFixed(2)}`,
-      bbox,
-      piercingPos: contour.piercingPosition,
-      endPos: contour.endPosition,
-      leadInCount: contour.leadIn?.path?.length || 0,
-      approachCount: contour.approachPath?.length || 0,
-      cuttingCount: contour.cuttingPath?.length || 0,
-    });
+    // 디버그 모드: 선택된 파트/컨투어의 바운딩 박스와 상세 정보 표시
+    const isDebugTarget = options.showDebugBoundingBox && 
+                         partIndex === options.debugPartNumber && 
+                         contourIndex === options.debugContourNumber;
     
-    // 컨투어 6번 상세 디버깅
-    if (contourIndex === 6) {
-      console.log('=== 컨투어 6번 상세 분석 ===');
+    if (isDebugTarget) {
+      // 콘솔 로그 출력
+      console.log(`=== 디버그: 파트 ${partIndex}, 컨투어 ${contourIndex} ===`);
+      console.log('위치:', `(${centerX.toFixed(2)}, ${topY.toFixed(2)})`);
+      console.log('라벨위치Y:', `${(topY + 2).toFixed(2)}`);
+      console.log('크기:', `${bboxWidth.toFixed(2)} x ${bboxHeight.toFixed(2)}`);
+      console.log('BBox:', bbox);
+      console.log('피어싱 위치:', contour.piercingPosition);
+      console.log('종료 위치:', contour.endPosition);
+      console.log('경로 개수:', {
+        leadIn: contour.leadIn?.path?.length || 0,
+        approach: contour.approachPath?.length || 0,
+        cutting: contour.cuttingPath?.length || 0,
+      });
+      
+      // Cutting Path 상세 정보
       console.log('Cutting Path Segments:', contour.cuttingPath?.length || 0);
       contour.cuttingPath?.forEach((seg, idx) => {
         if (seg.type === 'arc') {
@@ -500,10 +521,8 @@ export function LaserViewer({
           });
         }
       });
-    }
-    
-    // 컨투어 6번만 바운딩 박스 표시 (노란색 점선)
-    if (contourIndex === 6) {
+      
+      // 노란색 점선 바운딩 박스 표시
       const points = [
         new THREE.Vector3(bbox.minX, bbox.minY, 0.6),
         new THREE.Vector3(bbox.maxX, bbox.minY, 0.6),
@@ -522,9 +541,11 @@ export function LaserViewer({
       boundingBoxLine.computeLineDistances();
       group.add(boundingBoxLine);
       
-      // 전역 변수에 컨투어 6번 정보 저장
+      // 전역 변수에 디버그 정보 저장
       // @ts-ignore
-      window.contour6Info = {
+      window.debugContourInfo = {
+        partNumber: partIndex,
+        contourNumber: contourIndex,
         width: bboxWidth,
         height: bboxHeight,
         bbox: bbox,
