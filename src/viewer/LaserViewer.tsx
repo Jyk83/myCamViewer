@@ -323,7 +323,7 @@ export function LaserViewer({
 
     // 파트 번호 표시 (바운딩 박스 중앙) - 옵션이 활성화된 경우만
     if (options.showPartLabels) {
-      const textSprite = createTextSprite(options.partIndex.toString(), Colors.partLabel, 12);
+      const textSprite = createTextSprite(options.partIndex.toString(), Colors.partLabel, 24);
       textSprite.position.set(partWidth / 2, partHeight / 2, 0.7);
       group.add(textSprite);
     }
@@ -376,10 +376,13 @@ export function LaserViewer({
       const actualCenterX = (bbox.minX + bbox.maxX) / 2;
       const actualTopY = bbox.maxY;
       
-      const contourLabel = createTextSprite(contourIndex.toString(), Colors.contourLabel, 8);
-      contourLabel.position.set(actualCenterX, actualTopY + 2, 0.6);
-      contourLabel.scale.set(4, 2, 1);
+      const contourLabel = createTextSprite(contourIndex.toString(), Colors.contourLabel, 10);
+      contourLabel.position.set(actualCenterX, actualTopY + 3, 0.6);
+      contourLabel.scale.set(5, 2.5, 1);
       group.add(contourLabel);
+      
+      // 디버깅: 컨투어 번호 로그
+      console.log(`컨투어 ${contourIndex}: 위치 (${actualCenterX.toFixed(2)}, ${actualTopY.toFixed(2)}), bbox:`, bbox);
     }
 
     // Lead-in 경로
