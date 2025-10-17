@@ -251,67 +251,115 @@ export function LaserViewer({
    * 시뮬레이션 경로 그리기 (1mm 단위로 빨간색 경로)
    * 레이저 ON 구간만 그림 (laserOn === true)
    * 컨투어가 바뀌면 선 끊기
+   * 
+   * **완료된 컨투어**: 밝은 빨간색 + 두꺼운 선 (이미 절단 완료)
+   * **현재 진행 중 컨투어**: 일반 빨간색 (진행 중)
    */
   const drawSimulationPath = (scene: THREE.Scene, pathPoints: PathPoint[], currentIndex: number) => {
     if (currentIndex < 0 || pathPoints.length === 0) return;
 
-    // 레이저 ON 구간만 수집하여 연속된 세그먼트로 그리기
-    let segmentPoints: THREE.Vector3[] = [];
-    let lastPartIndex = pathPoints[0]?.partIndex;
-    let lastContourIndex = pathPoints[0]?.contourIndex;
-    
+    // 1. 현재 위치의 파트/컨투어 인덱스 파악
+    const currentPoint = pathPoints[currentIndex];
+    const currentPartIndex = currentPoint.partIndex;
+    const currentContourIndex = currentPoint.contourIndex;
+
+    // 2. 각 컨투어별로 그룹화하여 완료/진행중 구분
+    interface ContourGroup {
+      partIndex: number;
+      contourIndex: number;
+      points: PathPoint[];
+      isCompleted: boolean; // 이 컨투어가 완전히 완료되었는지
+    }
+
+    const contourGroups: ContourGroup[] = [];
+    let currentGroup: ContourGroup | null = null;
+
     for (let i = 0; i <= currentIndex && i < pathPoints.length; i++) {
       const point = pathPoints[i];
       
-      // 컨투어가 바뀌면 이전 세그먼트 그리고 새로 시작
-      if (point.partIndex !== lastPartIndex || point.contourIndex !== lastContourIndex) {
-        if (segmentPoints.length > 1) {
-          const geometry = new THREE.BufferGeometry().setFromPoints(segmentPoints);
-          const material = new THREE.LineBasicMaterial({ 
-            color: new THREE.Color(Colors.simulated), 
-            linewidth: 4 
-          });
-          const line = new THREE.Line(geometry, material);
-          scene.add(line);
+      // 새 컨투어 시작
+      if (!currentGroup || 
+          point.partIndex !== currentGroup.partIndex || 
+          point.contourIndex !== currentGroup.contourIndex) {
+        
+        // 이전 그룹 저장
+        if (currentGroup) {
+          contourGroups.push(currentGroup);
         }
-        segmentPoints = [];
-        lastPartIndex = point.partIndex;
-        lastContourIndex = point.contourIndex;
-      }
-      
-      if (point.laserOn) {
-        // 레이저 ON: 포인트 추가
-        segmentPoints.push(new THREE.Vector3(point.position.x, point.position.y, 0.5));
+        
+        // 새 그룹 시작
+        currentGroup = {
+          partIndex: point.partIndex,
+          contourIndex: point.contourIndex,
+          points: [point],
+          isCompleted: false, // 일단 미완료로 시작
+        };
       } else {
-        // 레이저 OFF: 이전까지 모은 포인트들로 라인 그리기
-        if (segmentPoints.length > 1) {
-          const geometry = new THREE.BufferGeometry().setFromPoints(segmentPoints);
-          const material = new THREE.LineBasicMaterial({ 
-            color: new THREE.Color(Colors.simulated), 
-            linewidth: 4 
-          });
-          const line = new THREE.Line(geometry, material);
-          scene.add(line);
-        }
-        // 새 세그먼트 시작
-        segmentPoints = [];
+        // 같은 컨투어에 포인트 추가
+        currentGroup.points.push(point);
       }
-    }
-    
-    // 마지막 세그먼트 그리기
-    if (segmentPoints.length > 1) {
-      const geometry = new THREE.BufferGeometry().setFromPoints(segmentPoints);
-      const material = new THREE.LineBasicMaterial({ 
-        color: new THREE.Color(Colors.simulated), 
-        linewidth: 4 
-      });
-      const line = new THREE.Line(geometry, material);
-      scene.add(line);
     }
 
-    // 현재 위치에 레이저 헤드 마커 표시 (노란색 원)
+    // 마지막 그룹 저장
+    if (currentGroup) {
+      contourGroups.push(currentGroup);
+    }
+
+    // 3. 마지막 그룹(현재 진행 중)을 제외한 모든 그룹은 완료된 것으로 표시
+    if (contourGroups.length > 0) {
+      for (let i = 0; i < contourGroups.length - 1; i++) {
+        contourGroups[i].isCompleted = true;
+      }
+      // 마지막 그룹은 진행 중
+      contourGroups[contourGroups.length - 1].isCompleted = false;
+    }
+
+    // 4. 각 컨투어 그룹을 렌더링
+    contourGroups.forEach(group => {
+      // 완료된 컨투어: 밝은 빨간색 + 두꺼운 선
+      // 진행 중 컨투어: 일반 빨간색 + 보통 선
+      const isCompleted = group.isCompleted;
+      const color = isCompleted ? '#ff3333' : '#ff0000'; // 완료: 밝은 빨강, 진행중: 어두운 빨강
+      const linewidth = isCompleted ? 6 : 4;              // 완료: 6px, 진행중: 4px
+      const zIndex = isCompleted ? 0.6 : 0.5;             // 완료: 위쪽, 진행중: 아래쪽
+      
+      // 레이저 ON 구간만 수집하여 연속된 세그먼트로 그리기
+      let segmentPoints: THREE.Vector3[] = [];
+      
+      group.points.forEach((point, idx) => {
+        if (point.laserOn) {
+          // 레이저 ON: 포인트 추가
+          segmentPoints.push(new THREE.Vector3(point.position.x, point.position.y, zIndex));
+        } else {
+          // 레이저 OFF: 이전까지 모은 포인트들로 라인 그리기
+          if (segmentPoints.length > 1) {
+            const geometry = new THREE.BufferGeometry().setFromPoints(segmentPoints);
+            const material = new THREE.LineBasicMaterial({ 
+              color: new THREE.Color(color), 
+              linewidth: linewidth
+            });
+            const line = new THREE.Line(geometry, material);
+            scene.add(line);
+          }
+          // 새 세그먼트 시작
+          segmentPoints = [];
+        }
+      });
+      
+      // 마지막 세그먼트 그리기
+      if (segmentPoints.length > 1) {
+        const geometry = new THREE.BufferGeometry().setFromPoints(segmentPoints);
+        const material = new THREE.LineBasicMaterial({ 
+          color: new THREE.Color(color), 
+          linewidth: linewidth
+        });
+        const line = new THREE.Line(geometry, material);
+        scene.add(line);
+      }
+    });
+
+    // 5. 현재 위치에 레이저 헤드 마커 표시 (노란색 원)
     if (currentIndex >= 0 && currentIndex < pathPoints.length) {
-      const currentPoint = pathPoints[currentIndex];
       const headGeometry = new THREE.CircleGeometry(3, 16);
       const headMaterial = new THREE.MeshBasicMaterial({ 
         color: new THREE.Color(Colors.laserHead),
