@@ -214,30 +214,23 @@ export function LaserViewer({
         if (segment.start) addPoint(segment.start.x, segment.start.y);
         if (segment.end) addPoint(segment.end.x, segment.end.y);
 
-        // 원호인 경우 사각형 바운딩 박스로 계산 (0,0 ~ max,max)
+        // 원호인 경우 정확한 바운딩 박스 계산
         if (segment.type === 'arc' && segment.start && segment.end) {
-          // 시작점과 종료점을 포함하는 사각형
-          const xs = [segment.start.x, segment.end.x];
-          const ys = [segment.start.y, segment.end.y];
-          
           const arcSegment = segment as any;
           if (arcSegment.i !== undefined && arcSegment.j !== undefined) {
-            // 중심점도 포함
+            // 중심점 계산
             const centerX = segment.start.x + arcSegment.i;
             const centerY = segment.start.y + arcSegment.j;
-            xs.push(centerX);
-            ys.push(centerY);
-            
-            // 반지름 기준 극단점
             const radius = Math.sqrt(arcSegment.i * arcSegment.i + arcSegment.j * arcSegment.j);
+            
             if (!isNaN(centerX) && !isNaN(centerY) && !isNaN(radius)) {
-              xs.push(centerX - radius, centerX + radius);
-              ys.push(centerY - radius, centerY + radius);
+              // 원의 바운딩 박스 = 중심점 ± 반지름
+              addPoint(centerX - radius, centerY - radius);
+              addPoint(centerX + radius, centerY - radius);
+              addPoint(centerX - radius, centerY + radius);
+              addPoint(centerX + radius, centerY + radius);
             }
           }
-          
-          // 모든 좌표의 min/max를 추가
-          xs.forEach(x => ys.forEach(y => addPoint(x, y)));
         }
       });
     }
@@ -357,10 +350,10 @@ export function LaserViewer({
 
     // 파트 번호 표시 (바운딩 박스 중앙) - 옵션이 활성화된 경우만
     if (options.showPartLabels) {
-      const textSprite = createTextSprite(options.partIndex.toString(), Colors.partLabel, 30); // 20 * 1.5 = 30
+      const textSprite = createTextSprite(options.partIndex.toString(), Colors.partLabel, 24);
       textSprite.position.set(partWidth / 2, partHeight / 2, 0.7);
       // 스프라이트 크기는 월드 좌표로 설정 (줌에 따라 자동 조정됨)
-      textSprite.scale.set(15, 7.5, 1); // 10 * 1.5 = 15, 5 * 1.5 = 7.5
+      textSprite.scale.set(12, 6, 1);
       group.add(textSprite);
     }
 
@@ -461,8 +454,8 @@ export function LaserViewer({
       // 유효한 좌표인 경우에만 라벨 생성
       if (!isNaN(centerX) && !isNaN(topY)) {
         const contourLabel = createTextSprite(contourIndex.toString(), Colors.contourLabel, options.contourLabelSize);
-        // 컨투어 상단 중앙에 마진 1 추가
-        contourLabel.position.set(centerX, topY + 1, 0.8);
+        // 컨투어 상단 중앙에 마진 2 추가
+        contourLabel.position.set(centerX, topY + 2, 0.8);
         // 크기를 폰트 사이즈에 비례하여 조정
         const scale = options.contourLabelSize / 3;
         contourLabel.scale.set(scale, scale / 2, 1);
