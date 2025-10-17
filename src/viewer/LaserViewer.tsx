@@ -58,7 +58,7 @@ export function LaserViewer({
 
     // Scene 생성
     const scene = new THREE.Scene();
-    scene.background = new THREE.Color(Colors.workpiece); // 어두운 청록색 배경
+    scene.background = new THREE.Color(0x000000); // 검정색 배경 (자재 외부)
     sceneRef.current = scene;
 
     // Camera 생성 (Orthographic for 2D view)
@@ -329,24 +329,15 @@ export function LaserViewer({
    * 워크피스 그리기
    */
   const drawWorkpiece = (scene: THREE.Scene, width: number, height: number) => {
-    // 테두리만 점선으로 그리기 (배경은 씬 배경 사용)
-    const points = [
-      new THREE.Vector3(0, 0, -1),
-      new THREE.Vector3(width, 0, -1),
-      new THREE.Vector3(width, height, -1),
-      new THREE.Vector3(0, height, -1),
-      new THREE.Vector3(0, 0, -1),
-    ];
-    const geometry = new THREE.BufferGeometry().setFromPoints(points);
-    const material = new THREE.LineDashedMaterial({
-      color: new THREE.Color(Colors.workpieceBorder),
-      linewidth: 1,
-      dashSize: 5,
-      gapSize: 3,
+    // 워크피스 영역을 채워진 사각형으로 그리기 (자재 영역 표현)
+    const geometry = new THREE.PlaneGeometry(width, height);
+    const material = new THREE.MeshBasicMaterial({ 
+      color: new THREE.Color(Colors.workpiece), // 어두운 청록색 (자재 색상)
+      side: THREE.DoubleSide 
     });
-    const line = new THREE.Line(geometry, material);
-    line.computeLineDistances(); // 점선 렌더링에 필요
-    scene.add(line);
+    const plane = new THREE.Mesh(geometry, material);
+    plane.position.set(width / 2, height / 2, -1);
+    scene.add(plane);
   };
 
   /**
