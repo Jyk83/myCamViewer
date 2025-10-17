@@ -481,7 +481,7 @@ export class MPFParser {
             endPosition: { x: 0, y: 0 },
           };
           currentPosition = { x: hkscrc.x, y: hkscrc.y };
-          inCutting = false;
+          inCutting = true; // 잔재절단은 시작부터 레이저 ON
         }
         // HKSCRC(3) 형태: 절단 경로 시작 (HKCUT과 유사)
         else if (hkscrc.params === 3 && currentContour) {
@@ -494,7 +494,10 @@ export class MPFParser {
         }
         // HKSCRC(4) 형태: 종료 (HKSTO와 유사)
         else if (hkscrc.params === 4 && currentContour) {
-          this.log(`    HKSCRC(4) - 잔재절단 종료, ${currentContour.cuttingPath!.length}개 세그먼트`);
+          this.log(`    HKSCRC(4) - 잔재절단 종료`);
+          this.log(`      approachPath: ${currentContour.approachPath!.length}개 세그먼트`);
+          this.log(`      cuttingPath: ${currentContour.cuttingPath!.length}개 세그먼트`);
+          
           // 현재 위치를 종료 위치로 설정
           currentContour.endGCode = 0;
           currentContour.endPosition = currentPosition;
@@ -507,7 +510,7 @@ export class MPFParser {
           ];
 
           contours.push(currentContour as Contour);
-          this.log(`  잔재절단 컨투어 완료: ${contours.length}번째`);
+          this.log(`  잔재절단 컨투어 완료: ${contours.length}번째, 전체 ${currentContour.allSegments.length}개 세그먼트`);
           currentContour = null;
           inCutting = false;
         }
