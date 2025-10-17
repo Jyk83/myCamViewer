@@ -269,6 +269,40 @@ export const CuttingTypes: Record<number, string> = {
   11: 'Repeat Cutting',
 };
 
+// ========== 시뮬레이션 타입 ==========
+
+/**
+ * 1mm 단위로 분할된 미세 경로 포인트
+ */
+export interface PathPoint {
+  position: Point2D;
+  segmentIndex: number;      // 원본 세그먼트 인덱스
+  progress: number;           // 세그먼트 내 진행률 (0.0 ~ 1.0)
+  laserOn: boolean;          // 레이저 상태 (G0: false, G1/G2/G3: true)
+  pathType: 'piercing' | 'leadIn' | 'approach' | 'cutting';
+}
+
+/**
+ * 시뮬레이션 상태
+ */
+export interface SimulationState {
+  isRunning: boolean;         // 실행 중
+  isPaused: boolean;          // 일시정지
+  currentPartIndex: number;   // 현재 파트 (0부터 시작)
+  currentContourIndex: number;// 현재 컨투어 (0부터 시작)
+  currentPointIndex: number;  // 현재 포인트 (0부터 시작)
+  totalPoints: number;        // 전체 포인트 수
+  speed: number;              // ms per step (100, 200, 500...)
+  completedPaths: Set<string>; // "part-0-contour-1-point-50"
+}
+
+/**
+ * 경로 ID 생성 헬퍼
+ */
+export function createPathId(partIndex: number, contourIndex: number, pointIndex: number): string {
+  return `part-${partIndex}-contour-${contourIndex}-point-${pointIndex}`;
+}
+
 // ========== 색상 정의 ==========
 
 export const Colors = {
@@ -284,4 +318,6 @@ export const Colors = {
   grid: '#2a4a4a',             // 어두운 그리드
   partLabel: '#ffff00',        // 노란색 파트 레이블
   contourLabel: '#ffffff',     // 흰색 컨투어 레이블
+  simulated: '#ff0000',        // 빨간색 시뮬레이션 완료 경로
+  laserHead: '#ffff00',        // 노란색 레이저 헤드
 };
