@@ -1375,7 +1375,7 @@ namespace RealtimeITagControl
                 bool isMarking = (contour.CuttingType == 10);
                 
                 // 1. Piercing Point 렌더링 (PiercingType != 0)
-                if (contour.PiercingType != 0 && contour.PiercingPosition != null)
+                if (contour.PiercingType != 0)
                 {
                     float pierceX = (float)(contour.PiercingPosition.X * scale) + offsetX;
                     float pierceY = offsetY - (float)(contour.PiercingPosition.Y * scale);
