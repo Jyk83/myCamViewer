@@ -1210,10 +1210,16 @@ namespace RealtimeITagControl
                 }
                 
                 // 2. Workpiece Interior 배경 (Workpiece 영역)
+                // Phase8 방식: Workpiece 좌상단을 기준점으로 사용
+                float wpOriginX = 0f;  // Workpiece 좌상단 X (월드 좌표)
+                float wpOriginY = 0f;  // Workpiece 좌상단 Y (월드 좌표)
+                
                 if (mpfProgram.Workpiece != null)
                 {
                     float wpWidth = (float)(mpfProgram.Workpiece.Width * finalScale);
                     float wpHeight = (float)(mpfProgram.Workpiece.Height * finalScale);
+                    
+                    // Workpiece 화면 위치: 화면 중심에서 Workpiece 크기의 절반만큼 왼쪽/위
                     float wpX = offsetX - wpWidth / 2;
                     float wpY = offsetY - wpHeight / 2;
                     
@@ -1241,9 +1247,14 @@ namespace RealtimeITagControl
                     if (part.Contours == null)
                         continue;
                     
-                    // Phase8: Part Origin 좌표 (workpieceScale * zoom 적용)
-                    float partOffsetX = (float)(part.Origin.X * finalScale) + offsetX;
-                    float partOffsetY = offsetY - (float)(part.Origin.Y * finalScale);  // Y축 반전
+                    // Phase8 방식: Part Origin을 Workpiece 좌상단 기준으로 계산
+                    // Workpiece 좌상단 화면 좌표
+                    float wpScreenX = offsetX - (float)(mpfProgram.Workpiece.Width * finalScale) / 2;
+                    float wpScreenY = offsetY - (float)(mpfProgram.Workpiece.Height * finalScale) / 2;
+                    
+                    // Part Origin을 Workpiece 좌상단에서의 상대 좌표로 적용
+                    float partOffsetX = wpScreenX + (float)(part.Origin.X * finalScale);
+                    float partOffsetY = wpScreenY + (float)(part.Origin.Y * finalScale);
                     
                     for (int contIdx = 0; contIdx < part.Contours.Count; contIdx++)
                     {
@@ -1392,10 +1403,11 @@ namespace RealtimeITagControl
                 bool isMarking = (contour.CuttingType == 10);
                 
                 // 1. Piercing Point 렌더링 (PiercingType != 0)
+                // Phase8 방식: Part 내부 좌표를 그대로 적용
                 if (contour.PiercingType != 0)
                 {
                     float pierceX = (float)(contour.PiercingPosition.X * scale) + offsetX;
-                    float pierceY = offsetY - (float)(contour.PiercingPosition.Y * scale);
+                    float pierceY = (float)(contour.PiercingPosition.Y * scale) + offsetY;
                     float pierceSize = settings.PiercingPointSize;
                     Color pierceColor = settings.PiercingPointColor;
                     
@@ -1627,9 +1639,9 @@ namespace RealtimeITagControl
             float zoomFactor = e.Delta > 0 ? 1.1f : 0.9f;
             zoom *= zoomFactor;
             
-            // Zoom 범위 제한
+            // Phase8 방식: Zoom 범위 제한 (0.1 ~ 30000.0)
             if (zoom < 0.1f) zoom = 0.1f;
-            if (zoom > 100.0f) zoom = 100.0f;
+            if (zoom > 30000.0f) zoom = 30000.0f;
             
             // 줌 변경 시 즉시 다시 그리기
             if (viewerPanel != null && !viewerPanel.IsDisposed)
