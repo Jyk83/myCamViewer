@@ -1,0 +1,5 @@
+C:\Work\00_Project\00_Siemens_Upgrade\01_DLL_PG\109760182_ControlDevelopment_samples\samples\VB100\CCITagTest\CCITagApplication\obj\x86\Debug\CCITagApplication.vbproj.AssemblyReference.cache
+C:\Work\00_Project\00_Siemens_Upgrade\01_DLL_PG\109760182_ControlDevelopment_samples\samples\VB100\CCITagTest\CCITagApplication\obj\x86\Debug\CCITagApplication.ITagForm.resources
+C:\Work\00_Project\00_Siemens_Upgrade\01_DLL_PG\109760182_ControlDevelopment_samples\samples\VB100\CCITagTest\CCITagApplication\obj\x86\Debug\CCITagApplication.Resources.resources
+C:\Work\00_Project\00_Siemens_Upgrade\01_DLL_PG\109760182_ControlDevelopment_samples\samples\VB100\CCITagTest\CCITagApplication\obj\x86\Debug\CCITagApplication.vbproj.GenerateResource.cache
+C:\Work\00_Project\00_Siemens_Upgrade\01_DLL_PG\109760182_ControlDevelopment_samples\samples\VB100\CCITagTest\CCITagApplication\obj\x86\Debug\CCITagApplication.vbproj.CoreCompileInputs.cache

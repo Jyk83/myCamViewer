@@ -1,0 +1,522 @@
+using System;
+using System.Drawing;
+using System.Runtime.InteropServices;
+using System.Windows.Forms;
+using Siemens.Runtime;
+using Siemens.Runtime.ITag;
+
+namespace ITagTestControl
+{
+    /// <summary>
+    /// WinCC에 임포트 가능한 ITag 테스트 UserControl
+    /// HKCAMLib.dll 방식: C#에서 직접 ITag 및 ITagSink 구현
+    /// </summary>
+    [ComVisible(false)]
+    public partial class ITagTestControl : UserControl, ITagSink
+    {
+        #region 멤버 변수
+
+        public ITag m_ITag;                    // ITag 인터페이스
+        public long m_RegisterCookie;          // 등록 쿠키
+        public bool m_Active = true;           // 활성화 상태
+        public bool isConnected = false;       // 연결 상태
+        private bool isCyclicReading = false;  // 주기적 읽기 상태
+        private long cyclicServerCookie = 0;    // 주기적 읽기 서버 쿠키
+
+        #endregion
+
+        #region 생성자 및 초기화
+
+        public ITagTestControl()
+        {
+            InitializeComponent();
+        }
+
+        private void ITagTestControl_Load(object sender, EventArgs e)
+        {
+            // UserControl Load 시 자동 연결 시도
+            if (!DesignMode && m_Active)
+            {
+                ChangeTagServer();
+            }
+        }
+
+        private void ITagTestControl_Disposed(object sender, EventArgs e)
+        {
+            // Dispose 시 연결 해제
+            try
+            {
+                if (m_ITag != null && isConnected)
+                {
+                    // 주기적 읽기 중이면 취소
+                    if (isCyclicReading)
+                    {
+                        m_ITag.Cancel(checked((int)this.m_RegisterCookie));
+                    }
+                    
+                    m_ITag.Unregister(checked((int)this.m_RegisterCookie));
+                    m_ITag = null;
+                }
+            }
+            catch
+            {
+                // Unregister 실패 무시
+            }
+        }
+
+        #endregion
+
+        #region ITag 연결 관리
+
+        /// <summary>
+        /// ITag 서버 변경 (HKCAMLib.dll의 ChangeTagServer 방식)
+        /// </summary>
+        private void ChangeTagServer()
+        {
+            if (DesignMode || !m_Active)
+                return;
+
+            try
+            {
+                // 1순위: Site.GetService로 ITag 가져오기 (WinCC 내부)
+                if (Site != null)
+                {
+                    m_ITag = (ITag)Site.GetService(typeof(ITag));
+                }
+
+                // 2순위: CreateObject로 ITag 생성 (독립 실행)
+                if (m_ITag == null)
+                {
+                    Type itagType = Type.GetTypeFromProgID("CCITagControl.ITagControl.1");
+                    if (itagType != null)
+                    {
+                        m_ITag = (ITag)Activator.CreateInstance(itagType);
+                    }
+                }
+
+                if (m_ITag != null)
+                {
+                    // ITagSink 콜백 등록 (this = UserControl 자신)
+                    m_RegisterCookie = m_ITag.Register(this);
+                    isConnected = true;
+                    LogMessage("✅ ITag 서버에 연결되었습니다.");
+                    UpdateConnectionStatus();
+                }
+                else
+                {
+                    LogMessage("❌ ITag 서버를 찾을 수 없습니다.");
+                }
+            }
+            catch (Exception ex)
+            {
+                LogMessage($"ITag 연결 실패: {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// 연결 버튼 클릭
+        /// </summary>
+        private void btnConnect_Click(object sender, EventArgs e)
+        {
+            try
+            {
+                if (!isConnected)
+                {
+                    ChangeTagServer();
+                }
+            }
+            catch (Exception ex)
+            {
+                LogMessage($"연결 오류: {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// 연결 해제 버튼 클릭
+        /// </summary>
+        private void btnDisconnect_Click(object sender, EventArgs e)
+        {
+            try
+            {
+                if (isConnected && m_ITag != null)
+                {
+                    // 주기적 읽기 중이면 먼저 취소
+                    if (isCyclicReading)
+                    {
+                        StopCyclicRead();
+                    }
+                    
+                    m_ITag.Unregister(checked((int)this.m_RegisterCookie));
+                    m_ITag = null;
+                    isConnected = false;
+                    LogMessage("✅ ITag 서버에서 연결 해제되었습니다.");
+                    UpdateConnectionStatus();
+                }
+            }
+            catch (Exception ex)
+            {
+                LogMessage($"연결 해제 오류: {ex.Message}");
+            }
+        }
+
+        #endregion
+
+        #region Tag 읽기/쓰기
+
+        /// <summary>
+        /// Tag 읽기 버튼 클릭 (단일 읽기)
+        /// </summary>
+        private void btnRead_Click(object sender, EventArgs e)
+        {
+            if (!isConnected)
+            {
+                LogMessage("ITag가 연결되지 않았습니다.");
+                return;
+            }
+
+            try
+            {
+                string tagName = txtTagName.Text.Trim();
+                if (string.IsNullOrEmpty(tagName))
+                {
+                    LogMessage("Tag 이름을 입력하세요.");
+                    return;
+                }
+
+                // ReadTag는 배열을 반환
+                object values = m_ITag.ReadTag(checked((int)this.m_RegisterCookie), tagName);
+                
+                if (values is Array arr && arr.Length > 0)
+                {
+                    object value = arr.GetValue(0);
+                    txtValue.Text = value?.ToString() ?? "";
+                    LogMessage($"Tag '{tagName}' 읽기 성공: {value}");
+                }
+            }
+            catch (Exception ex)
+            {
+                LogMessage($"Tag 읽기 실패: {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// Tag 쓰기 버튼 클릭
+        /// </summary>
+        private void btnWrite_Click(object sender, EventArgs e)
+        {
+            if (!isConnected)
+            {
+                LogMessage("ITag가 연결되지 않았습니다.");
+                return;
+            }
+
+            try
+            {
+                string tagName = txtTagName.Text.Trim();
+                string valueStr = txtValue.Text.Trim();
+
+                if (string.IsNullOrEmpty(tagName))
+                {
+                    LogMessage("Tag 이름을 입력하세요.");
+                    return;
+                }
+
+                // 값 타입 자동 변환
+                object value = ConvertValue(valueStr);
+                m_ITag.WriteTag(checked((int)this.m_RegisterCookie), tagName, value);
+                LogMessage($"Tag '{tagName}' 쓰기 성공: {value}");
+            }
+            catch (Exception ex)
+            {
+                LogMessage($"Tag 쓰기 실패: {ex.Message}");
+            }
+        }
+
+        #endregion
+
+        #region 주기적 읽기 (ReadTagCyclic)
+
+        /// <summary>
+        /// 주기적 읽기 시작 버튼 클릭
+        /// </summary>
+        private void btnStartCyclic_Click(object sender, EventArgs e)
+        {
+            if (!isConnected)
+            {
+                LogMessage("ITag가 연결되지 않았습니다.");
+                return;
+            }
+
+            if (isCyclicReading)
+            {
+                LogMessage("이미 주기적 읽기가 진행 중입니다.");
+                return;
+            }
+
+            try
+            {
+                string tagName = txtTagName.Text.Trim();
+                if (string.IsNullOrEmpty(tagName))
+                {
+                    LogMessage("Tag 이름을 입력하세요.");
+                    return;
+                }
+
+                // 주기 (밀리초) - 기본값 500ms
+                int cycle = 500;
+                if (int.TryParse(txtCycle.Text, out int userCycle) && userCycle > 0)
+                {
+                    cycle = userCycle;
+                }
+
+                // 쿠키 (식별자)
+                int cookie = 1;
+
+                object serverCookie = (object)0L;
+
+                // ReadTagCyclic 호출
+                this.m_ITag.ReadTagCyclic(
+                    checked((int)this.m_RegisterCookie),
+                    (object)tagName,
+                    (object)cycle,
+                    (object)cookie, 
+                    out serverCookie
+                );
+                isCyclicReading = true;
+                if (serverCookie != null)
+                {
+                    cyclicServerCookie = Convert.ToInt64(serverCookie);
+                }
+
+                //isCyclicReading = true;
+                LogMessage($"🔄 주기적 읽기 시작: Tag='{tagName}', 주기={cycle}ms (값 변경 시 자동 업데이트)");
+                UpdateCyclicStatus();
+            }
+            catch (Exception ex)
+            {
+                LogMessage($"주기적 읽기 시작 실패: {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// 주기적 읽기 중지 버튼 클릭
+        /// </summary>
+        private void btnStopCyclic_Click(object sender, EventArgs e)
+        {
+            StopCyclicRead();
+        }
+
+        /// <summary>
+        /// 주기적 읽기 중지
+        /// </summary>
+        private void StopCyclicRead()
+        {
+            if (!isConnected || !isCyclicReading)
+            {
+                return;
+            }
+
+            try
+            {
+                m_ITag.Cancel(checked((int)this.m_RegisterCookie));
+                isCyclicReading = false;
+                LogMessage("⏹ 주기적 읽기 중지됨");
+                UpdateCyclicStatus();
+            }
+            catch (Exception ex)
+            {
+                LogMessage($"주기적 읽기 중지 실패: {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// 주기적 읽기 상태 업데이트
+        /// </summary>
+        private void UpdateCyclicStatus()
+        {
+            if (InvokeRequired)
+            {
+                Invoke(new Action(UpdateCyclicStatus));
+                return;
+            }
+
+            btnStartCyclic.Enabled = !isCyclicReading && isConnected;
+            btnStopCyclic.Enabled = isCyclicReading && isConnected;
+            lblCyclicStatus.Text = isCyclicReading ? "실행 중" : "중지됨";
+            lblCyclicStatus.ForeColor = isCyclicReading ? Color.Blue : Color.Gray;
+        }
+
+        #endregion
+
+        #region ITagSink 인터페이스 구현 (HKCAMLib 방식)
+
+        /// <summary>
+        /// Tag 데이터 변경 시 호출 (비동기 읽기, 주기적 읽기)
+        /// </summary>
+        public void OnDataChanged(int RegisterCookie, object TagNames, object Values, object Qualities, object VarStates, object TimeStamps, object Cookies)
+        {
+            try
+            {
+                if (TagNames is Array tagArr && Values is Array valArr)
+                {
+                    for (int i = 0; i < tagArr.Length; i++)
+                    {
+                        string tagName = tagArr.GetValue(i)?.ToString();
+                        object value = valArr.GetValue(i);
+                        
+                        // UI 업데이트 (주기적 읽기 시 자동으로 값 표시)
+                        if (InvokeRequired)
+                        {
+                            Invoke(new Action(() => {
+                                txtValue.Text = value?.ToString() ?? "";
+                            }));
+                        }
+                        else
+                        {
+                            txtValue.Text = value?.ToString() ?? "";
+                        }
+                        
+                        LogMessage($"[OnDataChanged] {tagName} = {value}");
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                LogMessage($"OnDataChanged 오류: {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// Tag 쓰기 완료 시 호출 (비동기 쓰기)
+        /// </summary>
+        public void OnWriteComplete(int RegisterCookie, object TagNames, object Cookies)
+        {
+            try
+            {
+                if (TagNames is Array tagArr)
+                {
+                    for (int i = 0; i < tagArr.Length; i++)
+                    {
+                        string tagName = tagArr.GetValue(i)?.ToString();
+                        LogMessage($"[OnWriteComplete] {tagName} 쓰기 완료");
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                LogMessage($"OnWriteComplete 오류: {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// Tag 에러 발생 시 호출
+        /// </summary>
+        public void OnError(int RegisterCookie, object TagNames, object Cookies, object Errors)
+        {
+            try
+            {
+                if (TagNames is Array tagArr && Errors is Array errArr)
+                {
+                    for (int i = 0; i < tagArr.Length; i++)
+                    {
+                        string tagName = tagArr.GetValue(i)?.ToString();
+                        object error = errArr.GetValue(i);
+                        LogMessage($"[OnError] {tagName}: {error}");
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                LogMessage($"OnError 오류: {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// Tag 취소 시 호출
+        /// </summary>
+        public void OnCanceled(int RegisterCookie)
+        {
+            isCyclicReading = false;
+            LogMessage("[OnCanceled] 주기적 읽기 취소됨");
+            UpdateCyclicStatus();
+        }
+
+        /// <summary>
+        /// Tag 제거 시 호출
+        /// </summary>
+        public void OnRemoved(int RegisterCookie, object Cookies)
+        {
+            LogMessage("[OnRemoved] Tag 제거됨");
+        }
+
+        #endregion
+
+        #region UI 업데이트
+
+        /// <summary>
+        /// 연결 상태 업데이트
+        /// </summary>
+        private void UpdateConnectionStatus()
+        {
+            if (InvokeRequired)
+            {
+                Invoke(new Action(UpdateConnectionStatus));
+                return;
+            }
+
+            lblStatus.Text = isConnected ? "연결됨" : "연결 안됨";
+            lblStatus.ForeColor = isConnected ? Color.Green : Color.Red;
+            btnConnect.Enabled = !isConnected;
+            btnDisconnect.Enabled = isConnected;
+            
+            // 주기적 읽기 관련 컨트롤 활성화 상태 (연결되어야 사용 가능)
+            txtTagName.Enabled = isConnected;
+            txtValue.Enabled = isConnected;
+            btnRead.Enabled = isConnected;
+            btnWrite.Enabled = isConnected;
+            txtCycle.Enabled = isConnected && !isCyclicReading;
+            
+            // 주기적 읽기 버튼 상태도 업데이트
+            UpdateCyclicStatus();
+        }
+
+        /// <summary>
+        /// 로그 메시지 출력
+        /// </summary>
+        private void LogMessage(string message)
+        {
+            if (InvokeRequired)
+            {
+                Invoke(new Action<string>(LogMessage), message);
+                return;
+            }
+
+            string timestamp = DateTime.Now.ToString("HH:mm:ss");
+            txtLog.AppendText($"[{timestamp}] {message}\r\n");
+        }
+
+        /// <summary>
+        /// 로그 지우기 버튼
+        /// </summary>
+        private void btnClearLog_Click(object sender, EventArgs e)
+        {
+            txtLog.Clear();
+        }
+
+        /// <summary>
+        /// 값 타입 자동 변환
+        /// </summary>
+        private object ConvertValue(string valueStr)
+        {
+            if (int.TryParse(valueStr, out int intVal))
+                return intVal;
+            if (double.TryParse(valueStr, out double dblVal))
+                return dblVal;
+            if (bool.TryParse(valueStr, out bool boolVal))
+                return boolVal;
+            return valueStr;
+        }
+
+        #endregion
+    }
+}

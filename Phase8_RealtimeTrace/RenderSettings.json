@@ -1,0 +1,36 @@
+{
+  "Colors": {
+    "WorkpieceBoundaryColor": "#646464",
+    "WorkpieceInteriorColor": "#004040",
+    "WorkpieceExteriorColor": "#000000",
+    "PartOriginColor": "#00FF00",
+    "PiercingPointColor": "#FF0000",
+    "LeadInColor": "#FFFF00",
+    "CuttingCompletedColor": "#00FFFF",
+    "CuttingInProgressColor": "#FF0000",
+    "CuttingPendingColor": "#505050",
+    "PartNumberColor": "#FFFFFF",
+    "ContourNumberColor": "#C8C8C8",
+    "MarkingColor": "#FFFF00"
+  },
+  "Sizes": {
+    "WorkpieceBoundaryWidth": 2,
+    "PartOriginSize": 8,
+    "PiercingPointSize": 2,
+    "LeadInWidth": 1,
+    "CuttingCompletedWidth": 1,
+    "CuttingInProgressWidth": 1,
+    "CuttingPendingWidth": 1,
+    "PartNumberSize": 4,
+    "ContourNumberSize": 3
+  },
+  "Visibility": {
+    "ShowPartOrigin": false,
+    "ShowWorkpieceBoundary": false,
+    "ShowPartNumbers": false,
+    "ShowContourNumbers": false
+  },
+  "View": {
+    "InitialZoomMultiplier": 0.005
+  }
+}
