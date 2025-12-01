@@ -48,6 +48,13 @@ namespace RealtimeITagControl
         
         // 컨투어별 추적 정보 (렌더링용)
         private System.Collections.Generic.Dictionary<string, ContourTraceInfo> contourStatusMap;
+        
+        // Pan/Zoom 기능
+        private float zoom = 1.0f;          // 확대/축소 배율
+        private float panX = 0.0f;          // X축 이동
+        private float panY = 0.0f;          // Y축 이동
+        private Point lastMousePos;         // 마우스 드래그 시작 위치
+        private bool isDragging = false;    // 드래그 중 여부
 
         #endregion
         
@@ -169,7 +176,10 @@ namespace RealtimeITagControl
                 BackColor = Color.FromArgb(50, 50, 50),
                 Dock = DockStyle.None
             };
+            viewerPanel.MouseDown += ViewerPanel_MouseDown;
             viewerPanel.MouseMove += ViewerPanel_MouseMove;
+            viewerPanel.MouseUp += ViewerPanel_MouseUp;
+            viewerPanel.MouseWheel += ViewerPanel_MouseWheel;
             viewerPanel.MouseClick += ViewerPanel_MouseClick;
             viewerPanel.Paint += ViewerPanel_Paint;
             this.Controls.Add(viewerPanel);
@@ -210,7 +220,10 @@ namespace RealtimeITagControl
 
                 if (viewerPanel != null)
                 {
+                    viewerPanel.MouseDown -= ViewerPanel_MouseDown;
                     viewerPanel.MouseMove -= ViewerPanel_MouseMove;
+                    viewerPanel.MouseUp -= ViewerPanel_MouseUp;
+                    viewerPanel.MouseWheel -= ViewerPanel_MouseWheel;
                     viewerPanel.MouseClick -= ViewerPanel_MouseClick;
                     viewerPanel.Paint -= ViewerPanel_Paint;
                 }
@@ -814,6 +827,9 @@ namespace RealtimeITagControl
 
                 // 7. 현재 로드된 파일 경로 저장
                 currentMpfPath = mpfPath;
+                
+                // 7.5. AutoFit: 초기 Zoom/Pan 설정
+                AutoFitView();
 
                 // 8. Viewer 다시 그리기
                 if (viewerPanel != null && !viewerPanel.IsDisposed)
@@ -1163,12 +1179,15 @@ namespace RealtimeITagControl
                 if (mpfProgram?.Parts == null)
                     return;
                 
-                // 좌표 변환을 위한 스케일 계산 (간단 구현)
+                // 좌표 변환을 위한 스케일 계산 (Pan/Zoom 적용)
                 float viewWidth = viewerPanel.Width;
                 float viewHeight = viewerPanel.Height;
-                float scale = CalculateAutoScale();
-                float offsetX = viewWidth / 2;
-                float offsetY = viewHeight / 2;
+                float baseScale = CalculateAutoScale();
+                float scale = baseScale * zoom;  // Zoom 적용
+                
+                // Pan 적용 (화면 중심 + Pan offset)
+                float offsetX = viewWidth / 2 + panX;
+                float offsetY = viewHeight / 2 + panY;
                 
                 // 모든 파트 렌더링
                 for (int partIdx = 0; partIdx < mpfProgram.Parts.Count; partIdx++)
@@ -1269,6 +1288,44 @@ namespace RealtimeITagControl
             catch
             {
                 return 1.0f;
+            }
+        }
+        
+        /// <summary>
+        /// AutoFit: 전체 프로그램이 화면에 맞도록 Zoom/Pan 설정
+        /// </summary>
+        private void AutoFitView()
+        {
+            try
+            {
+                if (mpfProgram?.Workpiece == null)
+                    return;
+                
+                // Workpiece 크기 기반 초기 Zoom 계산
+                float width = (float)mpfProgram.Workpiece.Width;
+                float height = (float)mpfProgram.Workpiece.Height;
+                
+                if (width <= 0 || height <= 0)
+                    return;
+                
+                // RenderSettings에서 InitialZoomMultiplier 사용
+                RenderSettings settings = RenderSettings.Instance;
+                float multiplier = settings.InitialZoomMultiplier;
+                
+                float zoomByWidth = (float)viewerPanel.Width / width * multiplier;
+                float zoomByHeight = (float)viewerPanel.Height / height * multiplier;
+                
+                zoom = Math.Min(zoomByWidth, zoomByHeight);
+                
+                // Pan 초기화 (중심)
+                panX = 0.0f;
+                panY = 0.0f;
+                
+                LogToFile($"AutoFit: Zoom={zoom:F3}, Workpiece Size=({width:F1}, {height:F1})");
+            }
+            catch (Exception ex)
+            {
+                LogToFile($"AutoFitView 오류: {ex.Message}");
             }
         }
         
@@ -1477,9 +1534,52 @@ namespace RealtimeITagControl
             }
         }
 
+        private void ViewerPanel_MouseDown(object sender, MouseEventArgs e)
+        {
+            if (e.Button == MouseButtons.Left)
+            {
+                isDragging = true;
+                lastMousePos = e.Location;
+            }
+        }
+        
         private void ViewerPanel_MouseMove(object sender, MouseEventArgs e)
         {
-            // TODO: 마우스 좌표 변환
+            if (isDragging && e.Button == MouseButtons.Left)
+            {
+                // Pan: 마우스 이동에 따라 뷰 이동
+                float dx = -(e.X - lastMousePos.X) / (float)viewerPanel.Width * 2.0f / zoom;
+                float dy = (e.Y - lastMousePos.Y) / (float)viewerPanel.Height * 2.0f / zoom;
+                
+                panX += dx * 100f;  // GDI+ 좌표계 스케일 조정
+                panY += dy * 100f;
+                
+                lastMousePos = e.Location;
+                viewerPanel.Invalidate();  // 다시 그리기
+            }
+            
+            // TODO: 마우스 좌표를 월드 좌표로 변환하여 표시
+        }
+        
+        private void ViewerPanel_MouseUp(object sender, MouseEventArgs e)
+        {
+            if (e.Button == MouseButtons.Left)
+            {
+                isDragging = false;
+            }
+        }
+        
+        private void ViewerPanel_MouseWheel(object sender, MouseEventArgs e)
+        {
+            // Zoom: 마우스 휠로 확대/축소
+            float zoomFactor = e.Delta > 0 ? 1.1f : 0.9f;
+            zoom *= zoomFactor;
+            
+            // Zoom 범위 제한
+            if (zoom < 0.1f) zoom = 0.1f;
+            if (zoom > 100.0f) zoom = 100.0f;
+            
+            viewerPanel.Invalidate();  // 다시 그리기
         }
 
         private void ViewerPanel_MouseClick(object sender, MouseEventArgs e)
