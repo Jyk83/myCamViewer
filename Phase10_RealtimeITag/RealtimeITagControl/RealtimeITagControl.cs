@@ -6,6 +6,7 @@ using System.Linq;
 using Siemens.Runtime;
 using Siemens.Runtime.ITag;
 using RealtimeITagControl.UI;
+using RealtimeITagControl.MPF;
 
 namespace RealtimeITagControl
 {
@@ -33,7 +34,7 @@ namespace RealtimeITagControl
         private TagData lastTagData;
         
         // MPF 파싱 데이터
-        private RealtimeITagControl.MPF.MPFProgram mpfProgram;  // 파싱된 MPF 프로그램
+        private MPFProgram mpfProgram;  // 파싱된 MPF 프로그램
         
         // Trace 상태 관리
         private TraceState currentTraceState = TraceState.Idle;
@@ -720,7 +721,7 @@ namespace RealtimeITagControl
                 System.Diagnostics.Debug.WriteLine($"[RealtimeITagControl] 📂 MPF 파일 로드 시작: {mpfPath}");
 
                 // 4. MPF 파일 파싱
-                var parser = new RealtimeITagControl.MPF.MPFParser();
+                var parser = new MPFParser();
                 mpfProgram = parser.Parse(mpfPath);
 
                 if (mpfProgram == null)
@@ -1157,7 +1158,7 @@ namespace RealtimeITagControl
         /// <summary>
         /// 컨투어 렌더링 (상태에 따라 색상 구분)
         /// </summary>
-        private void RenderContour(Graphics g, RealtimeITagControl.MPF.Contour contour, CutStatus status, 
+        private void RenderContour(Graphics g, Contour contour, CutStatus status, 
             double completedDistance, float scale, float offsetX, float offsetY)
         {
             try
@@ -1195,7 +1196,7 @@ namespace RealtimeITagControl
         /// <summary>
         /// 호(Arc) 그리기
         /// </summary>
-        private void DrawArc(Graphics g, Pen pen, RealtimeITagControl.MPF.Element elem, 
+        private void DrawArc(Graphics g, Pen pen, Element elem, 
             float scale, float offsetX, float offsetY)
         {
             try
