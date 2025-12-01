@@ -36,6 +36,11 @@ namespace RealtimeITagControl
         // MPF 파싱 데이터
         private MPFProgram mpfProgram;  // 파싱된 MPF 프로그램
         
+        // 로그 파일 경로
+        private static readonly string logFilePath = System.IO.Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.Desktop), 
+            "RealtimeITagControl_Log.txt");
+        
         // Trace 상태 관리
         private TraceState currentTraceState = TraceState.Idle;
         private bool isTracing = false;
@@ -109,6 +114,27 @@ namespace RealtimeITagControl
             InitializeComponent();
         }
 
+        #endregion
+        
+        #region 로그 메서드
+        
+        /// <summary>
+        /// 파일 로그 기록 (WinCC 디버깅용)
+        /// </summary>
+        private void LogToFile(string message)
+        {
+            try
+            {
+                string timestamp = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss.fff");
+                string logMessage = $"[{timestamp}] {message}\n";
+                System.IO.File.AppendAllText(logFilePath, logMessage);
+            }
+            catch
+            {
+                // 로그 실패 시 무시
+            }
+        }
+        
         #endregion
 
         #region 초기화
@@ -217,16 +243,28 @@ namespace RealtimeITagControl
         /// </summary>
         public bool Connect()
         {
+            // 로그 파일 초기화
+            try
+            {
+                if (System.IO.File.Exists(logFilePath))
+                    System.IO.File.Delete(logFilePath);
+                LogToFile("========================================");
+                LogToFile("RealtimeITagControl 시작");
+                LogToFile($"시작 시간: {DateTime.Now:yyyy-MM-dd HH:mm:ss}");
+                LogToFile("========================================\n");
+            }
+            catch { }
+            
             if (isConnected && m_ITag != null)
             {
-                System.Diagnostics.Debug.WriteLine("[RealtimeITagControl] 이미 연결되어 있습니다.");
+                LogToFile("이미 ITag에 연결되어 있음");
                 return true;
             }
 
             try
             {
                 lastErrorMessage = null;
-                System.Diagnostics.Debug.WriteLine("[RealtimeITagControl] === ITag 연결 시작 ===");
+                LogToFile("=== ITag 연결 시작 ===");
 
                 // 1순위: Site.GetService (WinCC 내부)
                 if (this.Site != null)
@@ -311,8 +349,8 @@ namespace RealtimeITagControl
 
                 isConnected = true;
                 ConnectionChanged?.Invoke(this, true);
-                System.Diagnostics.Debug.WriteLine("[RealtimeITagControl] ✅ ITag 서버 연결 성공");
-                System.Diagnostics.Debug.WriteLine("[RealtimeITagControl] === ITag 연결 완료 ===");
+                LogToFile("✅ ITag 서버 연결 성공");
+                LogToFile("=== ITag 연결 완료 ===\n");
                 
                 UpdateConnectionStatusUI();
                 return true;
@@ -621,34 +659,27 @@ namespace RealtimeITagControl
                 string newMpfPath = tagData.FullMpfPath;
                 
                 // 디버깅 로그 (최초 1회만)
-                if (currentMpfPath == null)
+                if (currentMpfPath == null && !string.IsNullOrEmpty(newMpfPath))
                 {
-                    System.Diagnostics.Debug.WriteLine($"[RealtimeITagControl] MPF 경로 체크:");
-                    System.Diagnostics.Debug.WriteLine($"  - WorkDir: '{tagData.WorkDir}'");
-                    System.Diagnostics.Debug.WriteLine($"  - WorkMpfName: '{tagData.WorkMpfName}'");
-                    System.Diagnostics.Debug.WriteLine($"  - FullMpfPath: '{newMpfPath}'");
+                    LogToFile("=== MPF 경로 정보 (최초) ===");
+                    LogToFile($"WorkDir: '{tagData.WorkDir}'");
+                    LogToFile($"WorkMpfName: '{tagData.WorkMpfName}'");
+                    LogToFile($"FullMpfPath: '{newMpfPath}'");
+                    LogToFile("===========================\n");
                 }
                 
                 if (!string.IsNullOrEmpty(newMpfPath) && newMpfPath != currentMpfPath)
                 {
-                    System.Diagnostics.Debug.WriteLine($"[RealtimeITagControl] 📂 새 MPF 파일 감지: {newMpfPath}");
+                    LogToFile($"📂 새 MPF 파일 감지: {newMpfPath}");
                     bool loaded = LoadMpfFile(newMpfPath);
                     if (loaded)
                     {
                         currentTraceState = TraceState.Loaded;
-                        System.Diagnostics.Debug.WriteLine($"[RealtimeITagControl] ✅ MPF 로드 성공");
+                        LogToFile($"✅ MPF 로드 및 상태 변경: Loaded");
                     }
                     else
                     {
-                        System.Diagnostics.Debug.WriteLine($"[RealtimeITagControl] ❌ MPF 로드 실패");
-                    }
-                }
-                else if (string.IsNullOrEmpty(newMpfPath))
-                {
-                    // MPF 경로가 비어있는 경우 (최초 1회만 로그)
-                    if (currentMpfPath == null)
-                    {
-                        System.Diagnostics.Debug.WriteLine($"[RealtimeITagControl] ⚠️ MPF 파일 경로가 비어있습니다. WORK_DIR과 WORK_MPF_NAME Tag를 설정하세요.");
+                        LogToFile($"❌ MPF 로드 실패");
                     }
                 }
 
@@ -721,28 +752,34 @@ namespace RealtimeITagControl
         {
             try
             {
+                LogToFile("=== LoadMpfFile 시작 ===");
+                LogToFile($"요청 경로: {mpfPath}");
+                
                 // 1. 파일 경로 유효성 검사
                 if (string.IsNullOrEmpty(mpfPath))
                 {
-                    System.Diagnostics.Debug.WriteLine("[RealtimeITagControl] MPF 파일 경로가 비어있음");
+                    LogToFile("❌ 파일 경로가 비어있음");
                     return false;
                 }
 
                 // 2. 파일 존재 확인
-                if (!File.Exists(mpfPath))
+                bool fileExists = File.Exists(mpfPath);
+                LogToFile($"파일 존재 여부: {fileExists}");
+                
+                if (!fileExists)
                 {
-                    System.Diagnostics.Debug.WriteLine($"[RealtimeITagControl] ❌ MPF 파일 없음: {mpfPath}");
+                    LogToFile($"❌ 파일 없음: {mpfPath}");
                     return false;
                 }
 
                 // 3. 이미 로드된 파일인지 확인 (재로드 방지)
                 if (currentMpfPath == mpfPath && mpfProgram != null)
                 {
-                    System.Diagnostics.Debug.WriteLine($"[RealtimeITagControl] ℹ️ 이미 로드된 파일: {mpfPath}");
-                    return true;  // 이미 로드됨, 재로드 안함
+                    LogToFile($"ℹ️ 이미 로드된 파일 (재로드 안함)");
+                    return true;
                 }
 
-                System.Diagnostics.Debug.WriteLine($"[RealtimeITagControl] 📂 MPF 파일 로드 시작: {mpfPath}");
+                LogToFile($"📂 MPF 파일 파싱 시작...");
 
                 // 4. MPF 파일 파싱
                 var parser = new MPFParser();
@@ -750,7 +787,7 @@ namespace RealtimeITagControl
 
                 if (mpfProgram == null)
                 {
-                    System.Diagnostics.Debug.WriteLine($"[RealtimeITagControl] ❌ MPF 파싱 실패: {mpfPath}");
+                    LogToFile($"❌ MPF 파싱 결과 null");
                     return false;
                 }
 
@@ -765,10 +802,10 @@ namespace RealtimeITagControl
                     }
                 }
 
-                System.Diagnostics.Debug.WriteLine($"[RealtimeITagControl] ✅ MPF 파싱 성공:");
-                System.Diagnostics.Debug.WriteLine($"   - 파일: {Path.GetFileName(mpfPath)}");
-                System.Diagnostics.Debug.WriteLine($"   - 파트 수: {totalParts}");
-                System.Diagnostics.Debug.WriteLine($"   - 컨투어 수: {totalContours}");
+                LogToFile($"✅ MPF 파싱 성공!");
+                LogToFile($"   - 파일명: {Path.GetFileName(mpfPath)}");
+                LogToFile($"   - 파트 수: {totalParts}");
+                LogToFile($"   - 컨투어 수: {totalContours}");
 
                 // 6. 현재 로드된 파일 경로 저장
                 currentMpfPath = mpfPath;
@@ -777,14 +814,19 @@ namespace RealtimeITagControl
                 if (viewerPanel != null && !viewerPanel.IsDisposed)
                 {
                     viewerPanel.Invalidate();
+                    LogToFile("Viewer 다시 그리기 요청");
                 }
 
+                LogToFile("=== LoadMpfFile 완료 ===\n");
                 return true;
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"[RealtimeITagControl] ❌ LoadMpfFile 오류: {ex.Message}");
-                System.Diagnostics.Debug.WriteLine($"[RealtimeITagControl] 스택 트레이스: {ex.StackTrace}");
+                LogToFile($"❌ LoadMpfFile 예외 발생!");
+                LogToFile($"   Exception: {ex.GetType().Name}");
+                LogToFile($"   Message: {ex.Message}");
+                LogToFile($"   StackTrace: {ex.StackTrace}");
+                LogToFile("=== LoadMpfFile 실패 ===\n");
                 return false;
             }
         }
