@@ -781,9 +781,13 @@ namespace RealtimeITagControl
 
                 LogToFile($"📂 MPF 파일 파싱 시작...");
 
-                // 4. MPF 파일 파싱
+                // 4. MPF 파일 읽기
+                string fileContent = System.IO.File.ReadAllText(mpfPath);
+                LogToFile($"   - 파일 읽기 완료: {fileContent.Length} bytes");
+
+                // 5. MPF 파일 파싱
                 var parser = new MPFParser();
-                mpfProgram = parser.Parse(mpfPath);
+                mpfProgram = parser.Parse(fileContent);
 
                 if (mpfProgram == null)
                 {
@@ -791,7 +795,7 @@ namespace RealtimeITagControl
                     return false;
                 }
 
-                // 5. 파싱 결과 요약 로그
+                // 6. 파싱 결과 요약 로그
                 int totalParts = mpfProgram.Parts?.Count ?? 0;
                 int totalContours = 0;
                 if (mpfProgram.Parts != null)
@@ -807,10 +811,10 @@ namespace RealtimeITagControl
                 LogToFile($"   - 파트 수: {totalParts}");
                 LogToFile($"   - 컨투어 수: {totalContours}");
 
-                // 6. 현재 로드된 파일 경로 저장
+                // 7. 현재 로드된 파일 경로 저장
                 currentMpfPath = mpfPath;
 
-                // 7. Viewer 다시 그리기
+                // 8. Viewer 다시 그리기
                 if (viewerPanel != null && !viewerPanel.IsDisposed)
                 {
                     viewerPanel.Invalidate();
