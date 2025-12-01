@@ -619,12 +619,36 @@ namespace RealtimeITagControl
 
                 // MPF 파일 변경 감지 및 로드
                 string newMpfPath = tagData.FullMpfPath;
+                
+                // 디버깅 로그 (최초 1회만)
+                if (currentMpfPath == null)
+                {
+                    System.Diagnostics.Debug.WriteLine($"[RealtimeITagControl] MPF 경로 체크:");
+                    System.Diagnostics.Debug.WriteLine($"  - WorkDir: '{tagData.WorkDir}'");
+                    System.Diagnostics.Debug.WriteLine($"  - WorkMpfName: '{tagData.WorkMpfName}'");
+                    System.Diagnostics.Debug.WriteLine($"  - FullMpfPath: '{newMpfPath}'");
+                }
+                
                 if (!string.IsNullOrEmpty(newMpfPath) && newMpfPath != currentMpfPath)
                 {
+                    System.Diagnostics.Debug.WriteLine($"[RealtimeITagControl] 📂 새 MPF 파일 감지: {newMpfPath}");
                     bool loaded = LoadMpfFile(newMpfPath);
                     if (loaded)
                     {
                         currentTraceState = TraceState.Loaded;
+                        System.Diagnostics.Debug.WriteLine($"[RealtimeITagControl] ✅ MPF 로드 성공");
+                    }
+                    else
+                    {
+                        System.Diagnostics.Debug.WriteLine($"[RealtimeITagControl] ❌ MPF 로드 실패");
+                    }
+                }
+                else if (string.IsNullOrEmpty(newMpfPath))
+                {
+                    // MPF 경로가 비어있는 경우 (최초 1회만 로그)
+                    if (currentMpfPath == null)
+                    {
+                        System.Diagnostics.Debug.WriteLine($"[RealtimeITagControl] ⚠️ MPF 파일 경로가 비어있습니다. WORK_DIR과 WORK_MPF_NAME Tag를 설정하세요.");
                     }
                 }
 
@@ -1040,10 +1064,36 @@ namespace RealtimeITagControl
                 // MPF 프로그램이 없으면 안내 메시지 표시
                 if (mpfProgram == null || mpfProgram.Parts == null || mpfProgram.Parts.Count == 0)
                 {
-                    g.DrawString("Realtime ITag Viewer\n(MPF 파일 대기 중)", 
-                        new Font("Arial", 16, FontStyle.Bold), 
+                    string message = "Realtime ITag Viewer\n\n";
+                    
+                    if (string.IsNullOrEmpty(lastTagData.WorkDir) && string.IsNullOrEmpty(lastTagData.WorkMpfName))
+                    {
+                        message += "📂 MPF 파일 대기 중\n\n";
+                        message += "다음 ITag를 설정하세요:\n";
+                        message += "• HMI_VIEW_WORK_DIR\n";
+                        message += "• HMI_VIEW_WORK_MPF_NAME";
+                    }
+                    else if (string.IsNullOrEmpty(lastTagData.WorkMpfName))
+                    {
+                        message += "⚠️ MPF 파일명 없음\n\n";
+                        message += $"작업 폴더: {lastTagData.WorkDir}\n";
+                        message += "HMI_VIEW_WORK_MPF_NAME을 설정하세요";
+                    }
+                    else if (!string.IsNullOrEmpty(currentMpfPath))
+                    {
+                        message += "❌ MPF 로드 실패\n\n";
+                        message += $"파일: {currentMpfPath}\n";
+                        message += "파일 존재 여부를 확인하세요";
+                    }
+                    else
+                    {
+                        message += "⏳ MPF 로딩 중...";
+                    }
+                    
+                    g.DrawString(message, 
+                        new Font("맑은 고딕", 14, FontStyle.Regular), 
                         Brushes.White, 
-                        new PointF(300, 250));
+                        new PointF(250, 200));
                     return;
                 }
                 
