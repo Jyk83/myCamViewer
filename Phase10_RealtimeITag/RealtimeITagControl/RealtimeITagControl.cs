@@ -1179,6 +1179,8 @@ namespace RealtimeITagControl
                 if (mpfProgram?.Parts == null)
                     return;
                 
+                RenderSettings settings = RenderSettings.Instance;
+                
                 // 좌표 변환을 위한 스케일 계산 (Pan/Zoom 적용)
                 float viewWidth = viewerPanel.Width;
                 float viewHeight = viewerPanel.Height;
@@ -1189,7 +1191,36 @@ namespace RealtimeITagControl
                 float offsetX = viewWidth / 2 + panX;
                 float offsetY = viewHeight / 2 + panY;
                 
-                // 모든 파트 렌더링
+                // 1. Workpiece Exterior 배경 (전체 화면)
+                using (SolidBrush exteriorBrush = new SolidBrush(settings.WorkpieceExteriorColor))
+                {
+                    g.FillRectangle(exteriorBrush, 0, 0, viewWidth, viewHeight);
+                }
+                
+                // 2. Workpiece Interior 배경 (Workpiece 영역)
+                if (mpfProgram.Workpiece != null)
+                {
+                    float wpWidth = (float)(mpfProgram.Workpiece.Width * scale);
+                    float wpHeight = (float)(mpfProgram.Workpiece.Height * scale);
+                    float wpX = offsetX - wpWidth / 2;
+                    float wpY = offsetY - wpHeight / 2;
+                    
+                    using (SolidBrush interiorBrush = new SolidBrush(settings.WorkpieceInteriorColor))
+                    {
+                        g.FillRectangle(interiorBrush, wpX, wpY, wpWidth, wpHeight);
+                    }
+                    
+                    // 3. Workpiece Boundary (옵션)
+                    if (settings.ShowWorkpieceBoundary)
+                    {
+                        using (Pen boundaryPen = new Pen(settings.WorkpieceBoundaryColor, settings.WorkpieceBoundaryWidth))
+                        {
+                            g.DrawRectangle(boundaryPen, wpX, wpY, wpWidth, wpHeight);
+                        }
+                    }
+                }
+                
+                // 4. 모든 파트 렌더링
                 for (int partIdx = 0; partIdx < mpfProgram.Parts.Count; partIdx++)
                 {
                     var part = mpfProgram.Parts[partIdx];
