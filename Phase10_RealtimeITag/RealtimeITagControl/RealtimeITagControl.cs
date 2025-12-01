@@ -55,6 +55,9 @@ namespace RealtimeITagControl
         private float panY = 0.0f;          // Y축 이동
         private Point lastMousePos;         // 마우스 드래그 시작 위치
         private bool isDragging = false;    // 드래그 중 여부
+        
+        // Phase8 렌더링 호환
+        private float workpieceScale = 0.001f;  // mm to screen units (Phase8과 동일)
 
         #endregion
         
@@ -1189,13 +1192,14 @@ namespace RealtimeITagControl
                 
                 RenderSettings settings = RenderSettings.Instance;
                 
-                // 좌표 변환을 위한 스케일 계산 (Pan/Zoom 적용)
+                // Phase8 좌표 변환: workpieceScale * zoom
                 float viewWidth = viewerPanel.Width;
                 float viewHeight = viewerPanel.Height;
-                float baseScale = CalculateAutoScale();
-                float scale = baseScale * zoom;  // Zoom 적용
                 
-                // Pan 적용 (화면 중심 + Pan offset)
+                // Phase8: workpieceScale (0.001) 적용
+                float finalScale = workpieceScale * zoom;
+                
+                // Phase8: Pan 적용 (화면 중심 + panOffset)
                 float offsetX = viewWidth / 2 + panX;
                 float offsetY = viewHeight / 2 + panY;
                 
@@ -1208,8 +1212,8 @@ namespace RealtimeITagControl
                 // 2. Workpiece Interior 배경 (Workpiece 영역)
                 if (mpfProgram.Workpiece != null)
                 {
-                    float wpWidth = (float)(mpfProgram.Workpiece.Width * scale);
-                    float wpHeight = (float)(mpfProgram.Workpiece.Height * scale);
+                    float wpWidth = (float)(mpfProgram.Workpiece.Width * finalScale);
+                    float wpHeight = (float)(mpfProgram.Workpiece.Height * finalScale);
                     float wpX = offsetX - wpWidth / 2;
                     float wpY = offsetY - wpHeight / 2;
                     
@@ -1237,9 +1241,9 @@ namespace RealtimeITagControl
                     if (part.Contours == null)
                         continue;
                     
-                    // Phase8 로직: Part Origin 좌표 적용
-                    float partOffsetX = (float)(part.Origin.X * scale) + offsetX;
-                    float partOffsetY = offsetY - (float)(part.Origin.Y * scale);  // Y축 반전
+                    // Phase8: Part Origin 좌표 (workpieceScale * zoom 적용)
+                    float partOffsetX = (float)(part.Origin.X * finalScale) + offsetX;
+                    float partOffsetY = offsetY - (float)(part.Origin.Y * finalScale);  // Y축 반전
                     
                     for (int contIdx = 0; contIdx < part.Contours.Count; contIdx++)
                     {
@@ -1257,8 +1261,8 @@ namespace RealtimeITagControl
                             completedDistance = contourStatusMap[key].CompletedDistance;
                         }
                         
-                        // 컨투어 그리기 (Part Origin 적용)
-                        RenderContour(g, contour, status, completedDistance, scale, partOffsetX, partOffsetY);
+                        // 컨투어 그리기 (finalScale 전달)
+                        RenderContour(g, contour, status, completedDistance, finalScale, partOffsetX, partOffsetY);
                     }
                 }
                 
@@ -1331,7 +1335,7 @@ namespace RealtimeITagControl
         }
         
         /// <summary>
-        /// AutoFit: 전체 프로그램이 화면에 맞도록 Zoom/Pan 설정 (Phase8 로직)
+        /// AutoFit: Phase8 완전 호환 방식
         /// </summary>
         private void AutoFitView()
         {
@@ -1340,10 +1344,9 @@ namespace RealtimeITagControl
                 if (mpfProgram?.Workpiece == null)
                     return;
                 
-                // Phase8 로직: baseScale을 먼저 적용한 크기로 계산
-                float baseScale = CalculateAutoScale();
-                float width = (float)(mpfProgram.Workpiece.Width * baseScale);
-                float height = (float)(mpfProgram.Workpiece.Height * baseScale);
+                // Phase8: workpieceScale 적용한 크기
+                float width = (float)(mpfProgram.Workpiece.Width * workpieceScale);
+                float height = (float)(mpfProgram.Workpiece.Height * workpieceScale);
                 
                 if (width <= 0 || height <= 0)
                 {
@@ -1353,22 +1356,20 @@ namespace RealtimeITagControl
                     return;
                 }
                 
-                // RenderSettings에서 InitialZoomMultiplier 사용 (기본값 0.005)
+                // Phase8: InitialZoomMultiplier 사용
                 RenderSettings settings = RenderSettings.Instance;
                 float multiplier = settings.InitialZoomMultiplier;
                 
-                // 화면에 맞춰 Zoom 계산
                 float zoomByWidth = (float)viewerPanel.Width / width * multiplier;
                 float zoomByHeight = (float)viewerPanel.Height / height * multiplier;
                 
-                // 더 작은 값 사용 (전체가 보이도록)
                 zoom = Math.Min(zoomByWidth, zoomByHeight);
                 
-                // Pan 초기화 (중심)
-                panX = 0.0f;
-                panY = 0.0f;
+                // Phase8: Pan은 workpiece 중심으로
+                panX = width / 2.0f;
+                panY = height / 2.0f;
                 
-                LogToFile($"AutoFit: BaseScale={baseScale:F3}, Zoom={zoom:F3}, WP Size=({mpfProgram.Workpiece.Width:F1}x{mpfProgram.Workpiece.Height:F1})");
+                LogToFile($"AutoFit: workpieceScale={workpieceScale}, Zoom={zoom:F3}, WP=({mpfProgram.Workpiece.Width:F1}x{mpfProgram.Workpiece.Height:F1})");
             }
             catch (Exception ex)
             {
