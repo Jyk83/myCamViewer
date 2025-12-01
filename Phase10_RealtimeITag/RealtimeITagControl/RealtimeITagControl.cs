@@ -855,30 +855,36 @@ namespace RealtimeITagControl
                 double progressDistance = tagData.ProgressDistance;
                 
                 // 1. 현재 파트/컨투어 이전 것들은 모두 Completed 처리
-                foreach (var part in mpfProgram.Parts)
+                for (int partIdx = 0; partIdx < mpfProgram.Parts.Count; partIdx++)
                 {
+                    var part = mpfProgram.Parts[partIdx];
+                    int partNum = partIdx + 1;  // 1-based 인덱스
+                    
                     if (part.Contours == null)
                         continue;
                     
-                    foreach (var contour in part.Contours)
+                    for (int contIdx = 0; contIdx < part.Contours.Count; contIdx++)
                     {
-                        string key = $"{part.PartNumber}_{contour.ContourNumber}";
+                        var contour = part.Contours[contIdx];
+                        int contNum = contIdx + 1;  // 1-based 인덱스
+                        
+                        string key = $"{partNum}_{contNum}";
                         
                         if (!contourStatusMap.ContainsKey(key))
                             continue;
                         
                         // 이전 파트들은 모두 완료
-                        if (part.PartNumber < currentPart)
+                        if (partNum < currentPart)
                         {
                             contourStatusMap[key].Status = CutStatus.Completed;
                         }
                         // 현재 파트의 이전 컨투어들은 완료
-                        else if (part.PartNumber == currentPart && contour.ContourNumber < currentContour)
+                        else if (partNum == currentPart && contNum < currentContour)
                         {
                             contourStatusMap[key].Status = CutStatus.Completed;
                         }
                         // 현재 파트의 현재 컨투어는 진행 중
-                        else if (part.PartNumber == currentPart && contour.ContourNumber == currentContour)
+                        else if (partNum == currentPart && contNum == currentContour)
                         {
                             contourStatusMap[key].Status = CutStatus.InProgress;
                             contourStatusMap[key].CompletedDistance = progressDistance;
@@ -919,15 +925,19 @@ namespace RealtimeITagControl
                 // 2. mpfProgram의 모든 컨투어를 NotStarted 상태로 초기화
                 if (mpfProgram?.Parts != null)
                 {
-                    foreach (var part in mpfProgram.Parts)
+                    for (int partIdx = 0; partIdx < mpfProgram.Parts.Count; partIdx++)
                     {
+                        var part = mpfProgram.Parts[partIdx];
+                        int partNum = partIdx + 1;  // 1-based 인덱스
+                        
                         if (part.Contours == null)
                             continue;
                             
-                        foreach (var contour in part.Contours)
+                        for (int contIdx = 0; contIdx < part.Contours.Count; contIdx++)
                         {
-                            string key = $"{part.PartNumber}_{contour.ContourNumber}";
-                            contourStatusMap[key] = new ContourTraceInfo(part.PartNumber, contour.ContourNumber);
+                            int contNum = contIdx + 1;  // 1-based 인덱스
+                            string key = $"{partNum}_{contNum}";
+                            contourStatusMap[key] = new ContourTraceInfo(partNum, contNum);
                         }
                     }
                 }
@@ -1064,15 +1074,21 @@ namespace RealtimeITagControl
                 float offsetY = viewHeight / 2;
                 
                 // 모든 파트 렌더링
-                foreach (var part in mpfProgram.Parts)
+                for (int partIdx = 0; partIdx < mpfProgram.Parts.Count; partIdx++)
                 {
+                    var part = mpfProgram.Parts[partIdx];
+                    int partNum = partIdx + 1;  // 1-based 인덱스
+                    
                     if (part.Contours == null)
                         continue;
                     
-                    foreach (var contour in part.Contours)
+                    for (int contIdx = 0; contIdx < part.Contours.Count; contIdx++)
                     {
+                        var contour = part.Contours[contIdx];
+                        int contNum = contIdx + 1;  // 1-based 인덱스
+                        
                         // 컨투어 상태 가져오기
-                        string key = $"{part.PartNumber}_{contour.ContourNumber}";
+                        string key = $"{partNum}_{contNum}";
                         CutStatus status = CutStatus.NotStarted;
                         double completedDistance = 0.0;
                         
@@ -1117,20 +1133,20 @@ namespace RealtimeITagControl
                     
                     foreach (var contour in part.Contours)
                     {
-                        if (contour.Elements == null)
+                        if (contour.AllSegments == null)
                             continue;
                         
-                        foreach (var elem in contour.Elements)
+                        foreach (var segment in contour.AllSegments)
                         {
-                            minX = Math.Min(minX, (float)elem.StartX);
-                            minY = Math.Min(minY, (float)elem.StartY);
-                            maxX = Math.Max(maxX, (float)elem.StartX);
-                            maxY = Math.Max(maxY, (float)elem.StartY);
+                            minX = Math.Min(minX, (float)segment.Start.X);
+                            minY = Math.Min(minY, (float)segment.Start.Y);
+                            maxX = Math.Max(maxX, (float)segment.Start.X);
+                            maxY = Math.Max(maxY, (float)segment.Start.Y);
                             
-                            minX = Math.Min(minX, (float)elem.EndX);
-                            minY = Math.Min(minY, (float)elem.EndY);
-                            maxX = Math.Max(maxX, (float)elem.EndX);
-                            maxY = Math.Max(maxY, (float)elem.EndY);
+                            minX = Math.Min(minX, (float)segment.End.X);
+                            minY = Math.Min(minY, (float)segment.End.Y);
+                            maxX = Math.Max(maxX, (float)segment.End.X);
+                            maxY = Math.Max(maxY, (float)segment.End.Y);
                         }
                     }
                 }
@@ -1163,27 +1179,27 @@ namespace RealtimeITagControl
         {
             try
             {
-                if (contour.Elements == null)
+                if (contour.AllSegments == null)
                     return;
                 
                 // 상태에 따른 색상 선택
                 Pen pen = GetPenByStatus(status);
                 
-                foreach (var elem in contour.Elements)
+                foreach (var segment in contour.AllSegments)
                 {
-                    float x1 = (float)(elem.StartX * scale) + offsetX;
-                    float y1 = offsetY - (float)(elem.StartY * scale);  // Y축 반전
-                    float x2 = (float)(elem.EndX * scale) + offsetX;
-                    float y2 = offsetY - (float)(elem.EndY * scale);
+                    float x1 = (float)(segment.Start.X * scale) + offsetX;
+                    float y1 = offsetY - (float)(segment.Start.Y * scale);  // Y축 반전
+                    float x2 = (float)(segment.End.X * scale) + offsetX;
+                    float y2 = offsetY - (float)(segment.End.Y * scale);
                     
-                    if (elem.Type == "LINE")
+                    if (segment.Type == PathSegmentType.Line)
                     {
                         g.DrawLine(pen, x1, y1, x2, y2);
                     }
-                    else if (elem.Type == "ARC")
+                    else if (segment.Type == PathSegmentType.Arc)
                     {
                         // 호 그리기 (간단 구현)
-                        DrawArc(g, pen, elem, scale, offsetX, offsetY);
+                        DrawArc(g, pen, segment as ArcSegment, scale, offsetX, offsetY);
                     }
                 }
             }
@@ -1196,14 +1212,17 @@ namespace RealtimeITagControl
         /// <summary>
         /// 호(Arc) 그리기
         /// </summary>
-        private void DrawArc(Graphics g, Pen pen, Element elem, 
+        private void DrawArc(Graphics g, Pen pen, ArcSegment arc, 
             float scale, float offsetX, float offsetY)
         {
             try
             {
-                float cx = (float)(elem.CenterX * scale) + offsetX;
-                float cy = offsetY - (float)(elem.CenterY * scale);
-                float radius = (float)(elem.Radius * scale);
+                if (arc == null)
+                    return;
+                    
+                float cx = (float)(arc.Center.X * scale) + offsetX;
+                float cy = offsetY - (float)(arc.Center.Y * scale);
+                float radius = (float)(arc.Radius * scale);
                 
                 // 간단 구현: 원으로 대체 (정확한 호 계산은 Phase7 로직 참조)
                 g.DrawEllipse(pen, cx - radius, cy - radius, radius * 2, radius * 2);
