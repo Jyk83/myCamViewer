@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
+using System.IO;
 using System.Linq;
 using System.Text.RegularExpressions;
 
@@ -15,6 +16,7 @@ namespace RealtimeITagControl.MPF
         private List<string> lines;
         private List<Command> commands;
         private bool debug;
+        private static string logFilePath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory), "MPFParser_Log.txt");
 
         public MPFParser(bool enableDebug = true)
         {
@@ -53,7 +55,18 @@ namespace RealtimeITagControl.MPF
         {
             if (debug)
             {
-                Console.WriteLine("[MPFParser] " + message);
+                string logMessage = "[MPFParser] " + message;
+                Console.WriteLine(logMessage);
+                
+                // WinCC 환경에서도 확인할 수 있도록 파일 로깅
+                try
+                {
+                    File.AppendAllText(logFilePath, DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss") + " " + logMessage + Environment.NewLine);
+                }
+                catch
+                {
+                    // 파일 쓰기 실패는 무시
+                }
             }
         }
 
@@ -353,9 +366,17 @@ namespace RealtimeITagControl.MPF
         private List<NestingInfo> ExtractNesting()
         {
             Log("=== 네스팅 정보 추출 시작 ===");
+            Log("전체 커맨드 수: " + commands.Count);
+            
+            // 커맨드 타입 분포 출력
+            int nblockCount = commands.OfType<NBlockCommand>().Count();
+            int hkostCount = commands.OfType<HKOSTCommand>().Count();
+            int hkendCount = commands.OfType<HKENDCommand>().Count();
+            Log(string.Format("커맨드 타입 분포: NBlock={0}, HKOST={1}, HKEND={2}", nblockCount, hkostCount, hkendCount));
+            
             List<NestingInfo> nesting = new List<NestingInfo>();
             int currentBlockNumber = 0;
-            int hkostCount = 0;
+            int hkostIndex = 0;
 
             for (int i = 0; i < commands.Count; i++)
             {
@@ -372,8 +393,8 @@ namespace RealtimeITagControl.MPF
                 if (cmd is HKOSTCommand)
                 {
                     HKOSTCommand hkost = (HKOSTCommand)cmd;
-                    hkostCount++;
-                    Log(string.Format("  HKOST #{0}: 블록={1}, 파트코드={2}", hkostCount, currentBlockNumber, hkost.PartNumber));
+                    hkostIndex++;
+                    Log(string.Format("  HKOST #{0}: 블록={1}, 파트코드={2}, 컨투어수={3}", hkostIndex, currentBlockNumber, hkost.PartNumber, hkost.ContourCount));
                     nesting.Add(new NestingInfo
                     {
                         PartOriginBlockNumber = currentBlockNumber,
@@ -390,15 +411,22 @@ namespace RealtimeITagControl.MPF
                     Log("  HKPPP 발견");
                 }
 
-                // HKEND 발견 시 네스팅 정보 종료
+                // HKEND 발견 시 네스팅 정보 종료 (하지만 파트 정의는 계속 읽음)
                 if (cmd is HKENDCommand)
                 {
-                    Log("  HKEND 발견 - 네스팅 종료");
+                    Log("  HKEND 발견 - 네스팅 영역 종료 (파트 정의는 계속 파싱)");
+                    // ⚠️ break 제거: HKEND 이후에도 파트 블록(N10001~)을 읽어야 함
                     break;
                 }
             }
 
             Log("=== 네스팅 정보 추출 완료: " + nesting.Count + "개 ===");
+            
+            if (nesting.Count == 0)
+            {
+                Log("⚠️ WARNING: 네스팅 정보가 없습니다! HKOST 커맨드가 HKEND 이전에 존재하는지 확인하세요.");
+            }
+            
             return nesting;
         }
 
@@ -435,6 +463,10 @@ namespace RealtimeITagControl.MPF
         private Part ExtractPart(NestingInfo nest)
         {
             Log("파트 추출: 블록 " + nest.PartCodeBlockNumber);
+            
+            // 전체 N블록 번호 출력 (디버깅용)
+            var allNBlocks = commands.OfType<NBlockCommand>().Select(cmd => cmd.BlockNumber).ToList();
+            Log(string.Format("  전체 N블록 번호: {0}개 - {1}", allNBlocks.Count, string.Join(", ", allNBlocks.Take(20))));
 
             // 파트 시작 블록 찾기
             int startIdx = -1;
@@ -451,7 +483,7 @@ namespace RealtimeITagControl.MPF
 
             if (startIdx == -1)
             {
-                Log("  ERROR: 블록 번호 " + nest.PartCodeBlockNumber + "를 찾을 수 없음!");
+                Log(string.Format("  ⚠️ ERROR: 블록 번호 {0}를 찾을 수 없음! commands에 해당 NBlock이 없습니다.", nest.PartCodeBlockNumber));
                 return null;
             }
 
