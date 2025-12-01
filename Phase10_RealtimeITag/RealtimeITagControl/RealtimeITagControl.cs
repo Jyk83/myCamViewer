@@ -1178,6 +1178,10 @@ namespace RealtimeITagControl
                     if (part.Contours == null)
                         continue;
                     
+                    // Phase8 로직: Part Origin 좌표 적용
+                    float partOffsetX = (float)(part.Origin.X * scale) + offsetX;
+                    float partOffsetY = offsetY - (float)(part.Origin.Y * scale);  // Y축 반전
+                    
                     for (int contIdx = 0; contIdx < part.Contours.Count; contIdx++)
                     {
                         var contour = part.Contours[contIdx];
@@ -1194,8 +1198,8 @@ namespace RealtimeITagControl
                             completedDistance = contourStatusMap[key].CompletedDistance;
                         }
                         
-                        // 컨투어 그리기
-                        RenderContour(g, contour, status, completedDistance, scale, offsetX, offsetY);
+                        // 컨투어 그리기 (Part Origin 적용)
+                        RenderContour(g, contour, status, completedDistance, scale, partOffsetX, partOffsetY);
                     }
                 }
                 
@@ -1306,7 +1310,7 @@ namespace RealtimeITagControl
         }
         
         /// <summary>
-        /// 호(Arc) 그리기
+        /// 호(Arc) 그리기 - Phase7/8 정확한 호 렌더링 로직
         /// </summary>
         private void DrawArc(Graphics g, Pen pen, ArcSegment arc, 
             float scale, float offsetX, float offsetY)
@@ -1320,8 +1324,43 @@ namespace RealtimeITagControl
                 float cy = offsetY - (float)(arc.Center.Y * scale);
                 float radius = (float)(arc.Radius * scale);
                 
-                // 간단 구현: 원으로 대체 (정확한 호 계산은 Phase7 로직 참조)
-                g.DrawEllipse(pen, cx - radius, cy - radius, radius * 2, radius * 2);
+                // GDI+ DrawArc 파라미터: (x, y, width, height, startAngle, sweepAngle)
+                // x, y: 바운딩 박스의 좌상단
+                // startAngle: 시작 각도 (도 단위, 3시 방향 = 0도, 시계방향)
+                // sweepAngle: 스윕 각도 (도 단위)
+                
+                float rectX = cx - radius;
+                float rectY = cy - radius;
+                float rectWidth = radius * 2;
+                float rectHeight = radius * 2;
+                
+                // 각도 계산 (arc.StartAngle, arc.EndAngle는 이미 도 단위)
+                float startAngleDeg = (float)arc.StartAngle;
+                float endAngleDeg = (float)arc.EndAngle;
+                
+                // Y축 반전으로 인해 각도도 반전 필요
+                startAngleDeg = -startAngleDeg;
+                endAngleDeg = -endAngleDeg;
+                
+                // Sweep angle 계산
+                float sweepAngle = endAngleDeg - startAngleDeg;
+                
+                // Clockwise 방향 고려
+                if (arc.Clockwise)
+                {
+                    // CW: sweep angle이 음수일 수 있음
+                    if (sweepAngle > 0)
+                        sweepAngle -= 360;
+                }
+                else
+                {
+                    // CCW: sweep angle이 양수여야 함
+                    if (sweepAngle < 0)
+                        sweepAngle += 360;
+                }
+                
+                // GDI+ DrawArc 호출
+                g.DrawArc(pen, rectX, rectY, rectWidth, rectHeight, startAngleDeg, sweepAngle);
             }
             catch (Exception ex)
             {
