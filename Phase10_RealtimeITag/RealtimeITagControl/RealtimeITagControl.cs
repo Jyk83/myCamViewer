@@ -7,6 +7,7 @@ using Siemens.Runtime;
 using Siemens.Runtime.ITag;
 using RealtimeITagControl.UI;
 using RealtimeITagControl.MPF;
+using RealtimeITagControl.Rendering;
 
 namespace RealtimeITagControl
 {
@@ -1272,40 +1273,116 @@ namespace RealtimeITagControl
         }
         
         /// <summary>
-        /// 컨투어 렌더링 (상태에 따라 색상 구분)
+        /// 컨투어 렌더링 (Phase8 로직: Lead-in, Piercing, Marking 구분)
         /// </summary>
         private void RenderContour(Graphics g, Contour contour, CutStatus status, 
             double completedDistance, float scale, float offsetX, float offsetY)
         {
             try
             {
-                if (contour.AllSegments == null)
+                if (contour == null)
                     return;
                 
-                // 상태에 따른 색상 선택
-                Pen pen = GetPenByStatus(status);
+                RenderSettings settings = RenderSettings.Instance;
+                bool isMarking = (contour.CuttingType == 10);
                 
-                foreach (var segment in contour.AllSegments)
+                // 1. Piercing Point 렌더링 (PiercingType != 0)
+                if (contour.PiercingType != 0 && contour.PiercingPosition != null)
                 {
-                    float x1 = (float)(segment.Start.X * scale) + offsetX;
-                    float y1 = offsetY - (float)(segment.Start.Y * scale);  // Y축 반전
-                    float x2 = (float)(segment.End.X * scale) + offsetX;
-                    float y2 = offsetY - (float)(segment.End.Y * scale);
+                    float pierceX = (float)(contour.PiercingPosition.X * scale) + offsetX;
+                    float pierceY = offsetY - (float)(contour.PiercingPosition.Y * scale);
+                    float pierceSize = settings.PiercingPointSize;
+                    Color pierceColor = settings.PiercingPointColor;
                     
-                    if (segment.Type == PathSegmentType.Line)
+                    using (SolidBrush brush = new SolidBrush(pierceColor))
                     {
-                        g.DrawLine(pen, x1, y1, x2, y2);
+                        g.FillEllipse(brush, pierceX - pierceSize/2, pierceY - pierceSize/2, pierceSize, pierceSize);
                     }
-                    else if (segment.Type == PathSegmentType.Arc)
+                }
+                
+                // 2. AllSegments 렌더링 (Lead-in 포함)
+                if (contour.AllSegments != null)
+                {
+                    int elementIndex = 0;
+                    foreach (var segment in contour.AllSegments)
                     {
-                        // 호 그리기 (간단 구현)
-                        DrawArc(g, pen, segment as ArcSegment, scale, offsetX, offsetY);
+                        // Lead-in 세그먼트 체크
+                        bool isLeadInSegment = (contour.LeadIn != null && contour.LeadIn.Path != null && 
+                                                contour.LeadIn.Path.Contains(segment));
+                        
+                        // 색상 및 굵기 결정
+                        Color segmentColor;
+                        float lineWidth;
+                        
+                        if (isLeadInSegment)
+                        {
+                            // Lead-in: 노란색, 얇은 선
+                            segmentColor = settings.LeadInColor;
+                            lineWidth = settings.LeadInWidth;
+                        }
+                        else if (isMarking)
+                        {
+                            // Marking: 노란색
+                            segmentColor = settings.MarkingColor;
+                            lineWidth = settings.CuttingPendingWidth;
+                        }
+                        else
+                        {
+                            // 일반 절단 경로: 상태에 따라
+                            switch (status)
+                            {
+                                case CutStatus.Completed:
+                                    segmentColor = settings.CuttingCompletedColor;
+                                    lineWidth = settings.CuttingCompletedWidth;
+                                    break;
+                                case CutStatus.InProgress:
+                                    segmentColor = settings.CuttingInProgressColor;
+                                    lineWidth = settings.CuttingInProgressWidth;
+                                    break;
+                                case CutStatus.NotStarted:
+                                default:
+                                    segmentColor = settings.CuttingPendingColor;
+                                    lineWidth = settings.CuttingPendingWidth;
+                                    break;
+                            }
+                        }
+                        
+                        // 세그먼트 렌더링
+                        using (Pen pen = new Pen(segmentColor, lineWidth))
+                        {
+                            DrawPathSegment(g, pen, segment, scale, offsetX, offsetY);
+                        }
+                        
+                        elementIndex++;
                     }
                 }
             }
             catch (Exception ex)
             {
                 System.Diagnostics.Debug.WriteLine($"[RealtimeITagControl] RenderContour 오류: {ex.Message}");
+            }
+        }
+        
+        /// <summary>
+        /// PathSegment 렌더링 (Line 또는 Arc)
+        /// </summary>
+        private void DrawPathSegment(Graphics g, Pen pen, PathSegment segment, 
+            float scale, float offsetX, float offsetY)
+        {
+            if (segment == null)
+                return;
+            
+            if (segment.Type == PathSegmentType.Line)
+            {
+                float x1 = (float)(segment.Start.X * scale) + offsetX;
+                float y1 = offsetY - (float)(segment.Start.Y * scale);
+                float x2 = (float)(segment.End.X * scale) + offsetX;
+                float y2 = offsetY - (float)(segment.End.Y * scale);
+                g.DrawLine(pen, x1, y1, x2, y2);
+            }
+            else if (segment.Type == PathSegmentType.Arc)
+            {
+                DrawArc(g, pen, segment as ArcSegment, scale, offsetX, offsetY);
             }
         }
         
@@ -1368,23 +1445,7 @@ namespace RealtimeITagControl
             }
         }
         
-        /// <summary>
-        /// 상태별 Pen 반환
-        /// </summary>
-        private Pen GetPenByStatus(CutStatus status)
-        {
-            switch (status)
-            {
-                case CutStatus.NotStarted:
-                    return new Pen(Color.Gray, 1.5f);  // 회색
-                case CutStatus.InProgress:
-                    return new Pen(Color.Yellow, 2.0f);  // 노란색
-                case CutStatus.Completed:
-                    return new Pen(Color.LimeGreen, 1.5f);  // 초록색
-                default:
-                    return new Pen(Color.White, 1.0f);
-            }
-        }
+
         
         /// <summary>
         /// 상태 범례 표시 (우하단)
