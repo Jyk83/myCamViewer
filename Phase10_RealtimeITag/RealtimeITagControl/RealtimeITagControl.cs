@@ -1323,7 +1323,7 @@ namespace RealtimeITagControl
         }
         
         /// <summary>
-        /// AutoFit: 전체 프로그램이 화면에 맞도록 Zoom/Pan 설정
+        /// AutoFit: 전체 프로그램이 화면에 맞도록 Zoom/Pan 설정 (Phase8 로직)
         /// </summary>
         private void AutoFitView()
         {
@@ -1332,27 +1332,35 @@ namespace RealtimeITagControl
                 if (mpfProgram?.Workpiece == null)
                     return;
                 
-                // Workpiece 크기 기반 초기 Zoom 계산
-                float width = (float)mpfProgram.Workpiece.Width;
-                float height = (float)mpfProgram.Workpiece.Height;
+                // Phase8 로직: baseScale을 먼저 적용한 크기로 계산
+                float baseScale = CalculateAutoScale();
+                float width = (float)(mpfProgram.Workpiece.Width * baseScale);
+                float height = (float)(mpfProgram.Workpiece.Height * baseScale);
                 
                 if (width <= 0 || height <= 0)
+                {
+                    zoom = 1.0f;
+                    panX = 0.0f;
+                    panY = 0.0f;
                     return;
+                }
                 
-                // RenderSettings에서 InitialZoomMultiplier 사용
+                // RenderSettings에서 InitialZoomMultiplier 사용 (기본값 0.005)
                 RenderSettings settings = RenderSettings.Instance;
                 float multiplier = settings.InitialZoomMultiplier;
                 
+                // 화면에 맞춰 Zoom 계산
                 float zoomByWidth = (float)viewerPanel.Width / width * multiplier;
                 float zoomByHeight = (float)viewerPanel.Height / height * multiplier;
                 
+                // 더 작은 값 사용 (전체가 보이도록)
                 zoom = Math.Min(zoomByWidth, zoomByHeight);
                 
                 // Pan 초기화 (중심)
                 panX = 0.0f;
                 panY = 0.0f;
                 
-                LogToFile($"AutoFit: Zoom={zoom:F3}, Workpiece Size=({width:F1}, {height:F1})");
+                LogToFile($"AutoFit: BaseScale={baseScale:F3}, Zoom={zoom:F3}, WP Size=({mpfProgram.Workpiece.Width:F1}x{mpfProgram.Workpiece.Height:F1})");
             }
             catch (Exception ex)
             {
@@ -1499,27 +1507,25 @@ namespace RealtimeITagControl
                 float rectWidth = radius * 2;
                 float rectHeight = radius * 2;
                 
-                // 각도 계산 (arc.StartAngle, arc.EndAngle는 이미 도 단위)
-                float startAngleDeg = (float)arc.StartAngle;
-                float endAngleDeg = (float)arc.EndAngle;
-                
-                // Y축 반전으로 인해 각도도 반전 필요
-                startAngleDeg = -startAngleDeg;
-                endAngleDeg = -endAngleDeg;
+                // GDI+ DrawArc: 각도는 도 단위, Y축이 아래 방향이므로 각도 반전 필요
+                // Phase8: OpenGL은 Y축 위 방향, GDI+는 Y축 아래 방향
+                float startAngleDeg = -(float)arc.StartAngle;  // Y축 반전
+                float endAngleDeg = -(float)arc.EndAngle;
                 
                 // Sweep angle 계산
                 float sweepAngle = endAngleDeg - startAngleDeg;
                 
-                // Clockwise 방향 고려
-                if (arc.Clockwise)
+                // G2 (CW) vs G3 (CCW) 처리
+                // GDI+에서 양수 sweepAngle = 시계방향, 음수 = 반시계방향
+                if (arc.Clockwise)  // G2 (CW)
                 {
-                    // CW: sweep angle이 음수일 수 있음
+                    // 시계방향: sweepAngle이 음수여야 함
                     if (sweepAngle > 0)
                         sweepAngle -= 360;
                 }
-                else
+                else  // G3 (CCW)
                 {
-                    // CCW: sweep angle이 양수여야 함
+                    // 반시계방향: sweepAngle이 양수여야 함
                     if (sweepAngle < 0)
                         sweepAngle += 360;
                 }
@@ -1578,12 +1584,13 @@ namespace RealtimeITagControl
         {
             if (isDragging && e.Button == MouseButtons.Left)
             {
-                // Pan: 마우스 이동에 따라 뷰 이동
-                float dx = -(e.X - lastMousePos.X) / (float)viewerPanel.Width * 2.0f / zoom;
-                float dy = (e.Y - lastMousePos.Y) / (float)viewerPanel.Height * 2.0f / zoom;
+                // Pan: Phase8 로직 (OpenGL은 panX 방향, GDI+는 offsetX 방향 반대)
+                // GDI+에서는 dx를 그대로 사용 (부호 반전 없음)
+                float dx = (e.X - lastMousePos.X);  // 마우스 이동 방향 그대로
+                float dy = -(e.Y - lastMousePos.Y); // Y축만 반전 (화면 좌표계)
                 
-                panX += dx * 100f;  // GDI+ 좌표계 스케일 조정
-                panY += dy * 100f;
+                panX += dx;
+                panY += dy;
                 
                 lastMousePos = e.Location;
                 viewerPanel.Invalidate();  // 다시 그리기
