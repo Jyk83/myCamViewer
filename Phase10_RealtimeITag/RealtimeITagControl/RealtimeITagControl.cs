@@ -176,6 +176,13 @@ namespace RealtimeITagControl
                 BackColor = Color.FromArgb(50, 50, 50),
                 Dock = DockStyle.None
             };
+            
+            // DoubleBuffering 활성화 (깜빡임 방지)
+            typeof(Panel).InvokeMember("DoubleBuffered",
+                System.Reflection.BindingFlags.SetProperty | 
+                System.Reflection.BindingFlags.Instance | 
+                System.Reflection.BindingFlags.NonPublic,
+                null, viewerPanel, new object[] { true });
             viewerPanel.MouseDown += ViewerPanel_MouseDown;
             viewerPanel.MouseMove += ViewerPanel_MouseMove;
             viewerPanel.MouseUp += ViewerPanel_MouseUp;
@@ -1099,10 +1106,11 @@ namespace RealtimeITagControl
         {
             try
             {
-                // TODO: 실시간 렌더링 구현
-                
-                if (viewerPanel != null && !viewerPanel.IsDisposed)
+                // Trace 중일 때만 Invalidate (불필요한 다시 그리기 방지)
+                if (isTracing && viewerPanel != null && !viewerPanel.IsDisposed)
                 {
+                    // UpdateContourStatus에서 실제로 상태가 변경된 경우에만 다시 그림
+                    // 현재는 간단히 Tracing 상태일 때만 업데이트
                     viewerPanel.Invalidate();
                 }
             }
@@ -1593,7 +1601,12 @@ namespace RealtimeITagControl
                 panY += dy;
                 
                 lastMousePos = e.Location;
-                viewerPanel.Invalidate();  // 다시 그리기
+                
+                // 드래그 중에만 즉시 다시 그리기
+                if (viewerPanel != null && !viewerPanel.IsDisposed)
+                {
+                    viewerPanel.Invalidate();
+                }
             }
             
             // TODO: 마우스 좌표를 월드 좌표로 변환하여 표시
@@ -1617,7 +1630,11 @@ namespace RealtimeITagControl
             if (zoom < 0.1f) zoom = 0.1f;
             if (zoom > 100.0f) zoom = 100.0f;
             
-            viewerPanel.Invalidate();  // 다시 그리기
+            // 줌 변경 시 즉시 다시 그리기
+            if (viewerPanel != null && !viewerPanel.IsDisposed)
+            {
+                viewerPanel.Invalidate();
+            }
         }
 
         private void ViewerPanel_MouseClick(object sender, MouseEventArgs e)
