@@ -3,6 +3,7 @@ using System.Drawing;
 using System.Windows.Forms;
 using System.IO;
 using System.Linq;
+using System.Runtime.InteropServices;
 using Siemens.Runtime;
 using Siemens.Runtime.ITag;
 using RealtimeITagControl.UI;
@@ -11,6 +12,75 @@ using RealtimeITagControl.Rendering;
 
 namespace RealtimeITagControl
 {
+    /// <summary>
+    /// Native OpenGL renderer P/Invoke declarations (Phase8 방식)
+    /// </summary>
+    internal static class NativeRenderer
+    {
+        private const string DllName = "NativeRenderer.dll";
+
+        [DllImport(DllName, CallingConvention = CallingConvention.Cdecl)]
+        public static extern int InitializeRenderer(IntPtr windowHandle);
+
+        [DllImport(DllName, CallingConvention = CallingConvention.Cdecl)]
+        public static extern void CleanupRenderer();
+
+        [DllImport(DllName, CallingConvention = CallingConvention.Cdecl)]
+        public static extern void ResizeViewport(int width, int height);
+
+        [DllImport(DllName, CallingConvention = CallingConvention.Cdecl)]
+        public static extern void SetViewTransform(float zoom, float panX, float panY);
+
+        // MPF drawing functions
+        [DllImport(DllName, CallingConvention = CallingConvention.Cdecl)]
+        public static extern void BeginMPFRenderWithBackground(float bgR, float bgG, float bgB);
+
+        [DllImport(DllName, CallingConvention = CallingConvention.Cdecl)]
+        public static extern void EndMPFRender();
+
+        [DllImport(DllName, CallingConvention = CallingConvention.Cdecl)]
+        public static extern void SwapBuffersNow();
+
+        [DllImport(DllName, CallingConvention = CallingConvention.Cdecl)]
+        public static extern void DrawLine(float x1, float y1, float x2, float y2, 
+                                          float r, float g, float b, float lineWidth);
+
+        [DllImport(DllName, CallingConvention = CallingConvention.Cdecl)]
+        public static extern void DrawArc(float centerX, float centerY, float radius, 
+                                         float startAngle, float endAngle, int clockwise, 
+                                         float r, float g, float b, float lineWidth);
+
+        [DllImport(DllName, CallingConvention = CallingConvention.Cdecl)]
+        public static extern void DrawPoint(float x, float y, float size, 
+                                           float r, float g, float b);
+
+        [DllImport(DllName, CallingConvention = CallingConvention.Cdecl)]
+        public static extern void DrawFilledRectangle(float x, float y, float width, float height,
+                                                      float r, float g, float b);
+
+        [DllImport(DllName, CallingConvention = CallingConvention.Cdecl)]
+        public static extern void SetCanvasOrientation(int orientation);
+
+        // Phase 8.1: Text rendering for part/contour numbers
+        [DllImport(DllName, CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Unicode)]
+        public static extern int InitializeTextRenderer(
+            [MarshalAs(UnmanagedType.LPWStr)] string fontName,
+            int height,
+            int bold,
+            int italic);
+
+        [DllImport(DllName, CallingConvention = CallingConvention.Cdecl)]
+        public static extern void DrawPartNumber(double posX, double posY, uint number,
+                                                  double scale, float r, float g, float b);
+
+        [DllImport(DllName, CallingConvention = CallingConvention.Cdecl)]
+        public static extern void DrawContourNumber(double posX, double posY, uint number,
+                                                     double scale, float r, float g, float b);
+
+        [DllImport(DllName, CallingConvention = CallingConvention.Cdecl)]
+        public static extern void CleanupTextRenderer();
+    }
+
     /// <summary>
     /// Realtime ITag Viewer UserControl
     /// Phase8 (Realtime Viewer) + Phase9 (ITag Communication) 통합
@@ -56,8 +126,10 @@ namespace RealtimeITagControl
         private Point lastMousePos;         // 마우스 드래그 시작 위치
         private bool isDragging = false;    // 드래그 중 여부
         
-        // Phase8 렌더링 호환
-        private float workpieceScale = 0.001f;  // mm to screen units (Phase8과 동일)
+        // Phase8 OpenGL 렌더링
+        private bool isRendererInitialized = false;
+        private bool textRendererInitialized = false;
+        private float workpieceScale = 0.001f;  // mm to OpenGL units (Phase8과 동일)
 
         #endregion
         
@@ -192,13 +264,15 @@ namespace RealtimeITagControl
             viewerPanel.MouseWheel += ViewerPanel_MouseWheel;
             viewerPanel.MouseClick += ViewerPanel_MouseClick;
             viewerPanel.Paint += ViewerPanel_Paint;
+            viewerPanel.Resize += ViewerPanel_Resize;
             this.Controls.Add(viewerPanel);
 
-            // Load 시 자동 연결
+            // Load 시 OpenGL 초기화 및 ITag 연결
             this.Load += (s, e) =>
             {
                 if (!DesignMode)
                 {
+                    InitializeOpenGL();
                     Connect();
                     StartCyclicRead(500);
                 }
@@ -249,6 +323,9 @@ namespace RealtimeITagControl
                     contourStatusMap.Clear();
                     contourStatusMap = null;
                 }
+                
+                // OpenGL 정리
+                CleanupOpenGL();
 
                 System.Diagnostics.Debug.WriteLine("[RealtimeITagControl] === Dispose 완료 ===");
             }
@@ -507,7 +584,84 @@ namespace RealtimeITagControl
                 System.Diagnostics.Debug.WriteLine($"[RealtimeITagControl] StopCyclicRead 오류: {ex.Message}");
             }
         }
+        
+        #endregion
+        
+        #region OpenGL 초기화 및 정리 (Phase8 방식)
+        
+        /// <summary>
+        /// OpenGL 렌더러 초기화
+        /// </summary>
+        private void InitializeOpenGL()
+        {
+            try
+            {
+                if (viewerPanel == null || viewerPanel.IsDisposed)
+                    return;
+                    
+                LogToFile("OpenGL 초기화 시작...");
+                
+                int result = NativeRenderer.InitializeRenderer(viewerPanel.Handle);
+                if (result == 0)
+                {
+                    isRendererInitialized = true;
+                    LogToFile("OpenGL 렌더러 초기화 성공");
+                    
+                    // 초기 뷰포트 크기 설정
+                    NativeRenderer.ResizeViewport(viewerPanel.Width, viewerPanel.Height);
+                    
+                    // 텍스트 렌더러 초기화
+                    RenderSettings settings = RenderSettings.Instance;
+                    result = NativeRenderer.InitializeTextRenderer("Arial", 
+                        (int)settings.PartNumberSize, 0, 0);
+                    if (result == 0)
+                    {
+                        textRendererInitialized = true;
+                        LogToFile("OpenGL 텍스트 렌더러 초기화 성공");
+                    }
+                }
+                else
+                {
+                    LogToFile($"OpenGL 초기화 실패: {result}");
+                }
+            }
+            catch (Exception ex)
+            {
+                LogToFile($"InitializeOpenGL 오류: {ex.Message}");
+            }
+        }
+        
+        /// <summary>
+        /// OpenGL 렌더러 정리
+        /// </summary>
+        private void CleanupOpenGL()
+        {
+            try
+            {
+                if (textRendererInitialized)
+                {
+                    NativeRenderer.CleanupTextRenderer();
+                    textRendererInitialized = false;
+                }
+                
+                if (isRendererInitialized)
+                {
+                    NativeRenderer.CleanupRenderer();
+                    isRendererInitialized = false;
+                }
+                
+                LogToFile("OpenGL 정리 완료");
+            }
+            catch (Exception ex)
+            {
+                LogToFile($"CleanupOpenGL 오류: {ex.Message}");
+            }
+        }
+        
+        #endregion
 
+        #region ITag 기본 읽기/쓰기
+        
         /// <summary>
         /// 단일 Tag 읽기
         /// </summary>

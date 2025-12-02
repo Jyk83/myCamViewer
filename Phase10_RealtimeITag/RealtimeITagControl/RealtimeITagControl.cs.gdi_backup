@@ -3,7 +3,6 @@ using System.Drawing;
 using System.Windows.Forms;
 using System.IO;
 using System.Linq;
-using System.Runtime.InteropServices;
 using Siemens.Runtime;
 using Siemens.Runtime.ITag;
 using RealtimeITagControl.UI;
@@ -12,8 +11,6 @@ using RealtimeITagControl.Rendering;
 
 namespace RealtimeITagControl
 {
-    // NativeRenderer는 CamViewerCore.cs에 정의되어 있음 (중복 방지)
-    
     /// <summary>
     /// Realtime ITag Viewer UserControl
     /// Phase8 (Realtime Viewer) + Phase9 (ITag Communication) 통합
@@ -32,10 +29,13 @@ namespace RealtimeITagControl
         private string lastErrorMessage = null;
 
         private ProgramInfoPanel programInfoPanel;
-        private CamViewerControl camViewerControl;  // Phase8 OpenGL 렌더러 (핵심!)
+        private Panel viewerPanel;
 
         private string currentMpfPath;      // 현재 로드된 MPF 파일 경로
         private TagData lastTagData;
+        
+        // MPF 파싱 데이터
+        private MPFProgram mpfProgram;  // 파싱된 MPF 프로그램
         
         // 로그 파일 경로
         private static readonly string logFilePath = System.IO.Path.Combine(
@@ -46,8 +46,18 @@ namespace RealtimeITagControl
         private TraceState currentTraceState = TraceState.Idle;
         private bool isTracing = false;
         
-        // 컨투어별 추적 정보 (CamViewerControl에서 관리)
-        // Pan/Zoom, OpenGL 초기화 등은 CamViewerControl에서 처리
+        // 컨투어별 추적 정보 (렌더링용)
+        private System.Collections.Generic.Dictionary<string, ContourTraceInfo> contourStatusMap;
+        
+        // Pan/Zoom 기능
+        private float zoom = 1.0f;          // 확대/축소 배율
+        private float panX = 0.0f;          // X축 이동
+        private float panY = 0.0f;          // Y축 이동
+        private Point lastMousePos;         // 마우스 드래그 시작 위치
+        private bool isDragging = false;    // 드래그 중 여부
+        
+        // Phase8 렌더링 호환
+        private float workpieceScale = 0.001f;  // mm to screen units (Phase8과 동일)
 
         #endregion
         
@@ -155,21 +165,36 @@ namespace RealtimeITagControl
             };
             programInfoPanel.SimulationClicked += ProgramInfoPanel_SimulationClicked;
             programInfoPanel.ElementSelectClicked += ProgramInfoPanel_ElementSelectClicked;
+            programInfoPanel.ITagTestClicked += ProgramInfoPanel_ITagTestClicked;
             this.Controls.Add(programInfoPanel);
             
             // 초기 연결 상태 표시
             programInfoPanel.UpdateConnectionStatus(false, false, null);
 
-            // 우측 CamViewerControl (Phase8 OpenGL 렌더러) (968x630)
-            camViewerControl = new CamViewerControl
+            // 우측 Viewer 패널 (968x630)
+            viewerPanel = new Panel
             {
                 Location = new Point(300, 0),
                 Size = new Size(968, 630),
+                BackColor = Color.FromArgb(50, 50, 50),
                 Dock = DockStyle.None
             };
-            this.Controls.Add(camViewerControl);
+            
+            // DoubleBuffering 활성화 (깜빡임 방지)
+            typeof(Panel).InvokeMember("DoubleBuffered",
+                System.Reflection.BindingFlags.SetProperty | 
+                System.Reflection.BindingFlags.Instance | 
+                System.Reflection.BindingFlags.NonPublic,
+                null, viewerPanel, new object[] { true });
+            viewerPanel.MouseDown += ViewerPanel_MouseDown;
+            viewerPanel.MouseMove += ViewerPanel_MouseMove;
+            viewerPanel.MouseUp += ViewerPanel_MouseUp;
+            viewerPanel.MouseWheel += ViewerPanel_MouseWheel;
+            viewerPanel.MouseClick += ViewerPanel_MouseClick;
+            viewerPanel.Paint += ViewerPanel_Paint;
+            this.Controls.Add(viewerPanel);
 
-            // Load 시 ITag 연결
+            // Load 시 자동 연결
             this.Load += (s, e) =>
             {
                 if (!DesignMode)
@@ -200,19 +225,31 @@ namespace RealtimeITagControl
                 {
                     programInfoPanel.SimulationClicked -= ProgramInfoPanel_SimulationClicked;
                     programInfoPanel.ElementSelectClicked -= ProgramInfoPanel_ElementSelectClicked;
+                    programInfoPanel.ITagTestClicked -= ProgramInfoPanel_ITagTestClicked;
                 }
 
-                // CamViewerControl은 자체 Dispose 처리
+                if (viewerPanel != null)
+                {
+                    viewerPanel.MouseDown -= ViewerPanel_MouseDown;
+                    viewerPanel.MouseMove -= ViewerPanel_MouseMove;
+                    viewerPanel.MouseUp -= ViewerPanel_MouseUp;
+                    viewerPanel.MouseWheel -= ViewerPanel_MouseWheel;
+                    viewerPanel.MouseClick -= ViewerPanel_MouseClick;
+                    viewerPanel.Paint -= ViewerPanel_Paint;
+                }
 
                 // MPF 데이터 정리
                 currentMpfPath = null;
                 mpfProgram = null;  // MPF 프로그램 데이터 해제
                 lastTagData = default(TagData);
                 
-                // 컨투어 상태는 CamViewerControl에서 관리
-                
-                // CamViewerControl 자체 Dispose 처리
-                
+                // 컨투어 상태 맵 정리
+                if (contourStatusMap != null)
+                {
+                    contourStatusMap.Clear();
+                    contourStatusMap = null;
+                }
+
                 System.Diagnostics.Debug.WriteLine("[RealtimeITagControl] === Dispose 완료 ===");
             }
             catch (Exception ex)
@@ -470,13 +507,7 @@ namespace RealtimeITagControl
                 System.Diagnostics.Debug.WriteLine($"[RealtimeITagControl] StopCyclicRead 오류: {ex.Message}");
             }
         }
-        
-        #endregion
-        
-        // OpenGL 초기화 및 정리는 CamViewerControl에서 처리
 
-        #region ITag 기본 읽기/쓰기
-        
         /// <summary>
         /// 단일 Tag 읽기
         /// </summary>
@@ -807,11 +838,14 @@ namespace RealtimeITagControl
                 // 7. 현재 로드된 파일 경로 저장
                 currentMpfPath = mpfPath;
                 
-                // 8. CamViewerControl에 MPF 파일 로드 (Phase8 방식)
-                if (camViewerControl != null && !camViewerControl.IsDisposed)
+                // 7.5. AutoFit: 초기 Zoom/Pan 설정
+                AutoFitView();
+
+                // 8. Viewer 다시 그리기
+                if (viewerPanel != null && !viewerPanel.IsDisposed)
                 {
-                    camViewerControl.LoadMPFFile(mpfPath);
-                    LogToFile("CamViewerControl에 MPF 파일 로드 완료");
+                    viewerPanel.Invalidate();
+                    LogToFile("Viewer 다시 그리기 요청");
                 }
 
                 LogToFile("=== LoadMpfFile 완료 ===\n");
@@ -1091,6 +1125,538 @@ namespace RealtimeITagControl
 
         #endregion
 
+        #region Viewer 패널 이벤트 핸들러
+
+        private void ViewerPanel_Paint(object sender, PaintEventArgs e)
+        {
+            try
+            {
+                Graphics g = e.Graphics;
+                g.Clear(Color.FromArgb(50, 50, 50));
+                g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+                
+                // MPF 프로그램이 없으면 안내 메시지 표시
+                if (mpfProgram == null || mpfProgram.Parts == null || mpfProgram.Parts.Count == 0)
+                {
+                    string message = "Realtime ITag Viewer\n\n";
+                    
+                    if (string.IsNullOrEmpty(lastTagData.WorkDir) && string.IsNullOrEmpty(lastTagData.WorkMpfName))
+                    {
+                        message += "📂 MPF 파일 대기 중\n\n";
+                        message += "다음 ITag를 설정하세요:\n";
+                        message += "• HMI_VIEW_WORK_DIR\n";
+                        message += "• HMI_VIEW_WORK_MPF_NAME";
+                    }
+                    else if (string.IsNullOrEmpty(lastTagData.WorkMpfName))
+                    {
+                        message += "⚠️ MPF 파일명 없음\n\n";
+                        message += $"작업 폴더: {lastTagData.WorkDir}\n";
+                        message += "HMI_VIEW_WORK_MPF_NAME을 설정하세요";
+                    }
+                    else if (!string.IsNullOrEmpty(currentMpfPath))
+                    {
+                        message += "❌ MPF 로드 실패\n\n";
+                        message += $"파일: {currentMpfPath}\n";
+                        message += "파일 존재 여부를 확인하세요";
+                    }
+                    else
+                    {
+                        message += "⏳ MPF 로딩 중...";
+                    }
+                    
+                    g.DrawString(message, 
+                        new Font("맑은 고딕", 14, FontStyle.Regular), 
+                        Brushes.White, 
+                        new PointF(250, 200));
+                    return;
+                }
+                
+                // 렌더링: 모든 파트와 컨투어 그리기
+                RenderMpfProgram(g);
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[RealtimeITagControl] ViewerPanel_Paint 오류: {ex.Message}");
+            }
+        }
+        
+        /// <summary>
+        /// MPF 프로그램 렌더링 (컨투어 상태에 따라 색상 구분)
+        /// </summary>
+        private void RenderMpfProgram(Graphics g)
+        {
+            try
+            {
+                if (mpfProgram?.Parts == null)
+                    return;
+                
+                RenderSettings settings = RenderSettings.Instance;
+                
+                // Phase8 좌표 변환: workpieceScale * zoom
+                float viewWidth = viewerPanel.Width;
+                float viewHeight = viewerPanel.Height;
+                
+                // Phase8: workpieceScale (0.001) 적용
+                float finalScale = workpieceScale * zoom;
+                
+                // Phase8: Pan 적용 (화면 중심 + panOffset)
+                float offsetX = viewWidth / 2 + panX;
+                float offsetY = viewHeight / 2 + panY;
+                
+                // 1. Workpiece Exterior 배경 (전체 화면)
+                using (SolidBrush exteriorBrush = new SolidBrush(settings.WorkpieceExteriorColor))
+                {
+                    g.FillRectangle(exteriorBrush, 0, 0, viewWidth, viewHeight);
+                }
+                
+                // 2. Workpiece Interior 배경 (Workpiece 영역)
+                // Phase8 방식: Workpiece 좌상단을 기준점으로 사용
+                float wpOriginX = 0f;  // Workpiece 좌상단 X (월드 좌표)
+                float wpOriginY = 0f;  // Workpiece 좌상단 Y (월드 좌표)
+                
+                if (mpfProgram.Workpiece != null)
+                {
+                    float wpWidth = (float)(mpfProgram.Workpiece.Width * finalScale);
+                    float wpHeight = (float)(mpfProgram.Workpiece.Height * finalScale);
+                    
+                    // Workpiece 화면 위치: 화면 중심에서 Workpiece 크기의 절반만큼 왼쪽/위
+                    float wpX = offsetX - wpWidth / 2;
+                    float wpY = offsetY - wpHeight / 2;
+                    
+                    using (SolidBrush interiorBrush = new SolidBrush(settings.WorkpieceInteriorColor))
+                    {
+                        g.FillRectangle(interiorBrush, wpX, wpY, wpWidth, wpHeight);
+                    }
+                    
+                    // 3. Workpiece Boundary (옵션)
+                    if (settings.ShowWorkpieceBoundary)
+                    {
+                        using (Pen boundaryPen = new Pen(settings.WorkpieceBoundaryColor, settings.WorkpieceBoundaryWidth))
+                        {
+                            g.DrawRectangle(boundaryPen, wpX, wpY, wpWidth, wpHeight);
+                        }
+                    }
+                }
+                
+                // 4. 모든 파트 렌더링
+                for (int partIdx = 0; partIdx < mpfProgram.Parts.Count; partIdx++)
+                {
+                    var part = mpfProgram.Parts[partIdx];
+                    int partNum = partIdx + 1;  // 1-based 인덱스
+                    
+                    if (part.Contours == null)
+                        continue;
+                    
+                    // Phase8 방식: Part Origin을 Workpiece 좌상단 기준으로 계산
+                    // Workpiece 좌상단 화면 좌표
+                    float wpScreenX = offsetX - (float)(mpfProgram.Workpiece.Width * finalScale) / 2;
+                    float wpScreenY = offsetY - (float)(mpfProgram.Workpiece.Height * finalScale) / 2;
+                    
+                    // Part Origin을 Workpiece 좌상단에서의 상대 좌표로 적용
+                    float partOffsetX = wpScreenX + (float)(part.Origin.X * finalScale);
+                    float partOffsetY = wpScreenY + (float)(part.Origin.Y * finalScale);
+                    
+                    for (int contIdx = 0; contIdx < part.Contours.Count; contIdx++)
+                    {
+                        var contour = part.Contours[contIdx];
+                        int contNum = contIdx + 1;  // 1-based 인덱스
+                        
+                        // 컨투어 상태 가져오기
+                        string key = $"{partNum}_{contNum}";
+                        CutStatus status = CutStatus.NotStarted;
+                        double completedDistance = 0.0;
+                        
+                        if (contourStatusMap != null && contourStatusMap.ContainsKey(key))
+                        {
+                            status = contourStatusMap[key].Status;
+                            completedDistance = contourStatusMap[key].CompletedDistance;
+                        }
+                        
+                        // 컨투어 그리기 (finalScale 전달)
+                        RenderContour(g, contour, status, completedDistance, finalScale, partOffsetX, partOffsetY);
+                    }
+                }
+                
+                // 상태 표시 (우하단)
+                DrawStatusLegend(g);
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[RealtimeITagControl] RenderMpfProgram 오류: {ex.Message}");
+            }
+        }
+        
+        /// <summary>
+        /// 자동 스케일 계산 (전체 도형이 화면에 맞도록)
+        /// </summary>
+        private float CalculateAutoScale()
+        {
+            try
+            {
+                if (mpfProgram?.Parts == null)
+                    return 1.0f;
+                
+                float minX = float.MaxValue, minY = float.MaxValue;
+                float maxX = float.MinValue, maxY = float.MinValue;
+                
+                // 전체 바운딩 박스 계산
+                foreach (var part in mpfProgram.Parts)
+                {
+                    if (part.Contours == null)
+                        continue;
+                    
+                    foreach (var contour in part.Contours)
+                    {
+                        if (contour.AllSegments == null)
+                            continue;
+                        
+                        foreach (var segment in contour.AllSegments)
+                        {
+                            minX = Math.Min(minX, (float)segment.Start.X);
+                            minY = Math.Min(minY, (float)segment.Start.Y);
+                            maxX = Math.Max(maxX, (float)segment.Start.X);
+                            maxY = Math.Max(maxY, (float)segment.Start.Y);
+                            
+                            minX = Math.Min(minX, (float)segment.End.X);
+                            minY = Math.Min(minY, (float)segment.End.Y);
+                            maxX = Math.Max(maxX, (float)segment.End.X);
+                            maxY = Math.Max(maxY, (float)segment.End.Y);
+                        }
+                    }
+                }
+                
+                float rangeX = maxX - minX;
+                float rangeY = maxY - minY;
+                
+                if (rangeX <= 0 || rangeY <= 0)
+                    return 1.0f;
+                
+                float viewWidth = viewerPanel.Width * 0.8f;  // 여백 20%
+                float viewHeight = viewerPanel.Height * 0.8f;
+                
+                float scaleX = viewWidth / rangeX;
+                float scaleY = viewHeight / rangeY;
+                
+                return Math.Min(scaleX, scaleY);
+            }
+            catch
+            {
+                return 1.0f;
+            }
+        }
+        
+        /// <summary>
+        /// AutoFit: Phase8 완전 호환 방식
+        /// </summary>
+        private void AutoFitView()
+        {
+            try
+            {
+                if (mpfProgram?.Workpiece == null)
+                    return;
+                
+                // Phase8: workpieceScale 적용한 크기
+                float width = (float)(mpfProgram.Workpiece.Width * workpieceScale);
+                float height = (float)(mpfProgram.Workpiece.Height * workpieceScale);
+                
+                if (width <= 0 || height <= 0)
+                {
+                    zoom = 1.0f;
+                    panX = 0.0f;
+                    panY = 0.0f;
+                    return;
+                }
+                
+                // Phase8: InitialZoomMultiplier 사용
+                RenderSettings settings = RenderSettings.Instance;
+                float multiplier = settings.InitialZoomMultiplier;
+                
+                float zoomByWidth = (float)viewerPanel.Width / width * multiplier;
+                float zoomByHeight = (float)viewerPanel.Height / height * multiplier;
+                
+                zoom = Math.Min(zoomByWidth, zoomByHeight);
+                
+                // Phase8: Pan은 workpiece 중심으로
+                panX = width / 2.0f;
+                panY = height / 2.0f;
+                
+                LogToFile($"AutoFit: workpieceScale={workpieceScale}, Zoom={zoom:F3}, WP=({mpfProgram.Workpiece.Width:F1}x{mpfProgram.Workpiece.Height:F1})");
+            }
+            catch (Exception ex)
+            {
+                LogToFile($"AutoFitView 오류: {ex.Message}");
+            }
+        }
+        
+        /// <summary>
+        /// 컨투어 렌더링 (Phase8 로직: Lead-in, Piercing, Marking 구분)
+        /// </summary>
+        private void RenderContour(Graphics g, Contour contour, CutStatus status, 
+            double completedDistance, float scale, float offsetX, float offsetY)
+        {
+            try
+            {
+                if (contour == null)
+                    return;
+                
+                RenderSettings settings = RenderSettings.Instance;
+                bool isMarking = (contour.CuttingType == 10);
+                
+                // 1. Piercing Point 렌더링 (PiercingType != 0)
+                // Phase8 방식: Part 내부 좌표를 그대로 적용
+                if (contour.PiercingType != 0)
+                {
+                    float pierceX = (float)(contour.PiercingPosition.X * scale) + offsetX;
+                    float pierceY = (float)(contour.PiercingPosition.Y * scale) + offsetY;
+                    float pierceSize = settings.PiercingPointSize;
+                    Color pierceColor = settings.PiercingPointColor;
+                    
+                    using (SolidBrush brush = new SolidBrush(pierceColor))
+                    {
+                        g.FillEllipse(brush, pierceX - pierceSize/2, pierceY - pierceSize/2, pierceSize, pierceSize);
+                    }
+                }
+                
+                // 2. AllSegments 렌더링 (Lead-in 포함)
+                if (contour.AllSegments != null)
+                {
+                    int elementIndex = 0;
+                    foreach (var segment in contour.AllSegments)
+                    {
+                        // Lead-in 세그먼트 체크
+                        bool isLeadInSegment = (contour.LeadIn != null && contour.LeadIn.Path != null && 
+                                                contour.LeadIn.Path.Contains(segment));
+                        
+                        // 색상 및 굵기 결정
+                        Color segmentColor;
+                        float lineWidth;
+                        
+                        if (isLeadInSegment)
+                        {
+                            // Lead-in: 노란색, 얇은 선
+                            segmentColor = settings.LeadInColor;
+                            lineWidth = settings.LeadInWidth;
+                        }
+                        else if (isMarking)
+                        {
+                            // Marking: 노란색
+                            segmentColor = settings.MarkingColor;
+                            lineWidth = settings.CuttingPendingWidth;
+                        }
+                        else
+                        {
+                            // 일반 절단 경로: 상태에 따라
+                            switch (status)
+                            {
+                                case CutStatus.Completed:
+                                    segmentColor = settings.CuttingCompletedColor;
+                                    lineWidth = settings.CuttingCompletedWidth;
+                                    break;
+                                case CutStatus.InProgress:
+                                    segmentColor = settings.CuttingInProgressColor;
+                                    lineWidth = settings.CuttingInProgressWidth;
+                                    break;
+                                case CutStatus.NotStarted:
+                                default:
+                                    segmentColor = settings.CuttingPendingColor;
+                                    lineWidth = settings.CuttingPendingWidth;
+                                    break;
+                            }
+                        }
+                        
+                        // 세그먼트 렌더링
+                        using (Pen pen = new Pen(segmentColor, lineWidth))
+                        {
+                            DrawPathSegment(g, pen, segment, scale, offsetX, offsetY);
+                        }
+                        
+                        elementIndex++;
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[RealtimeITagControl] RenderContour 오류: {ex.Message}");
+            }
+        }
+        
+        /// <summary>
+        /// PathSegment 렌더링 (Line 또는 Arc)
+        /// </summary>
+        private void DrawPathSegment(Graphics g, Pen pen, PathSegment segment, 
+            float scale, float offsetX, float offsetY)
+        {
+            if (segment == null)
+                return;
+            
+            if (segment.Type == PathSegmentType.Line)
+            {
+                float x1 = (float)(segment.Start.X * scale) + offsetX;
+                float y1 = offsetY - (float)(segment.Start.Y * scale);
+                float x2 = (float)(segment.End.X * scale) + offsetX;
+                float y2 = offsetY - (float)(segment.End.Y * scale);
+                g.DrawLine(pen, x1, y1, x2, y2);
+            }
+            else if (segment.Type == PathSegmentType.Arc)
+            {
+                DrawArc(g, pen, segment as ArcSegment, scale, offsetX, offsetY);
+            }
+        }
+        
+        /// <summary>
+        /// 호(Arc) 그리기 - Phase7/8 정확한 호 렌더링 로직
+        /// </summary>
+        private void DrawArc(Graphics g, Pen pen, ArcSegment arc, 
+            float scale, float offsetX, float offsetY)
+        {
+            try
+            {
+                if (arc == null)
+                    return;
+                    
+                float cx = (float)(arc.Center.X * scale) + offsetX;
+                float cy = offsetY - (float)(arc.Center.Y * scale);
+                float radius = (float)(arc.Radius * scale);
+                
+                // GDI+ DrawArc 파라미터: (x, y, width, height, startAngle, sweepAngle)
+                // x, y: 바운딩 박스의 좌상단
+                // startAngle: 시작 각도 (도 단위, 3시 방향 = 0도, 시계방향)
+                // sweepAngle: 스윕 각도 (도 단위)
+                
+                float rectX = cx - radius;
+                float rectY = cy - radius;
+                float rectWidth = radius * 2;
+                float rectHeight = radius * 2;
+                
+                // GDI+ DrawArc: 각도는 도 단위, Y축이 아래 방향이므로 각도 반전 필요
+                // Phase8: OpenGL은 Y축 위 방향, GDI+는 Y축 아래 방향
+                float startAngleDeg = -(float)arc.StartAngle;  // Y축 반전
+                float endAngleDeg = -(float)arc.EndAngle;
+                
+                // Sweep angle 계산
+                float sweepAngle = endAngleDeg - startAngleDeg;
+                
+                // G2 (CW) vs G3 (CCW) 처리
+                // GDI+에서 양수 sweepAngle = 시계방향, 음수 = 반시계방향
+                if (arc.Clockwise)  // G2 (CW)
+                {
+                    // 시계방향: sweepAngle이 음수여야 함
+                    if (sweepAngle > 0)
+                        sweepAngle -= 360;
+                }
+                else  // G3 (CCW)
+                {
+                    // 반시계방향: sweepAngle이 양수여야 함
+                    if (sweepAngle < 0)
+                        sweepAngle += 360;
+                }
+                
+                // GDI+ DrawArc 호출
+                g.DrawArc(pen, rectX, rectY, rectWidth, rectHeight, startAngleDeg, sweepAngle);
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[RealtimeITagControl] DrawArc 오류: {ex.Message}");
+            }
+        }
+        
+
+        
+        /// <summary>
+        /// 상태 범례 표시 (우하단)
+        /// </summary>
+        private void DrawStatusLegend(Graphics g)
+        {
+            try
+            {
+                float x = viewerPanel.Width - 150;
+                float y = viewerPanel.Height - 100;
+                
+                Font font = new Font("Arial", 10, FontStyle.Regular);
+                
+                // 미시작 (회색)
+                g.DrawLine(new Pen(Color.Gray, 2), x, y, x + 30, y);
+                g.DrawString("미시작", font, Brushes.White, x + 35, y - 7);
+                
+                // 진행 중 (노란색)
+                g.DrawLine(new Pen(Color.Yellow, 2), x, y + 25, x + 30, y + 25);
+                g.DrawString("진행 중", font, Brushes.White, x + 35, y + 18);
+                
+                // 완료 (초록색)
+                g.DrawLine(new Pen(Color.LimeGreen, 2), x, y + 50, x + 30, y + 50);
+                g.DrawString("완료", font, Brushes.White, x + 35, y + 43);
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[RealtimeITagControl] DrawStatusLegend 오류: {ex.Message}");
+            }
+        }
+
+        private void ViewerPanel_MouseDown(object sender, MouseEventArgs e)
+        {
+            if (e.Button == MouseButtons.Left)
+            {
+                isDragging = true;
+                lastMousePos = e.Location;
+            }
+        }
+        
+        private void ViewerPanel_MouseMove(object sender, MouseEventArgs e)
+        {
+            if (isDragging && e.Button == MouseButtons.Left)
+            {
+                // Pan: Phase8 로직 (OpenGL은 panX 방향, GDI+는 offsetX 방향 반대)
+                // GDI+에서는 dx를 그대로 사용 (부호 반전 없음)
+                float dx = (e.X - lastMousePos.X);  // 마우스 이동 방향 그대로
+                float dy = -(e.Y - lastMousePos.Y); // Y축만 반전 (화면 좌표계)
+                
+                panX += dx;
+                panY += dy;
+                
+                lastMousePos = e.Location;
+                
+                // 드래그 중에만 즉시 다시 그리기
+                if (viewerPanel != null && !viewerPanel.IsDisposed)
+                {
+                    viewerPanel.Invalidate();
+                }
+            }
+            
+            // TODO: 마우스 좌표를 월드 좌표로 변환하여 표시
+        }
+        
+        private void ViewerPanel_MouseUp(object sender, MouseEventArgs e)
+        {
+            if (e.Button == MouseButtons.Left)
+            {
+                isDragging = false;
+            }
+        }
+        
+        private void ViewerPanel_MouseWheel(object sender, MouseEventArgs e)
+        {
+            // Zoom: 마우스 휠로 확대/축소
+            float zoomFactor = e.Delta > 0 ? 1.1f : 0.9f;
+            zoom *= zoomFactor;
+            
+            // Phase8 방식: Zoom 범위 제한 (0.1 ~ 30000.0)
+            if (zoom < 0.1f) zoom = 0.1f;
+            if (zoom > 30000.0f) zoom = 30000.0f;
+            
+            // 줌 변경 시 즉시 다시 그리기
+            if (viewerPanel != null && !viewerPanel.IsDisposed)
+            {
+                viewerPanel.Invalidate();
+            }
+        }
+
+        private void ViewerPanel_MouseClick(object sender, MouseEventArgs e)
+        {
+            System.Diagnostics.Debug.WriteLine($"[RealtimeITagControl] Viewer 클릭: ({e.X}, {e.Y})");
+        }
+
+        #endregion
+
         #region Program Info 패널 이벤트 핸들러
 
         private void ProgramInfoPanel_SimulationClicked(object sender, EventArgs e)
@@ -1101,6 +1667,25 @@ namespace RealtimeITagControl
         private void ProgramInfoPanel_ElementSelectClicked(object sender, EventArgs e)
         {
             System.Diagnostics.Debug.WriteLine("[RealtimeITagControl] 엘리먼트 선택 버튼 클릭");
+        }
+
+        private void ProgramInfoPanel_ITagTestClicked(object sender, EventArgs e)
+        {
+            try
+            {
+                System.Diagnostics.Debug.WriteLine("[RealtimeITagControl] ITag 테스트 버튼 클릭");
+                
+                // ITag 테스트 팝업 폼 열기 (this의 ITag 인스턴스 전달)
+                using (ITagTestForm testForm = new ITagTestForm(this))
+                {
+                    testForm.ShowDialog(this);
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[RealtimeITagControl] ProgramInfoPanel_ITagTestClicked 오류: {ex.Message}");
+                MessageBox.Show($"ITag 테스트 폼 열기 오류: {ex.Message}", "오류", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
         }
 
         #endregion
