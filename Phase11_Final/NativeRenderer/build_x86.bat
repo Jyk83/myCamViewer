@@ -33,44 +33,48 @@ cd build\x86
 
 REM Try Visual Studio 2022 first
 echo [INFO] Trying Visual Studio 2022...
-cmake ..\.. -G "Visual Studio 17 2022" -A Win32 -DCMAKE_BUILD_TYPE=Release 2>nul
-if %ERRORLEVEL% NEQ 0 (
-    echo [WARN] Visual Studio 2022 not found, trying 2019...
-    REM Clean cache before trying different generator
-    del CMakeCache.txt 2>nul
-    rmdir /S /Q CMakeFiles 2>nul
-    
-    cmake ..\.. -G "Visual Studio 16 2019" -A Win32 -DCMAKE_BUILD_TYPE=Release 2>nul
-    if %ERRORLEVEL% NEQ 0 (
-        echo [WARN] Visual Studio 2019 not found, trying 2017...
-        REM Clean cache before trying different generator
-        del CMakeCache.txt 2>nul
-        rmdir /S /Q CMakeFiles 2>nul
-        
-        cmake ..\.. -G "Visual Studio 15 2017" -A Win32 -DCMAKE_BUILD_TYPE=Release 2>nul
-        if %ERRORLEVEL% NEQ 0 (
-            echo [ERROR] CMake configure failed - No Visual Studio found
-            echo.
-            echo Please install one of the following:
-            echo - Visual Studio 2017 or later
-            echo - Visual Studio Build Tools
-            echo.
-            echo You can download Visual Studio Build Tools from:
-            echo https://visualstudio.microsoft.com/downloads/
-            echo.
-            cd ..\..
-            pause
-            exit /b 1
-        ) else (
-            echo [OK] Using Visual Studio 2017
-        )
-    ) else (
-        echo [OK] Using Visual Studio 2019
-    )
-) else (
+cmake ..\.. -G "Visual Studio 17 2022" -A Win32 -DCMAKE_BUILD_TYPE=Release
+if %ERRORLEVEL% EQU 0 (
     echo [OK] Using Visual Studio 2022
+    goto BUILD
 )
 
+echo [WARN] Visual Studio 2022 not found, trying 2019...
+REM Clean cache before trying different generator
+del CMakeCache.txt 2>nul
+rmdir /S /Q CMakeFiles 2>nul
+
+cmake ..\.. -G "Visual Studio 16 2019" -A Win32 -DCMAKE_BUILD_TYPE=Release
+if %ERRORLEVEL% EQU 0 (
+    echo [OK] Using Visual Studio 2019
+    goto BUILD
+)
+
+echo [WARN] Visual Studio 2019 not found, trying 2017...
+REM Clean cache before trying different generator
+del CMakeCache.txt 2>nul
+rmdir /S /Q CMakeFiles 2>nul
+
+cmake ..\.. -G "Visual Studio 15 2017" -A Win32 -DCMAKE_BUILD_TYPE=Release
+if %ERRORLEVEL% EQU 0 (
+    echo [OK] Using Visual Studio 2017
+    goto BUILD
+)
+
+echo [ERROR] CMake configure failed - No Visual Studio found
+echo.
+echo Please install one of the following:
+echo - Visual Studio 2017 or later
+echo - Visual Studio Build Tools
+echo.
+echo You can download Visual Studio Build Tools from:
+echo https://visualstudio.microsoft.com/downloads/
+echo.
+cd ..\..
+pause
+exit /b 1
+
+:BUILD
 echo.
 echo ====================================
 echo [2/3] Building x86 Release...
@@ -101,7 +105,6 @@ if exist "build\x86\bin\Release\NativeRenderer.dll" (
     echo [ERROR] x86 DLL not found at build\x86\bin\Release\NativeRenderer.dll
     echo [INFO] Searching for DLL in build directory...
     dir /s /b build\x86\*.dll
-    cd ..\..
     pause
     exit /b 1
 )
