@@ -162,8 +162,23 @@ namespace RealtimeITagControl
         public CamViewerControl()
         {
             InitializeComponent();
-            SetupRenderPanel();
-            SetupSimulationEngine();
+            
+            // WinCC Graphics Designer 디자인 모드 체크
+            if (!DesignMode)
+            {
+                SetupRenderPanel();
+                SetupSimulationEngine();
+            }
+            else
+            {
+                // 디자인 모드일 때는 기본 패널만 생성
+                renderPanel = new Panel
+                {
+                    Dock = DockStyle.Fill,
+                    BackColor = Color.Black
+                };
+                this.Controls.Add(renderPanel);
+            }
         }
 
         private void InitializeComponent()
