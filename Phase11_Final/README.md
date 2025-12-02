@@ -105,12 +105,66 @@ Phase11_Final/
 
 ## 빌드 방법
 
+### ⚠️ 중요: NativeRenderer.dll Architecture 문제
+
+**Architecture Mismatch 에러가 발생하는 경우:**
+```
+Platform mismatch error!
+The NativeRenderer.dll architecture doesn't match this application.
+- DLL is x64 (64-bit)
+- Application must be x64 or AnyCPU
+```
+
+**해결 방법:**
+
+#### 옵션 1: WinCC Runtime 아키텍처 확인 (추천)
+
+1. WinCC Runtime이 32비트인지 64비트인지 확인
+2. 해당 아키텍처의 NativeRenderer.dll 사용
+
+#### 옵션 2: x86 버전 NativeRenderer.dll 빌드
+
+```batch
+cd Phase11_Final\NativeRenderer
+mkdir build\x86
+cd build\x86
+cmake ..\.. -G "Visual Studio 17 2022" -A Win32 -DCMAKE_BUILD_TYPE=Release
+cmake --build . --config Release
+copy bin\Release\NativeRenderer.dll ..\..\..\RealtimeITagControl\
+```
+
+#### 옵션 3: Multi-Architecture 빌드 (x86 + x64)
+
+```batch
+cd Phase11_Final\NativeRenderer
+build_multi.bat
+```
+
+이 스크립트는 x86과 x64 두 버전을 모두 빌드하여:
+- `NativeRenderer_x86.dll`
+- `NativeRenderer_x64.dll`
+
+두 파일을 RealtimeITagControl 폴더에 복사합니다.
+
+상세한 내용은 [`NativeRenderer/README.md`](NativeRenderer/README.md)를 참조하세요.
+
+### C# 프로젝트 빌드
+
 ```batch
 cd Phase11_Final
 build.bat
 ```
 
 빌드 결과: `RealtimeITagControl\bin\Release\RealtimeITagControl.dll`
+
+**빌드 설정:**
+- **Platform**: AnyCPU
+- **Prefer32Bit**: false
+- **Framework**: .NET Framework 4.7.2
+
+이 설정은 WinCC Runtime 환경에 자동으로 적응합니다:
+- x64 WinCC → 64비트 프로세스로 실행 → NativeRenderer_x64.dll 로드
+- x86 WinCC → 32비트 프로세스로 실행 → NativeRenderer_x86.dll 로드
 
 ## WinCC Graphics Designer에 임포트
 
