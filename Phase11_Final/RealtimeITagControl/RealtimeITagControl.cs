@@ -156,6 +156,8 @@ namespace RealtimeITagControl
             };
             programInfoPanel.SimulationClicked += ProgramInfoPanel_SimulationClicked;
             programInfoPanel.ElementSelectClicked += ProgramInfoPanel_ElementSelectClicked;
+            programInfoPanel.ShowPartNumberChanged += ProgramInfoPanel_ShowPartNumberChanged;
+            programInfoPanel.ShowContourNumberChanged += ProgramInfoPanel_ShowContourNumberChanged;
             this.Controls.Add(programInfoPanel);
             
             // 초기 연결 상태 표시
@@ -194,9 +196,30 @@ namespace RealtimeITagControl
         /// </summary>
         private void RealtimeITagControl_Disposed(object sender, EventArgs e)
         {
+            CleanupResources();
+        }
+
+        /// <summary>
+        /// Dispose 오버라이드 (WinCC에서 확실하게 호출되도록)
+        /// </summary>
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing)
+            {
+                CleanupResources();
+            }
+            base.Dispose(disposing);
+        }
+
+        /// <summary>
+        /// 리소스 정리 공통 메서드
+        /// </summary>
+        private void CleanupResources()
+        {
             try
             {
-                System.Diagnostics.Debug.WriteLine("[RealtimeITagControl] === Dispose 시작 ===");
+                System.Diagnostics.Debug.WriteLine("[RealtimeITagControl] === CleanupResources 시작 ===");
+                LogToFile("=== CleanupResources 시작 ===");
 
                 // ITag 연결 해제
                 Disconnect();
@@ -206,6 +229,8 @@ namespace RealtimeITagControl
                 {
                     programInfoPanel.SimulationClicked -= ProgramInfoPanel_SimulationClicked;
                     programInfoPanel.ElementSelectClicked -= ProgramInfoPanel_ElementSelectClicked;
+                    programInfoPanel.ShowPartNumberChanged -= ProgramInfoPanel_ShowPartNumberChanged;
+                    programInfoPanel.ShowContourNumberChanged -= ProgramInfoPanel_ShowContourNumberChanged;
                 }
 
                 // CamViewerControl은 자체 Dispose 처리
@@ -217,13 +242,13 @@ namespace RealtimeITagControl
                 
                 // 컨투어 상태는 CamViewerControl에서 관리
                 
-                // CamViewerControl 자체 Dispose 처리
-                
-                System.Diagnostics.Debug.WriteLine("[RealtimeITagControl] === Dispose 완료 ===");
+                System.Diagnostics.Debug.WriteLine("[RealtimeITagControl] === CleanupResources 완료 ===");
+                LogToFile("=== CleanupResources 완료 ===");
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"[RealtimeITagControl] Dispose 오류: {ex.Message}");
+                System.Diagnostics.Debug.WriteLine($"[RealtimeITagControl] CleanupResources 오류: {ex.Message}");
+                LogToFile($"CleanupResources 오류: {ex.Message}");
             }
         }
 
@@ -902,11 +927,24 @@ namespace RealtimeITagControl
                         break;
 
                     case TagDefinitions.WorkStatus.End:  // WorkStatus = 0
-                        // 완료
+                        // 완료 - 마지막 파트/컨투어인지 확인
                         if (currentTraceState != TraceState.Completed)
                         {
-                            CompleteTracing();
-                            System.Diagnostics.Debug.WriteLine("[RealtimeITagControl] ✅ Trace 완료");
+                            // 마지막 파트/컨투어 확인
+                            bool isLastPartContour = IsLastPartAndContour(tagData.CurrentPart, tagData.CurrentContour);
+                            
+                            if (isLastPartContour)
+                            {
+                                // 마지막까지 완료된 경우 모든 컨투어를 Completed 처리
+                                CompleteTracing();
+                                System.Diagnostics.Debug.WriteLine("[RealtimeITagControl] ✅ Trace 완료 - 마지막 파트/컨투어 도달");
+                            }
+                            else
+                            {
+                                // 중간에 멈춘 경우 현재까지만 업데이트
+                                UpdateContourStatus(tagData);
+                                System.Diagnostics.Debug.WriteLine($"[RealtimeITagControl] ⏹️ Trace 중지 - Part {tagData.CurrentPart}, Contour {tagData.CurrentContour}");
+                            }
                         }
                         currentTraceState = TraceState.Completed;
                         isTracing = false;
@@ -934,6 +972,28 @@ namespace RealtimeITagControl
             }
         }
         
+        /// <summary>
+        /// 마지막 파트와 컨투어인지 확인
+        /// </summary>
+        private bool IsLastPartAndContour(int currentPart, int currentContour)
+        {
+            if (mpfProgram == null || mpfProgram.Parts == null || mpfProgram.Parts.Count == 0)
+                return false;
+
+            // 마지막 파트 확인
+            int lastPartNumber = mpfProgram.Parts.Count;
+            if (currentPart != lastPartNumber)
+                return false;
+
+            // 마지막 파트의 마지막 컨투어 확인
+            var lastPart = mpfProgram.Parts[mpfProgram.Parts.Count - 1];
+            if (lastPart == null || lastPart.Contours == null || lastPart.Contours.Count == 0)
+                return false;
+
+            int lastContourNumber = lastPart.Contours.Count;
+            return currentContour == lastContourNumber;
+        }
+
         /// <summary>
         /// 실시간 컨투어 상태 업데이트 (CurrentPart, CurrentContour, ProgressDistance 기반)
         /// </summary>
@@ -1159,6 +1219,43 @@ namespace RealtimeITagControl
                         System.Diagnostics.Debug.WriteLine("[RealtimeITagControl] Contour Selection ON");
                     }
                 }
+            }
+        }
+
+        /// <summary>
+        /// 파트 번호 표시 체크박스 변경 이벤트
+        /// </summary>
+        private void ProgramInfoPanel_ShowPartNumberChanged(object sender, bool isChecked)
+        {
+            System.Diagnostics.Debug.WriteLine($"[RealtimeITagControl] 파트 번호 표시: {isChecked}");
+            
+            if (camViewerControl != null)
+            {
+                // RenderSettings 업데이트
+                Rendering.RenderSettings.Instance.ShowPartNumbers = isChecked;
+                
+                // 파트 외곽선도 함께 표시/숨김
+                Rendering.RenderSettings.Instance.ShowPartBoundaries = isChecked;
+                
+                // 화면 갱신
+                camViewerControl.Invalidate();
+            }
+        }
+
+        /// <summary>
+        /// 컨투어 번호 표시 체크박스 변경 이벤트
+        /// </summary>
+        private void ProgramInfoPanel_ShowContourNumberChanged(object sender, bool isChecked)
+        {
+            System.Diagnostics.Debug.WriteLine($"[RealtimeITagControl] 컨투어 번호 표시: {isChecked}");
+            
+            if (camViewerControl != null)
+            {
+                // RenderSettings 업데이트
+                Rendering.RenderSettings.Instance.ShowContourNumbers = isChecked;
+                
+                // 화면 갱신
+                camViewerControl.Invalidate();
             }
         }
 
