@@ -12,75 +12,8 @@ using RealtimeITagControl.Rendering;
 
 namespace RealtimeITagControl
 {
-    /// <summary>
-    /// Native OpenGL renderer P/Invoke declarations (Phase8 방식)
-    /// </summary>
-    internal static class NativeRenderer
-    {
-        private const string DllName = "NativeRenderer.dll";
-
-        [DllImport(DllName, CallingConvention = CallingConvention.Cdecl)]
-        public static extern int InitializeRenderer(IntPtr windowHandle);
-
-        [DllImport(DllName, CallingConvention = CallingConvention.Cdecl)]
-        public static extern void CleanupRenderer();
-
-        [DllImport(DllName, CallingConvention = CallingConvention.Cdecl)]
-        public static extern void ResizeViewport(int width, int height);
-
-        [DllImport(DllName, CallingConvention = CallingConvention.Cdecl)]
-        public static extern void SetViewTransform(float zoom, float panX, float panY);
-
-        // MPF drawing functions
-        [DllImport(DllName, CallingConvention = CallingConvention.Cdecl)]
-        public static extern void BeginMPFRenderWithBackground(float bgR, float bgG, float bgB);
-
-        [DllImport(DllName, CallingConvention = CallingConvention.Cdecl)]
-        public static extern void EndMPFRender();
-
-        [DllImport(DllName, CallingConvention = CallingConvention.Cdecl)]
-        public static extern void SwapBuffersNow();
-
-        [DllImport(DllName, CallingConvention = CallingConvention.Cdecl)]
-        public static extern void DrawLine(float x1, float y1, float x2, float y2, 
-                                          float r, float g, float b, float lineWidth);
-
-        [DllImport(DllName, CallingConvention = CallingConvention.Cdecl)]
-        public static extern void DrawArc(float centerX, float centerY, float radius, 
-                                         float startAngle, float endAngle, int clockwise, 
-                                         float r, float g, float b, float lineWidth);
-
-        [DllImport(DllName, CallingConvention = CallingConvention.Cdecl)]
-        public static extern void DrawPoint(float x, float y, float size, 
-                                           float r, float g, float b);
-
-        [DllImport(DllName, CallingConvention = CallingConvention.Cdecl)]
-        public static extern void DrawFilledRectangle(float x, float y, float width, float height,
-                                                      float r, float g, float b);
-
-        [DllImport(DllName, CallingConvention = CallingConvention.Cdecl)]
-        public static extern void SetCanvasOrientation(int orientation);
-
-        // Phase 8.1: Text rendering for part/contour numbers
-        [DllImport(DllName, CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Unicode)]
-        public static extern int InitializeTextRenderer(
-            [MarshalAs(UnmanagedType.LPWStr)] string fontName,
-            int height,
-            int bold,
-            int italic);
-
-        [DllImport(DllName, CallingConvention = CallingConvention.Cdecl)]
-        public static extern void DrawPartNumber(double posX, double posY, uint number,
-                                                  double scale, float r, float g, float b);
-
-        [DllImport(DllName, CallingConvention = CallingConvention.Cdecl)]
-        public static extern void DrawContourNumber(double posX, double posY, uint number,
-                                                     double scale, float r, float g, float b);
-
-        [DllImport(DllName, CallingConvention = CallingConvention.Cdecl)]
-        public static extern void CleanupTextRenderer();
-    }
-
+    // NativeRenderer는 CamViewerCore.cs에 정의되어 있음 (중복 방지)
+    
     /// <summary>
     /// Realtime ITag Viewer UserControl
     /// Phase8 (Realtime Viewer) + Phase9 (ITag Communication) 통합

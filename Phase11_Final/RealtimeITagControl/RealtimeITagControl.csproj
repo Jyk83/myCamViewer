@@ -34,7 +34,7 @@
   </PropertyGroup>
   <ItemGroup>
     <Reference Include="Siemens.Runtime.ControlDev">
-      <HintPath>..\Siemens.Runtime.ControlDev.dll</HintPath>
+      <HintPath>C:\Program Files (x86)\Siemens\Automation\WinCC RT Advanced\Siemens.Runtime.ControlDev.dll</HintPath>
       <EmbedInteropTypes>False</EmbedInteropTypes>
     </Reference>
     <Reference Include="System" />
