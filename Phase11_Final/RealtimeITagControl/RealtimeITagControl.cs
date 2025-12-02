@@ -143,65 +143,49 @@ namespace RealtimeITagControl
 
         private void InitializeComponent()
         {
-            try
+            // UserControl 크기: 1268x630
+            this.Size = new Size(1268, 630);
+            this.BackColor = Color.White;
+
+            // 좌측 Program Info 패널 (300x630)
+            programInfoPanel = new ProgramInfoPanel
             {
-                // UserControl 크기: 1268x630
-                this.Size = new Size(1268, 630);
-                this.BackColor = Color.White;
+                Location = new Point(0, 0),
+                Size = new Size(300, 630),
+                Dock = DockStyle.None
+            };
+            programInfoPanel.SimulationClicked += ProgramInfoPanel_SimulationClicked;
+            programInfoPanel.ElementSelectClicked += ProgramInfoPanel_ElementSelectClicked;
+            this.Controls.Add(programInfoPanel);
+            
+            // 초기 연결 상태 표시
+            programInfoPanel.UpdateConnectionStatus(false, false, null);
 
-                // 좌측 Program Info 패널 (300x630)
-                programInfoPanel = new ProgramInfoPanel
-                {
-                    Location = new Point(0, 0),
-                    Size = new Size(300, 630),
-                    Dock = DockStyle.None
-                };
-                
-                // 디자인 모드가 아닐 때만 이벤트 핸들러 연결
-                if (!DesignMode)
-                {
-                    programInfoPanel.SimulationClicked += ProgramInfoPanel_SimulationClicked;
-                    programInfoPanel.ElementSelectClicked += ProgramInfoPanel_ElementSelectClicked;
-                }
-                
-                this.Controls.Add(programInfoPanel);
-                
-                // 초기 연결 상태 표시
-                if (!DesignMode)
-                {
-                    programInfoPanel.UpdateConnectionStatus(false, false, null);
-                }
-
-                // 우측 CamViewerControl (Phase8 OpenGL 렌더러) (968x630)
-                camViewerControl = new CamViewerControl
-                {
-                    Location = new Point(300, 0),
-                    Size = new Size(968, 630),
-                    Dock = DockStyle.None
-                };
-                this.Controls.Add(camViewerControl);
-
-                // Load 시 ITag 연결 (런타임 모드에서만)
-                this.Load += (s, e) =>
-                {
-                    if (!DesignMode)
-                    {
-                        Connect();
-                        StartCyclicRead(500);
-                    }
-                };
-
-                // Dispose 시 연결 해제
-                this.Disposed += RealtimeITagControl_Disposed;
-            }
-            catch (Exception ex)
+            // 우측 CamViewerControl (Phase8 OpenGL 렌더러) (968x630)
+            camViewerControl = new CamViewerControl
             {
-                // 디자인 모드에서 발생할 수 있는 에러 무시
-                if (!DesignMode)
-                {
-                    System.Diagnostics.Debug.WriteLine($"[RealtimeITagControl] InitializeComponent 오류: {ex.Message}");
-                    throw;
-                }
+                Location = new Point(300, 0),
+                Size = new Size(968, 630),
+                Dock = DockStyle.None
+            };
+            this.Controls.Add(camViewerControl);
+
+            // Load 시 ITag 연결
+            this.Load += RealtimeITagControl_Load;
+
+            // Dispose 시 연결 해제
+            this.Disposed += RealtimeITagControl_Disposed;
+        }
+
+        /// <summary>
+        /// UserControl Load 이벤트 핸들러
+        /// </summary>
+        private void RealtimeITagControl_Load(object sender, EventArgs e)
+        {
+            if (!DesignMode)
+            {
+                Connect();
+                StartCyclicRead(500);
             }
         }
 
