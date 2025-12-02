@@ -155,6 +155,7 @@ namespace RealtimeITagControl
                 Dock = DockStyle.None
             };
             programInfoPanel.SimulationClicked += ProgramInfoPanel_SimulationClicked;
+            programInfoPanel.StopSimulationClicked += ProgramInfoPanel_StopSimulationClicked;
             programInfoPanel.ElementSelectClicked += ProgramInfoPanel_ElementSelectClicked;
             programInfoPanel.ShowPartNumberChanged += ProgramInfoPanel_ShowPartNumberChanged;
             programInfoPanel.ShowContourNumberChanged += ProgramInfoPanel_ShowContourNumberChanged;
@@ -228,6 +229,7 @@ namespace RealtimeITagControl
                 if (programInfoPanel != null)
                 {
                     programInfoPanel.SimulationClicked -= ProgramInfoPanel_SimulationClicked;
+                    programInfoPanel.StopSimulationClicked -= ProgramInfoPanel_StopSimulationClicked;
                     programInfoPanel.ElementSelectClicked -= ProgramInfoPanel_ElementSelectClicked;
                     programInfoPanel.ShowPartNumberChanged -= ProgramInfoPanel_ShowPartNumberChanged;
                     programInfoPanel.ShowContourNumberChanged -= ProgramInfoPanel_ShowContourNumberChanged;
@@ -1188,11 +1190,65 @@ namespace RealtimeITagControl
         {
             System.Diagnostics.Debug.WriteLine("[RealtimeITagControl] 시뮬레이션 버튼 클릭");
             
-            // CamViewerControl의 Simulation 기능 호출
+            // 시뮬레이션 상태에 따라 토글 (시작/일시정지/재개)
             if (camViewerControl != null)
             {
-                camViewerControl.StartSimulation();
+                var state = camViewerControl.GetSimulationState();
+                
+                switch (state)
+                {
+                    case Simulation.SimulationState.Idle:
+                    case Simulation.SimulationState.Stopped:
+                    case Simulation.SimulationState.Completed:
+                        // 시뮬레이션 시작
+                        camViewerControl.StartSimulation();
+                        System.Diagnostics.Debug.WriteLine("[RealtimeITagControl] 시뮬레이션 시작");
+                        UpdateSimulationButtonUI();
+                        break;
+                        
+                    case Simulation.SimulationState.Running:
+                        // 일시정지
+                        camViewerControl.PauseSimulation();
+                        System.Diagnostics.Debug.WriteLine("[RealtimeITagControl] 시뮬레이션 일시정지");
+                        UpdateSimulationButtonUI();
+                        break;
+                        
+                    case Simulation.SimulationState.Paused:
+                        // 재개
+                        camViewerControl.ResumeSimulation();
+                        System.Diagnostics.Debug.WriteLine("[RealtimeITagControl] 시뮬레이션 재개");
+                        UpdateSimulationButtonUI();
+                        break;
+                }
             }
+        }
+
+        private void ProgramInfoPanel_StopSimulationClicked(object sender, EventArgs e)
+        {
+            System.Diagnostics.Debug.WriteLine("[RealtimeITagControl] 시뮬레이션 중단 버튼 클릭");
+            
+            // 시뮬레이션 중단
+            if (camViewerControl != null)
+            {
+                camViewerControl.StopSimulation();
+                System.Diagnostics.Debug.WriteLine("[RealtimeITagControl] 시뮬레이션 중단됨");
+                UpdateSimulationButtonUI();
+            }
+        }
+
+        /// <summary>
+        /// 시뮬레이션 버튼 UI 상태 업데이트
+        /// </summary>
+        private void UpdateSimulationButtonUI()
+        {
+            if (camViewerControl == null || programInfoPanel == null)
+                return;
+
+            var state = camViewerControl.GetSimulationState();
+            bool isRunning = (state == Simulation.SimulationState.Running);
+            bool isPaused = (state == Simulation.SimulationState.Paused);
+            
+            programInfoPanel.UpdateSimulationButtonState(isRunning, isPaused);
         }
 
         private void ProgramInfoPanel_ElementSelectClicked(object sender, EventArgs e)

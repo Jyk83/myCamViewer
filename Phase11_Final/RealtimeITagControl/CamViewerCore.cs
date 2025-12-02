@@ -1049,6 +1049,14 @@ namespace RealtimeITagControl
                 RedrawSimulation();
             }
         }
+
+        /// <summary>
+        /// Get current simulation state
+        /// </summary>
+        public SimulationState GetSimulationState()
+        {
+            return simulationEngine != null ? simulationEngine.State : SimulationState.Idle;
+        }
         
         /// <summary>
         /// Reset simulation to beginning
@@ -1425,6 +1433,12 @@ namespace RealtimeITagControl
             // End MPF rendering (finish OpenGL commands, but don't swap buffers yet)
             // SwapBuffers will be called after text overlays are drawn
             NativeRenderer.EndMPFRender();
+
+            // Phase 8.1: Draw part and contour numbers (시뮬레이션 중에도 표시)
+            if (textRendererInitialized)
+            {
+                DrawPartAndContourNumbers();
+            }
         }
         
         /// <summary>

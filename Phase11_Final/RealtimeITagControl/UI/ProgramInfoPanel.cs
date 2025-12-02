@@ -41,6 +41,7 @@ namespace RealtimeITagControl.UI
         private CheckBox chkShowContourNumber;
 
         private Button btnSimulation;
+        private Button btnStopSimulation;
         private Button btnElementSelect;
 
         // ITag 서버 상태 표시
@@ -55,6 +56,7 @@ namespace RealtimeITagControl.UI
         #region 이벤트
 
         public event EventHandler SimulationClicked;
+        public event EventHandler StopSimulationClicked;
         public event EventHandler ElementSelectClicked;
         public event EventHandler<bool> ShowPartNumberChanged;
         public event EventHandler<bool> ShowContourNumberChanged;
@@ -162,7 +164,18 @@ namespace RealtimeITagControl.UI
             this.Controls.Add(btnElementSelect);
             y += btnHeight + btnGap;
 
-            // 2행: (예비 버튼 공간)
+            // 2행: 중단 버튼
+            btnStopSimulation = new Button
+            {
+                Text = "시뮬레이션 중단",
+                Location = new Point(20, y),
+                Size = new Size(260, btnHeight),
+                BackColor = Color.LightCoral,
+                Enabled = false  // 초기에는 비활성화
+            };
+            btnStopSimulation.Click += (s, e) => StopSimulationClicked?.Invoke(this, EventArgs.Empty);
+            this.Controls.Add(btnStopSimulation);
+            y += btnHeight + btnGap;
         }
 
         private GroupBox CreateGroup(string title, int x, int y, int w, int h)
@@ -350,6 +363,37 @@ namespace RealtimeITagControl.UI
             {
                 txtCyclicStatus.Text = "⏸️ 중지됨";
                 txtCyclicStatus.BackColor = Color.LightGray;
+            }
+        }
+
+        /// <summary>
+        /// 시뮬레이션 버튼 상태 업데이트
+        /// </summary>
+        public void UpdateSimulationButtonState(bool isRunning, bool isPaused)
+        {
+            if (btnSimulation.InvokeRequired)
+            {
+                btnSimulation.Invoke(new Action(() => UpdateSimulationButtonState(isRunning, isPaused)));
+                return;
+            }
+
+            if (isRunning)
+            {
+                btnSimulation.Text = "일시정지";
+                btnSimulation.BackColor = Color.LightYellow;
+                btnStopSimulation.Enabled = true;
+            }
+            else if (isPaused)
+            {
+                btnSimulation.Text = "재개";
+                btnSimulation.BackColor = Color.LightGreen;
+                btnStopSimulation.Enabled = true;
+            }
+            else
+            {
+                btnSimulation.Text = "시뮬레이션";
+                btnSimulation.BackColor = Color.LightBlue;
+                btnStopSimulation.Enabled = false;
             }
         }
 
