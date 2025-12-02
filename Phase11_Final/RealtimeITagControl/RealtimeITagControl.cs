@@ -35,6 +35,7 @@ namespace RealtimeITagControl
         private CamViewerControl camViewerControl;  // Phase8 OpenGL 렌더러 (핵심!)
 
         private string currentMpfPath;      // 현재 로드된 MPF 파일 경로
+        private MPFProgram mpfProgram;      // MPF 프로그램 데이터 (파싱 결과)
         private TagData lastTagData;
         
         // 로그 파일 경로
@@ -45,9 +46,9 @@ namespace RealtimeITagControl
         // Trace 상태 관리
         private TraceState currentTraceState = TraceState.Idle;
         private bool isTracing = false;
+        private System.Collections.Generic.Dictionary<string, ContourTraceInfo> contourStatusMap;
         
-        // 컨투어별 추적 정보 (CamViewerControl에서 관리)
-        // Pan/Zoom, OpenGL 초기화 등은 CamViewerControl에서 처리
+        // OpenGL 렌더링, Pan/Zoom은 CamViewerControl에서 처리
 
         #endregion
         
@@ -1007,10 +1008,10 @@ namespace RealtimeITagControl
                 
                 System.Diagnostics.Debug.WriteLine($"[RealtimeITagControl] 렌더링 초기화 완료 - {contourStatusMap?.Count ?? 0}개 컨투어");
                 
-                // 3. Viewer 다시 그리기
-                if (viewerPanel != null && !viewerPanel.IsDisposed)
+                // 3. CamViewerControl Trace 시작
+                if (camViewerControl != null && !camViewerControl.IsDisposed)
                 {
-                    viewerPanel.Invalidate();
+                    camViewerControl.Invalidate();
                 }
             }
             catch (Exception ex)
@@ -1037,10 +1038,10 @@ namespace RealtimeITagControl
                     }
                 }
                 
-                // Viewer 다시 그리기
-                if (viewerPanel != null && !viewerPanel.IsDisposed)
+                // CamViewerControl 다시 그리기
+                if (camViewerControl != null && !camViewerControl.IsDisposed)
                 {
-                    viewerPanel.Invalidate();
+                    camViewerControl.Invalidate();
                 }
             }
             catch (Exception ex)
@@ -1076,11 +1077,11 @@ namespace RealtimeITagControl
             try
             {
                 // Trace 중일 때만 Invalidate (불필요한 다시 그리기 방지)
-                if (isTracing && viewerPanel != null && !viewerPanel.IsDisposed)
+                if (isTracing && camViewerControl != null && !camViewerControl.IsDisposed)
                 {
                     // UpdateContourStatus에서 실제로 상태가 변경된 경우에만 다시 그림
                     // 현재는 간단히 Tracing 상태일 때만 업데이트
-                    viewerPanel.Invalidate();
+                    camViewerControl.Invalidate();
                 }
             }
             catch (Exception ex)
@@ -1096,11 +1097,28 @@ namespace RealtimeITagControl
         private void ProgramInfoPanel_SimulationClicked(object sender, EventArgs e)
         {
             System.Diagnostics.Debug.WriteLine("[RealtimeITagControl] 시뮬레이션 버튼 클릭");
+            
+            // CamViewerControl의 Simulation 기능 호출
+            if (camViewerControl != null)
+            {
+                camViewerControl.StartSimulation();
+            }
         }
 
         private void ProgramInfoPanel_ElementSelectClicked(object sender, EventArgs e)
         {
             System.Diagnostics.Debug.WriteLine("[RealtimeITagControl] 엘리먼트 선택 버튼 클릭");
+            
+            // CamViewerControl의 SelectionManager 가져오기
+            if (camViewerControl != null)
+            {
+                var selectionManager = camViewerControl.GetSelectionManager();
+                if (selectionManager != null)
+                {
+                    // Selection 관련 UI나 로직 실행 가능
+                    System.Diagnostics.Debug.WriteLine("[RealtimeITagControl] SelectionManager 사용 가능");
+                }
+            }
         }
 
         #endregion
