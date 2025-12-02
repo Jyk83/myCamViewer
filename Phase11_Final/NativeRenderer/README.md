@@ -20,20 +20,24 @@ The NativeRenderer.dll architecture doesn't match this application.
 
 ### 해결 방법
 
-#### 옵션 1: x86 버전 NativeRenderer.dll 빌드 (추천)
+#### 옵션 1: x86 버전 빌드 (가장 간단, 추천) ⭐
 
-Windows에서 x86 버전을 빌드합니다:
+`build_x86.bat` 스크립트를 실행하여 x86 버전만 빌드합니다:
 
 ```cmd
 cd NativeRenderer
-mkdir build\x86
-cd build\x86
-cmake ..\.. -G "Visual Studio 17 2022" -A Win32 -DCMAKE_BUILD_TYPE=Release
-cmake --build . --config Release
-copy bin\Release\NativeRenderer.dll ..\..\..\..\RealtimeITagControl\
+build_x86.bat
 ```
 
-#### 옵션 2: Multi-Architecture 빌드 (권장)
+이 스크립트는:
+- Visual Studio 2022/2019/2017을 자동으로 탐색
+- x86 버전 빌드: `bin\x86\NativeRenderer.dll`
+- RealtimeITagControl 폴더로 자동 복사
+- 32비트 WinCC Runtime과 완벽하게 호환
+
+**이 방법을 사용하면 Architecture Mismatch 문제가 완전히 해결됩니다.**
+
+#### 옵션 2: Multi-Architecture 빌드 (고급)
 
 `build_multi.bat` 스크립트를 실행하여 x86과 x64 두 버전을 모두 빌드합니다:
 
@@ -47,10 +51,12 @@ build_multi.bat
 - x64 버전: `bin\x64\NativeRenderer.dll`
 
 두 파일을 모두 생성하고 RealtimeITagControl 폴더로 복사합니다.
+런타임에 플랫폼에 맞는 DLL을 동적으로 로드하는 추가 코드가 필요합니다.
 
 #### 옵션 3: WinCC를 64비트 모드로 실행
 
 WinCC Runtime을 64비트 프로세스로 실행하면 x64 DLL을 사용할 수 있습니다.
+(대부분의 WinCC 환경은 32비트로 실행됨)
 
 ## 빌드 요구사항
 
