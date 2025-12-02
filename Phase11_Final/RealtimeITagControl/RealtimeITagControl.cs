@@ -1262,16 +1262,16 @@ namespace RealtimeITagControl
                 if (selectionManager != null)
                 {
                     // Toggle between None and Contour selection mode
-                    if (selectionManager.CurrentMode == RealtimeITagControl.Selection.SelectionManager.SelectionMode.Contour)
+                    if (selectionManager.CurrentMode == Selection.SelectionManager.SelectionMode.Contour)
                     {
                         // Turn off selection mode
-                        camViewerControl.SetSelectionMode(RealtimeITagControl.Selection.SelectionManager.SelectionMode.None);
+                        camViewerControl.SetSelectionMode(Selection.SelectionManager.SelectionMode.None);
                         System.Diagnostics.Debug.WriteLine("[RealtimeITagControl] Contour Selection OFF");
                     }
                     else
                     {
                         // Turn on contour selection mode
-                        camViewerControl.SetSelectionMode(RealtimeITagControl.Selection.SelectionManager.SelectionMode.Contour);
+                        camViewerControl.SetSelectionMode(Selection.SelectionManager.SelectionMode.Contour);
                         System.Diagnostics.Debug.WriteLine("[RealtimeITagControl] Contour Selection ON");
                     }
                 }

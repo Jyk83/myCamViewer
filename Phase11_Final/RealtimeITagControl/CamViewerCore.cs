@@ -1085,13 +1085,6 @@ namespace RealtimeITagControl
         }
 
         /// <summary>
-        /// Get current simulation state
-        /// </summary>
-        public SimulationState GetSimulationState()
-        {
-            return simulationEngine.State;
-        }
-
         /// <summary>
         /// Simulation progress event handler
         /// </summary>
