@@ -32,13 +32,10 @@ namespace RealtimeITagControl
         private string lastErrorMessage = null;
 
         private ProgramInfoPanel programInfoPanel;
-        private Panel viewerPanel;
+        private CamViewerControl camViewerControl;  // Phase8 OpenGL 렌더러 (핵심!)
 
         private string currentMpfPath;      // 현재 로드된 MPF 파일 경로
         private TagData lastTagData;
-        
-        // MPF 파싱 데이터
-        private MPFProgram mpfProgram;  // 파싱된 MPF 프로그램
         
         // 로그 파일 경로
         private static readonly string logFilePath = System.IO.Path.Combine(
@@ -49,20 +46,8 @@ namespace RealtimeITagControl
         private TraceState currentTraceState = TraceState.Idle;
         private bool isTracing = false;
         
-        // 컨투어별 추적 정보 (렌더링용)
-        private System.Collections.Generic.Dictionary<string, ContourTraceInfo> contourStatusMap;
-        
-        // Pan/Zoom 기능
-        private float zoom = 1.0f;          // 확대/축소 배율
-        private float panX = 0.0f;          // X축 이동
-        private float panY = 0.0f;          // Y축 이동
-        private Point lastMousePos;         // 마우스 드래그 시작 위치
-        private bool isDragging = false;    // 드래그 중 여부
-        
-        // Phase8 OpenGL 렌더링
-        private bool isRendererInitialized = false;
-        private bool textRendererInitialized = false;
-        private float workpieceScale = 0.001f;  // mm to OpenGL units (Phase8과 동일)
+        // 컨투어별 추적 정보 (CamViewerControl에서 관리)
+        // Pan/Zoom, OpenGL 초기화 등은 CamViewerControl에서 처리
 
         #endregion
         
@@ -170,42 +155,25 @@ namespace RealtimeITagControl
             };
             programInfoPanel.SimulationClicked += ProgramInfoPanel_SimulationClicked;
             programInfoPanel.ElementSelectClicked += ProgramInfoPanel_ElementSelectClicked;
-            programInfoPanel.ITagTestClicked += ProgramInfoPanel_ITagTestClicked;
             this.Controls.Add(programInfoPanel);
             
             // 초기 연결 상태 표시
             programInfoPanel.UpdateConnectionStatus(false, false, null);
 
-            // 우측 Viewer 패널 (968x630)
-            viewerPanel = new Panel
+            // 우측 CamViewerControl (Phase8 OpenGL 렌더러) (968x630)
+            camViewerControl = new CamViewerControl
             {
                 Location = new Point(300, 0),
                 Size = new Size(968, 630),
-                BackColor = Color.FromArgb(50, 50, 50),
                 Dock = DockStyle.None
             };
-            
-            // DoubleBuffering 활성화 (깜빡임 방지)
-            typeof(Panel).InvokeMember("DoubleBuffered",
-                System.Reflection.BindingFlags.SetProperty | 
-                System.Reflection.BindingFlags.Instance | 
-                System.Reflection.BindingFlags.NonPublic,
-                null, viewerPanel, new object[] { true });
-            viewerPanel.MouseDown += ViewerPanel_MouseDown;
-            viewerPanel.MouseMove += ViewerPanel_MouseMove;
-            viewerPanel.MouseUp += ViewerPanel_MouseUp;
-            viewerPanel.MouseWheel += ViewerPanel_MouseWheel;
-            viewerPanel.MouseClick += ViewerPanel_MouseClick;
-            viewerPanel.Paint += ViewerPanel_Paint;
-            viewerPanel.Resize += ViewerPanel_Resize;
-            this.Controls.Add(viewerPanel);
+            this.Controls.Add(camViewerControl);
 
-            // Load 시 OpenGL 초기화 및 ITag 연결
+            // Load 시 ITag 연결
             this.Load += (s, e) =>
             {
                 if (!DesignMode)
                 {
-                    InitializeOpenGL();
                     Connect();
                     StartCyclicRead(500);
                 }
@@ -232,34 +200,19 @@ namespace RealtimeITagControl
                 {
                     programInfoPanel.SimulationClicked -= ProgramInfoPanel_SimulationClicked;
                     programInfoPanel.ElementSelectClicked -= ProgramInfoPanel_ElementSelectClicked;
-                    programInfoPanel.ITagTestClicked -= ProgramInfoPanel_ITagTestClicked;
                 }
 
-                if (viewerPanel != null)
-                {
-                    viewerPanel.MouseDown -= ViewerPanel_MouseDown;
-                    viewerPanel.MouseMove -= ViewerPanel_MouseMove;
-                    viewerPanel.MouseUp -= ViewerPanel_MouseUp;
-                    viewerPanel.MouseWheel -= ViewerPanel_MouseWheel;
-                    viewerPanel.MouseClick -= ViewerPanel_MouseClick;
-                    viewerPanel.Paint -= ViewerPanel_Paint;
-                }
+                // CamViewerControl은 자체 Dispose 처리
 
                 // MPF 데이터 정리
                 currentMpfPath = null;
                 mpfProgram = null;  // MPF 프로그램 데이터 해제
                 lastTagData = default(TagData);
                 
-                // 컨투어 상태 맵 정리
-                if (contourStatusMap != null)
-                {
-                    contourStatusMap.Clear();
-                    contourStatusMap = null;
-                }
+                // 컨투어 상태는 CamViewerControl에서 관리
                 
-                // OpenGL 정리
-                CleanupOpenGL();
-
+                // CamViewerControl 자체 Dispose 처리
+                
                 System.Diagnostics.Debug.WriteLine("[RealtimeITagControl] === Dispose 완료 ===");
             }
             catch (Exception ex)
@@ -520,78 +473,7 @@ namespace RealtimeITagControl
         
         #endregion
         
-        #region OpenGL 초기화 및 정리 (Phase8 방식)
-        
-        /// <summary>
-        /// OpenGL 렌더러 초기화
-        /// </summary>
-        private void InitializeOpenGL()
-        {
-            try
-            {
-                if (viewerPanel == null || viewerPanel.IsDisposed)
-                    return;
-                    
-                LogToFile("OpenGL 초기화 시작...");
-                
-                int result = NativeRenderer.InitializeRenderer(viewerPanel.Handle);
-                if (result == 0)
-                {
-                    isRendererInitialized = true;
-                    LogToFile("OpenGL 렌더러 초기화 성공");
-                    
-                    // 초기 뷰포트 크기 설정
-                    NativeRenderer.ResizeViewport(viewerPanel.Width, viewerPanel.Height);
-                    
-                    // 텍스트 렌더러 초기화
-                    RenderSettings settings = RenderSettings.Instance;
-                    result = NativeRenderer.InitializeTextRenderer("Arial", 
-                        (int)settings.PartNumberSize, 0, 0);
-                    if (result == 0)
-                    {
-                        textRendererInitialized = true;
-                        LogToFile("OpenGL 텍스트 렌더러 초기화 성공");
-                    }
-                }
-                else
-                {
-                    LogToFile($"OpenGL 초기화 실패: {result}");
-                }
-            }
-            catch (Exception ex)
-            {
-                LogToFile($"InitializeOpenGL 오류: {ex.Message}");
-            }
-        }
-        
-        /// <summary>
-        /// OpenGL 렌더러 정리
-        /// </summary>
-        private void CleanupOpenGL()
-        {
-            try
-            {
-                if (textRendererInitialized)
-                {
-                    NativeRenderer.CleanupTextRenderer();
-                    textRendererInitialized = false;
-                }
-                
-                if (isRendererInitialized)
-                {
-                    NativeRenderer.CleanupRenderer();
-                    isRendererInitialized = false;
-                }
-                
-                LogToFile("OpenGL 정리 완료");
-            }
-            catch (Exception ex)
-            {
-                LogToFile($"CleanupOpenGL 오류: {ex.Message}");
-            }
-        }
-        
-        #endregion
+        // OpenGL 초기화 및 정리는 CamViewerControl에서 처리
 
         #region ITag 기본 읽기/쓰기
         
@@ -925,14 +807,11 @@ namespace RealtimeITagControl
                 // 7. 현재 로드된 파일 경로 저장
                 currentMpfPath = mpfPath;
                 
-                // 7.5. AutoFit: 초기 Zoom/Pan 설정
-                AutoFitView();
-
-                // 8. Viewer 다시 그리기
-                if (viewerPanel != null && !viewerPanel.IsDisposed)
+                // 8. CamViewerControl에 MPF 파일 로드 (Phase8 방식)
+                if (camViewerControl != null && !camViewerControl.IsDisposed)
                 {
-                    viewerPanel.Invalidate();
-                    LogToFile("Viewer 다시 그리기 요청");
+                    camViewerControl.LoadMPFFile(mpfPath);
+                    LogToFile("CamViewerControl에 MPF 파일 로드 완료");
                 }
 
                 LogToFile("=== LoadMpfFile 완료 ===\n");
@@ -1754,25 +1633,6 @@ namespace RealtimeITagControl
         private void ProgramInfoPanel_ElementSelectClicked(object sender, EventArgs e)
         {
             System.Diagnostics.Debug.WriteLine("[RealtimeITagControl] 엘리먼트 선택 버튼 클릭");
-        }
-
-        private void ProgramInfoPanel_ITagTestClicked(object sender, EventArgs e)
-        {
-            try
-            {
-                System.Diagnostics.Debug.WriteLine("[RealtimeITagControl] ITag 테스트 버튼 클릭");
-                
-                // ITag 테스트 팝업 폼 열기 (this의 ITag 인스턴스 전달)
-                using (ITagTestForm testForm = new ITagTestForm(this))
-                {
-                    testForm.ShowDialog(this);
-                }
-            }
-            catch (Exception ex)
-            {
-                System.Diagnostics.Debug.WriteLine($"[RealtimeITagControl] ProgramInfoPanel_ITagTestClicked 오류: {ex.Message}");
-                MessageBox.Show($"ITag 테스트 폼 열기 오류: {ex.Message}", "오류", MessageBoxButtons.OK, MessageBoxIcon.Error);
-            }
         }
 
         #endregion
