@@ -260,6 +260,9 @@ namespace RealtimeITagControl
                 isInitialized = true;
                 NativeRenderer.ResizeViewport(renderPanel.Width, renderPanel.Height);
                 
+                // Load RenderSettings from AppData (Phase8 compatibility)
+                LoadRenderSettings();
+                
                 // Phase 8.1: Initialize text renderer
                 InitializeTextRendererIfNeeded();
                 
@@ -2268,6 +2271,48 @@ namespace RealtimeITagControl
             {
                 float scale = 1.0f / zoom;  // 줌에 따라 크기 조정
                 traceManager.DrawLaserHeadMarker(scale);
+            }
+        }
+
+        #endregion
+
+        #region RenderSettings Management
+
+        /// <summary>
+        /// Load RenderSettings from AppData (Phase8 compatibility)
+        /// Path: C:\Users\USER\AppData\Roaming\CamViewerPOC\RenderSettings.json
+        /// </summary>
+        private void LoadRenderSettings()
+        {
+            try
+            {
+                string appDataPath = Path.Combine(
+                    Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+                    "CamViewerPOC");
+
+                string settingsPath = Path.Combine(appDataPath, "RenderSettings.json");
+
+                if (File.Exists(settingsPath))
+                {
+                    RenderSettings.Instance.LoadFromFile(settingsPath);
+                    Log($"[RenderSettings] Loaded from: {settingsPath}");
+                }
+                else
+                {
+                    Log($"[RenderSettings] File not found: {settingsPath}, using defaults");
+                    
+                    // Create default settings file
+                    if (!Directory.Exists(appDataPath))
+                    {
+                        Directory.CreateDirectory(appDataPath);
+                    }
+                    RenderSettings.Instance.SaveToFile(settingsPath);
+                    Log($"[RenderSettings] Created default settings at: {settingsPath}");
+                }
+            }
+            catch (Exception ex)
+            {
+                Log($"[RenderSettings] Failed to load: {ex.Message}");
             }
         }
 

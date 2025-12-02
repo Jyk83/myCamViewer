@@ -391,8 +391,28 @@ namespace RealtimeITagControl
                 isConnected = false;
                 isCyclicReading = false;
                 
-                // 4. ITag 인스턴스 null 처리 (메모리 해제)
-                m_ITag = null;
+                // 4. COM 객체 명시적 해제 (Deadlock 방지)
+                if (m_ITag != null)
+                {
+                    try
+                    {
+                        // COM 객체 참조 카운트 감소
+                        if (Marshal.IsComObject(m_ITag))
+                        {
+                            int refCount = Marshal.ReleaseComObject(m_ITag);
+                            System.Diagnostics.Debug.WriteLine($"[RealtimeITagControl] COM ReleaseComObject: refCount={refCount}");
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        System.Diagnostics.Debug.WriteLine($"[RealtimeITagControl] ⚠️ ReleaseComObject 오류: {ex.Message}");
+                    }
+                    finally
+                    {
+                        m_ITag = null;
+                    }
+                }
+                
                 m_RegisterCookie = 0;
 
                 // 5. 이벤트 발생
@@ -400,6 +420,11 @@ namespace RealtimeITagControl
                 
                 // 6. UI 업데이트
                 UpdateConnectionStatusUI();
+
+                // 7. Garbage Collection 강제 실행 (COM 리소스 정리)
+                GC.Collect();
+                GC.WaitForPendingFinalizers();
+                GC.Collect();
 
                 System.Diagnostics.Debug.WriteLine("[RealtimeITagControl] ✅ Disconnect 완료");
             }
@@ -1114,14 +1139,25 @@ namespace RealtimeITagControl
         {
             System.Diagnostics.Debug.WriteLine("[RealtimeITagControl] 엘리먼트 선택 버튼 클릭");
             
-            // CamViewerControl의 SelectionManager 가져오기
+            // Toggle Contour Selection Mode
             if (camViewerControl != null)
             {
                 var selectionManager = camViewerControl.GetSelectionManager();
                 if (selectionManager != null)
                 {
-                    // Selection 관련 UI나 로직 실행 가능
-                    System.Diagnostics.Debug.WriteLine("[RealtimeITagControl] SelectionManager 사용 가능");
+                    // Toggle between None and Contour selection mode
+                    if (selectionManager.CurrentMode == RealtimeITagControl.Selection.SelectionManager.SelectionMode.Contour)
+                    {
+                        // Turn off selection mode
+                        camViewerControl.SetSelectionMode(RealtimeITagControl.Selection.SelectionManager.SelectionMode.None);
+                        System.Diagnostics.Debug.WriteLine("[RealtimeITagControl] Contour Selection OFF");
+                    }
+                    else
+                    {
+                        // Turn on contour selection mode
+                        camViewerControl.SetSelectionMode(RealtimeITagControl.Selection.SelectionManager.SelectionMode.Contour);
+                        System.Diagnostics.Debug.WriteLine("[RealtimeITagControl] Contour Selection ON");
+                    }
                 }
             }
         }

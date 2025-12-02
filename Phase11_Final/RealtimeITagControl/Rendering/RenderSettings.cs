@@ -211,8 +211,8 @@ namespace RealtimeITagControl.Rendering
             // Default visibility
             ShowPartOrigin = false; // Disabled by default (Phase4 requirement)
             ShowWorkpieceBoundary = false; // Hide workpiece boundary (external line)
-            ShowPartNumbers = false; // Hide part numbers by default
-            ShowContourNumbers = false; // Hide contour numbers by default
+            ShowPartNumbers = true; // Show part numbers by default
+            ShowContourNumbers = true; // Show contour numbers by default
 
             // Phase 5.3: Part boundary defaults
             ShowPartBoundaries = false; // Hide by default (shown when part numbers are visible)
