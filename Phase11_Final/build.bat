@@ -59,9 +59,9 @@ if errorlevel 1 (
     exit /b 1
 )
 
-REM 솔루션 빌드 (Release, x64)
-echo [2/3] 솔루션 빌드 (Release, x64)...
-echo [알림] NativeRenderer.dll (x64)와 아키텍처 매칭을 위해 x64로 빌드합니다.
+REM 솔루션 빌드 (Release, AnyCPU)
+echo [2/3] 솔루션 빌드 (Release, AnyCPU)...
+echo [알림] WinCC 호환성을 위해 AnyCPU(Prefer32Bit=false)로 빌드합니다.
 %MSBUILD_PATH% RealtimeITagControl.sln /t:Build /p:Configuration=Release /p:Platform="Any CPU" /v:minimal
 if errorlevel 1 (
     echo [오류] 빌드 실패
@@ -76,9 +76,9 @@ if exist "RealtimeITagControl\bin\Release\RealtimeITagControl.dll" (
     copy /Y "RealtimeITagControl\NativeRenderer.dll" "RealtimeITagControl\bin\Release\"
     echo.
     echo ====================================
-    echo Phase11 빌드 완료! (x64 Architecture)
+    echo Phase11 빌드 완료! (AnyCPU, Prefer32Bit=false)
     echo Phase8 OpenGL 렌더링 100%% 적용
-    echo NativeRenderer.dll (x64)와 매칭 완료
+    echo WinCC Runtime 호환 빌드
     echo ====================================
     echo.
     echo 출력 파일: RealtimeITagControl\bin\Release\RealtimeITagControl.dll
