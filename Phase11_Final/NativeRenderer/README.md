@@ -30,10 +30,18 @@ build_x86.bat
 ```
 
 이 스크립트는:
+- **이전 빌드 캐시 자동 삭제** (CMake generator mismatch 방지)
 - Visual Studio 2022/2019/2017을 자동으로 탐색
 - x86 버전 빌드: `bin\x86\NativeRenderer.dll`
 - RealtimeITagControl 폴더로 자동 복사
 - 32비트 WinCC Runtime과 완벽하게 호환
+
+**빌드 오류 발생 시 해결 방법:**
+```cmd
+cd NativeRenderer
+clean_build.bat    REM 이전 빌드 캐시 완전 삭제
+build_x86.bat      REM 클린 빌드 실행
+```
 
 **이 방법을 사용하면 Architecture Mismatch 문제가 완전히 해결됩니다.**
 

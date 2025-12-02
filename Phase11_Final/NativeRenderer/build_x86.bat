@@ -16,9 +16,15 @@ if %ERRORLEVEL% NEQ 0 (
     exit /b 1
 )
 
+REM Clean previous build cache to avoid CMake generator mismatch
+if exist "build\x86" (
+    echo [INFO] Cleaning previous build cache...
+    rmdir /S /Q "build\x86" 2>nul
+)
+
 REM Create build directory
 if not exist "build" mkdir build
-if not exist "build\x86" mkdir build\x86
+mkdir "build\x86"
 
 echo ====================================
 echo [1/3] Configuring x86 build...
@@ -26,13 +32,22 @@ echo ====================================
 cd build\x86
 
 REM Try Visual Studio 2022 first
-cmake ..\.. -G "Visual Studio 17 2022" -A Win32 -DCMAKE_BUILD_TYPE=Release
+echo [INFO] Trying Visual Studio 2022...
+cmake ..\.. -G "Visual Studio 17 2022" -A Win32 -DCMAKE_BUILD_TYPE=Release 2>nul
 if %ERRORLEVEL% NEQ 0 (
     echo [WARN] Visual Studio 2022 not found, trying 2019...
-    cmake ..\.. -G "Visual Studio 16 2019" -A Win32 -DCMAKE_BUILD_TYPE=Release
+    REM Clean cache before trying different generator
+    del CMakeCache.txt 2>nul
+    rmdir /S /Q CMakeFiles 2>nul
+    
+    cmake ..\.. -G "Visual Studio 16 2019" -A Win32 -DCMAKE_BUILD_TYPE=Release 2>nul
     if %ERRORLEVEL% NEQ 0 (
         echo [WARN] Visual Studio 2019 not found, trying 2017...
-        cmake ..\.. -G "Visual Studio 15 2017" -A Win32 -DCMAKE_BUILD_TYPE=Release
+        REM Clean cache before trying different generator
+        del CMakeCache.txt 2>nul
+        rmdir /S /Q CMakeFiles 2>nul
+        
+        cmake ..\.. -G "Visual Studio 15 2017" -A Win32 -DCMAKE_BUILD_TYPE=Release 2>nul
         if %ERRORLEVEL% NEQ 0 (
             echo [ERROR] CMake configure failed - No Visual Studio found
             echo.
@@ -40,11 +55,20 @@ if %ERRORLEVEL% NEQ 0 (
             echo - Visual Studio 2017 or later
             echo - Visual Studio Build Tools
             echo.
+            echo You can download Visual Studio Build Tools from:
+            echo https://visualstudio.microsoft.com/downloads/
+            echo.
             cd ..\..
             pause
             exit /b 1
+        ) else (
+            echo [OK] Using Visual Studio 2017
         )
+    ) else (
+        echo [OK] Using Visual Studio 2019
     )
+) else (
+    echo [OK] Using Visual Studio 2022
 )
 
 echo.
@@ -75,7 +99,9 @@ if exist "build\x86\bin\Release\NativeRenderer.dll" (
     echo [OK] x86\NativeRenderer.dll copied
 ) else (
     echo [ERROR] x86 DLL not found at build\x86\bin\Release\NativeRenderer.dll
+    echo [INFO] Searching for DLL in build directory...
     dir /s /b build\x86\*.dll
+    cd ..\..
     pause
     exit /b 1
 )
