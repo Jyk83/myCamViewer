@@ -49,9 +49,6 @@ namespace RealtimeITagControl.MPF
         /// </summary>
         public override double GetLength()
         {
-            if (Start == null || End == null)
-                return 0.0;
-            
             double dx = End.X - Start.X;
             double dy = End.Y - Start.Y;
             return Math.Sqrt(dx * dx + dy * dy);
