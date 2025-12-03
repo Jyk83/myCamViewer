@@ -810,10 +810,15 @@ namespace RealtimeITagControl
                     // Check if this segment is part of lead-in
                     bool isLeadInSegment = (contour.LeadIn != null && contour.LeadIn.Path.Contains(segment));
                     
-                    // Phase 8.2: Check cutting progress state
-                    // TODO: Implement element-level progress tracking if needed
-                    bool isCompleted = false;  // (traceManager != null && traceManager.IsElementCompleted(...));
-                    bool isInProgress = false; // (traceManager != null && traceManager.IsElementInProgress(...));
+                    // Phase 11: Check cutting progress state from progressManager
+                    bool isCompleted = false;
+                    bool isInProgress = false;
+                    
+                    if (progressManager != null && progressManager.HasCuttingProgress)
+                    {
+                        isCompleted = progressManager.IsElementCompleted(partIndex, contourIndex, elementIndex);
+                        isInProgress = progressManager.IsElementInProgress(partIndex, contourIndex, elementIndex);
+                    }
 
                     // Determine color and width based on state priority:
                     // 0. Contour selection (HIGHEST priority - Phase 7 fix)
