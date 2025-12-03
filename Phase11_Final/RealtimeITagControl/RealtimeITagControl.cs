@@ -237,6 +237,22 @@ namespace RealtimeITagControl
             {
                 LogHelper.Log("RealtimeITagControl", "=== CleanupResources 시작 ===");
 
+                // 0. TraceTestForm 종료 처리
+                try
+                {
+                    if (traceTestForm != null && !traceTestForm.IsDisposed)
+                    {
+                        traceTestForm.Close();
+                        traceTestForm.Dispose();
+                        traceTestForm = null;
+                        LogHelper.Log("RealtimeITagControl", "TraceTestForm closed and disposed");
+                    }
+                }
+                catch (Exception ex)
+                {
+                    LogHelper.Log("RealtimeITagControl", $"TraceTestForm cleanup error: {ex.Message}");
+                }
+
                 // 1. ITag 연결 해제 (Cyclic Read 먼저 중단)
                 try
                 {
@@ -783,6 +799,18 @@ namespace RealtimeITagControl
                         {
                             contourStatusMap[key].Status = CutStatus.InProgress;
                             contourStatusMap[key].CompletedDistance = progressDistance;
+                            
+                            // Phase 11: progressManager에도 업데이트 전달
+                            if (camViewerControl?.progressManager != null)
+                            {
+                                // progressDistance를 progress 비율로 변환 (0.0~1.0)
+                                double totalDistance = contour.TotalLength;
+                                double progressRatio = totalDistance > 0 ? progressDistance / totalDistance : 0.0;
+                                progressRatio = Math.Max(0.0, Math.Min(1.0, progressRatio));  // Clamp to [0, 1]
+                                
+                                // Element index는 현재로서는 0으로 설정 (향후 확장 가능)
+                                camViewerControl.progressManager.UpdateProgress(partIdx, contIdx, 0, progressRatio);
+                            }
                         }
                         // 그 외는 미시작
                         else
@@ -836,7 +864,19 @@ namespace RealtimeITagControl
                 }
                 
                 
-                // 3. CamViewerControl Trace 시작
+                // 3. progressManager 시작 (최초 Part/Contour는 ITag 데이터에서 받음)
+                if (camViewerControl?.progressManager != null && lastTagData != null)
+                {
+                    int partIdx = lastTagData.CurrentPart - 1;  // 0-based
+                    int contIdx = lastTagData.CurrentContour - 1;  // 0-based
+                    if (partIdx >= 0 && contIdx >= 0)
+                    {
+                        camViewerControl.progressManager.StartCuttingProgress(lastTagData.CurrentPart, lastTagData.CurrentContour, false);
+                        LogHelper.Log("RealtimeITagControl", $"CuttingProgress Started: Part {lastTagData.CurrentPart}, Contour {lastTagData.CurrentContour}");
+                    }
+                }
+                
+                // 4. CamViewerControl Trace 시작
                 if (camViewerControl != null && !camViewerControl.IsDisposed)
                 {
                     camViewerControl.Invalidate();
@@ -1066,6 +1106,9 @@ namespace RealtimeITagControl
             }
         }
 
+        // TraceTestForm 싱글톤 인스턴스
+        private Trace.TraceTestForm traceTestForm = null;
+
         /// <summary>
         /// TraceTestForm 호출 이벤트
         /// </summary>
@@ -1079,11 +1122,25 @@ namespace RealtimeITagControl
 
             try
             {
-                // CuttingProgressManager 생성
-                var progressManager = new Trace.CuttingProgressManager();
-                progressManager.SetProgram(mpfProgram);
+                // 이미 열려있는 폼이 있으면 활성화만
+                if (traceTestForm != null && !traceTestForm.IsDisposed)
+                {
+                    traceTestForm.BringToFront();
+                    traceTestForm.Focus();
+                    LogHelper.Log("RealtimeITagControl", "TraceTestForm already opened - brought to front");
+                    return;
+                }
+
+                // CuttingProgressManager는 camViewerControl의 것을 사용
+                if (camViewerControl.progressManager == null)
+                {
+                    MessageBox.Show("CuttingProgressManager가 초기화되지 않았습니다.", "오류", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    return;
+                }
                 
-                var traceTestForm = new Trace.TraceTestForm(progressManager, mpfProgram, camViewerControl);
+                traceTestForm = new Trace.TraceTestForm(camViewerControl.progressManager, mpfProgram, camViewerControl);
+                traceTestForm.TopMost = true;  // 항상 최상위 표시
+                traceTestForm.FormClosed += (s, args) => { traceTestForm = null; };  // 종료 시 참조 해제
                 traceTestForm.Show();
                 LogHelper.Log("RealtimeITagControl", "TraceTestForm opened");
             }

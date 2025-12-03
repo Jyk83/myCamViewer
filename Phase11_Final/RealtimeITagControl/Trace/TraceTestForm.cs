@@ -417,10 +417,15 @@ namespace RealtimeITagControl.Trace
             if (success)
             {
                 AddLog($"✓ 업데이트: P{partNo} C{contourNo} E{elementIdx} Prog={progress:F2}");
+                LogHelper.Log("TraceTestForm", $"Progress Updated: Part {partNo}, Contour {contourNo}, Element {elementIdx}, Progress {progress:F2}");
+                
+                // 뷰어 강제 리프레시 (색상 업데이트)
+                viewerControl?.Invalidate();
             }
             else
             {
                 AddLog($"✗ 업데이트 실패");
+                LogHelper.Log("TraceTestForm", $"Update Failed: Part {partNo}, Contour {contourNo}");
             }
 
             UpdateButtonStates();

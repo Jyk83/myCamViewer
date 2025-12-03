@@ -158,6 +158,9 @@ namespace RealtimeITagControl
         // Phase 8.2: Real-time trace management
         private TraceManager traceManager = null;
         
+        // Phase 11: Cutting progress manager (public for TraceTestForm access)
+        public Trace.CuttingProgressManager progressManager = null;
+        
         // Phase 5 Debug: Show selection areas
         private bool showSelectionAreas = false;
         
@@ -429,6 +432,20 @@ namespace RealtimeITagControl
                 else
                 {
                     traceManager.SetMPFProgram(currentProgram);
+                }
+                
+                // Phase 11: Initialize progress manager with new program
+                if (progressManager == null)
+                {
+                    progressManager = new Trace.CuttingProgressManager();
+                    progressManager.SetProgram(currentProgram);
+                    progressManager.ProgressUpdated += CuttingProgressManager_ProgressUpdated;
+                    LogHelper.Log("CamViewerCore", "CuttingProgressManager initialized");
+                }
+                else
+                {
+                    progressManager.SetProgram(currentProgram);
+                    LogHelper.Log("CamViewerCore", "CuttingProgressManager program updated");
                 }
 
                 // Display the program (fresh initial state, no simulation history)
