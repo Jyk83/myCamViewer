@@ -293,14 +293,20 @@ namespace RealtimeITagControl
             }
             catch (BadImageFormatException imgEx)
             {
-                MessageBox.Show("Platform mismatch error!\n\n" +
-                                "The NativeRenderer.dll architecture doesn't match this application.\n\n" +
-                                "- DLL is x64 (64-bit)\n" +
-                                "- Application must be x64 or AnyCPU\n\n" +
-                                "Error: " + imgEx.Message, 
-                                "Architecture Mismatch", 
-                                MessageBoxButtons.OK, 
-                                MessageBoxIcon.Error);
+                // TIA Portal Designer 환경에서는 handle이 정상 생성되지 않아 예외 발생
+                // Runtime(HMIRTm.exe)에서는 정상 동작하므로 로그만 남기고 패스
+                LogHelper.Log("CamViewerCore", $"Platform check (TIA Designer expected): {imgEx.Message}");
+                
+                // MessageBox 제거 - 편집 툴에서 방해되지 않도록
+                // Runtime에서는 이 catch 블록이 실행되지 않음
+                //MessageBox.Show("Platform mismatch error!\n\n" +
+                //                "The NativeRenderer.dll architecture doesn't match this application.\n\n" +
+                //                "- DLL is x64 (64-bit)\n" +
+                //                "- Application must be x64 or AnyCPU\n\n" +
+                //                "Error: " + imgEx.Message, 
+                //                "Architecture Mismatch", 
+                //                MessageBoxButtons.OK, 
+                //                MessageBoxIcon.Error);
             }
             catch (Exception ex)
             {
