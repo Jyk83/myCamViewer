@@ -82,7 +82,6 @@ namespace RealtimeITagControl.Selection
             // 점이 바운딩 박스 내부에 있는지 확인
             bool isInside = IsPointInBoundingBox(point, boundingBox);
             
-            System.Diagnostics.Debug.WriteLine($"[IsPointInsideContour] Point: ({point.X:F3}, {point.Y:F3}), BoundingBox: [({boundingBox.MinX:F3}, {boundingBox.MinY:F3}) {boundingBox.Width:F3}x{boundingBox.Height:F3}], Result: {isInside}");
             
             return isInside;
         }
@@ -113,9 +112,6 @@ namespace RealtimeITagControl.Selection
             if (contour.CuttingPath != null && contour.CuttingPath.Count > 0)
             {
                 contourPath = contour.CuttingPath;
-                System.Diagnostics.Debug.WriteLine($"[ConvertContourToPolygon] ============ DETAILED CONTOUR CONVERSION ============");
-                System.Diagnostics.Debug.WriteLine($"[ConvertContourToPolygon] Raw CuttingPath: {contourPath.Count} segments");
-                System.Diagnostics.Debug.WriteLine($"[ConvertContourToPolygon] Offset: ({offsetX:F6}, {offsetY:F6}), Scale: {scale:F6}");
                 
                 // Find the closed loop (actual cutting path)
                 // Strategy: Find first segment whose Start matches last segment's End
@@ -125,7 +121,6 @@ namespace RealtimeITagControl.Selection
                     var lastSeg = contourPath[contourPath.Count - 1];
                     Point2D lastEnd = new Point2D(lastSeg.End.X * scale + offsetX, lastSeg.End.Y * scale + offsetY);
                     
-                    System.Diagnostics.Debug.WriteLine($"[ConvertContourToPolygon] Last segment End point: ({lastEnd.X:F6}, {lastEnd.Y:F6})");
                     
                     // CRITICAL: Use tight tolerance (0.001 = 1mm)
                     // Loose tolerance would incorrectly match LeadIn approach segments!
@@ -146,20 +141,15 @@ namespace RealtimeITagControl.Selection
                             bestIdx = i;
                         }
                         
-                        System.Diagnostics.Debug.WriteLine($"  [Loop Check] Seg {i}: Type={seg.Type}, Start=({segStart.X:F6},{segStart.Y:F6}), End=({segEnd.X:F6},{segEnd.Y:F6}), Distance to LastEnd={dist:F6}");
                     }
                     
                     // Only skip segments if we found a GOOD match (< 1mm) AND it's not the first segment
                     if (bestDist < 0.01 && bestIdx > 0)
                     {
                         startIdx = bestIdx;
-                        System.Diagnostics.Debug.WriteLine($"  ✓✓ TRUE CLOSED LOOP: Segment {bestIdx} Start ≈ Last End (dist={bestDist:F6})");
-                        System.Diagnostics.Debug.WriteLine($"  → Skipping first {startIdx} segments (LeadIn approach within CuttingPath)");
                     }
                     else if (bestDist >= 0.001)
                     {
-                        System.Diagnostics.Debug.WriteLine($"  ⚠ No tight closed loop found (best: Seg {bestIdx}, dist={bestDist:F6})");
-                        System.Diagnostics.Debug.WriteLine($"  → Using full CuttingPath (will auto-close via modulo)");
                     }
                 }
             }
@@ -167,16 +157,13 @@ namespace RealtimeITagControl.Selection
             else if (contour.AllSegments != null && contour.AllSegments.Count > 0)
             {
                 contourPath = contour.AllSegments;
-                System.Diagnostics.Debug.WriteLine($"[ConvertContourToPolygon] WARNING: Using AllSegments fallback: {contourPath.Count} segments");
             }
             else
             {
-                System.Diagnostics.Debug.WriteLine($"[ConvertContourToPolygon] ERROR: No path data available!");
             }
 
             if (contourPath != null)
             {
-                System.Diagnostics.Debug.WriteLine($"[ConvertContourToPolygon] Processing segments from index {startIdx} to {contourPath.Count - 1}");
                 // Add only segments from startIdx onwards (skip LeadIn approach)
                 for (int i = startIdx; i < contourPath.Count; i++)
                 {
@@ -206,16 +193,11 @@ namespace RealtimeITagControl.Selection
                 Point2D last = polygon[polygon.Count - 1];
                 double distFirstLast = Distance(first, last);
                 
-                System.Diagnostics.Debug.WriteLine($"[ConvertContourToPolygon] Pre-closure check:");
-                System.Diagnostics.Debug.WriteLine($"  First point: ({first.X:F3}, {first.Y:F3})");
-                System.Diagnostics.Debug.WriteLine($"  Last point:  ({last.X:F3}, {last.Y:F3})");
-                System.Diagnostics.Debug.WriteLine($"  Distance first-last: {distFirstLast:F6}");
                 
                 if (distFirstLast < 0.001)
                 {
                     // Already closed - MUST remove duplicate to avoid double-counting
                     polygon.RemoveAt(polygon.Count - 1);
-                    System.Diagnostics.Debug.WriteLine($"  ✓ Removed duplicate last point (was already closed)");
                 }
                 else
                 {
@@ -223,42 +205,31 @@ namespace RealtimeITagControl.Selection
                     // This is actually CORRECT behavior for ray-casting!
                     if (distFirstLast <= 0.1)
                     {
-                        System.Diagnostics.Debug.WriteLine($"  ✓ Small gap (≤0.1mm) - will be auto-closed by modulo");
                     }
                     else
                     {
-                        System.Diagnostics.Debug.WriteLine($"  ⚠ OPEN CONTOUR detected (gap: {distFirstLast:F3}mm)");
-                        System.Diagnostics.Debug.WriteLine($"  → Will be auto-closed by modulo (미절단 영역 처리)");
                     }
                 }
             }
 
-            System.Diagnostics.Debug.WriteLine($"[ConvertContourToPolygon] Final polygon: {polygon.Count} points");
             if (polygon.Count > 0)
             {
                 // Print first few and last few points for debugging
                 int showCount = Math.Min(5, polygon.Count);
-                System.Diagnostics.Debug.WriteLine($"[ConvertContourToPolygon] First {showCount} points:");
                 for (int i = 0; i < showCount; i++)
                 {
-                    System.Diagnostics.Debug.WriteLine($"    Point[{i}]: ({polygon[i].X:F6}, {polygon[i].Y:F6})");
                 }
                 if (polygon.Count > showCount)
                 {
-                    System.Diagnostics.Debug.WriteLine($"[ConvertContourToPolygon] Last {showCount} points:");
                     for (int i = Math.Max(0, polygon.Count - showCount); i < polygon.Count; i++)
                     {
-                        System.Diagnostics.Debug.WriteLine($"    Point[{i}]: ({polygon[i].X:F6}, {polygon[i].Y:F6})");
                     }
                 }
             }
             if (polygon.Count > 1)
             {
                 double finalDist = Distance(polygon[0], polygon[polygon.Count-1]);
-                System.Diagnostics.Debug.WriteLine($"  Final distance first-last: {finalDist:F6}");
-                System.Diagnostics.Debug.WriteLine($"  ✓✓ Polygon ready for ray-casting (modulo will close)");
             }
-            System.Diagnostics.Debug.WriteLine($"[ConvertContourToPolygon] ============ END CONVERSION ============");
 
             return polygon;
         }
@@ -345,8 +316,6 @@ namespace RealtimeITagControl.Selection
             int intersections = 0;
             int n = polygon.Count;
 
-            System.Diagnostics.Debug.WriteLine($"[IsPointInPolygon] Ray-casting from point: {point}");
-            System.Diagnostics.Debug.WriteLine($"[IsPointInPolygon] Polygon has {n} points");
 
             for (int i = 0; i < n; i++)
             {
@@ -358,12 +327,10 @@ namespace RealtimeITagControl.Selection
                 if (intersects)
                 {
                     intersections++;
-                    System.Diagnostics.Debug.WriteLine($"  [Ray] Segment {i}: ({p1.X:F3},{p1.Y:F3}) → ({p2.X:F3},{p2.Y:F3}) ✓ INTERSECTS (total: {intersections})");
                 }
             }
 
             bool isInside = (intersections % 2) == 1;
-            System.Diagnostics.Debug.WriteLine($"[IsPointInPolygon] Total intersections: {intersections} → Result: {(isInside ? "INSIDE" : "OUTSIDE")}");
             
             // 교차 횟수가 홀수면 내부
             return isInside;
@@ -374,7 +341,6 @@ namespace RealtimeITagControl.Selection
         /// </summary>
         private static bool RayIntersectsSegment(Point2D point, Point2D p1, Point2D p2)
         {
-            System.Diagnostics.Debug.WriteLine($"    [RayIntersect] Testing point ({point.X:F6},{point.Y:F6}) vs segment ({p1.X:F6},{p1.Y:F6})→({p2.X:F6},{p2.Y:F6})");
             
             // 선분이 점의 Y 범위 내에 있는지 확인 - Swap to ensure p1.Y <= p2.Y
             if (p1.Y > p2.Y)
@@ -382,25 +348,19 @@ namespace RealtimeITagControl.Selection
                 Point2D temp = p1;
                 p1 = p2;
                 p2 = temp;
-                System.Diagnostics.Debug.WriteLine($"      [Swap] After swap: p1=({p1.X:F6},{p1.Y:F6}), p2=({p2.X:F6},{p2.Y:F6})");
             }
 
             // Y-range check: point must be in [p1.Y, p2.Y) range
             bool yInRange = !(point.Y < p1.Y || point.Y >= p2.Y);
-            System.Diagnostics.Debug.WriteLine($"      [YRange] point.Y={point.Y:F10}, p1.Y={p1.Y:F10}, p2.Y={p2.Y:F10}");
-            System.Diagnostics.Debug.WriteLine($"      [YRange] Check: point.Y < p1.Y? {point.Y < p1.Y}, point.Y >= p2.Y? {point.Y >= p2.Y} → yInRange={yInRange}");
             if (!yInRange)
             {
-                System.Diagnostics.Debug.WriteLine($"      [YRange] ✗ REJECT: Point Y outside segment Y range");
                 return false;
             }
 
             // Horizontal line check
             double deltaY = p2.Y - p1.Y;
-            System.Diagnostics.Debug.WriteLine($"      [DeltaY] deltaY={deltaY:F15}, threshold=1e-10={1e-10:F15}");
             if (Math.Abs(deltaY) < 1e-10)
             {
-                System.Diagnostics.Debug.WriteLine($"      [Horizontal] ✗ REJECT: Near-horizontal segment (deltaY < 1e-10)");
                 return false;
             }
 
@@ -408,18 +368,12 @@ namespace RealtimeITagControl.Selection
             double numerator = (point.Y - p1.Y) * (p2.X - p1.X);
             double xIntersect = p1.X + numerator / deltaY;
             bool intersects = xIntersect > point.X;
-            System.Diagnostics.Debug.WriteLine($"      [XCalc] Numerator=(point.Y - p1.Y)*(p2.X - p1.X)={numerator:F15}");
-            System.Diagnostics.Debug.WriteLine($"      [XCalc] xIntersect=p1.X + numerator/deltaY={p1.X:F10} + {numerator:F10}/{deltaY:F10} = {xIntersect:F10}");
-            System.Diagnostics.Debug.WriteLine($"      [XCalc] point.X={point.X:F10}, xIntersect={xIntersect:F10}");
-            System.Diagnostics.Debug.WriteLine($"      [XCalc] xIntersect > point.X? {intersects} (diff={(xIntersect - point.X):F15})");
             
             if (intersects)
             {
-                System.Diagnostics.Debug.WriteLine($"      [Result] ✓ INTERSECTS: Ray crosses segment to the right");
             }
             else
             {
-                System.Diagnostics.Debug.WriteLine($"      [Result] ✗ REJECT: Intersection point is to the left of click point");
             }
             
             return intersects;
@@ -622,7 +576,6 @@ namespace RealtimeITagControl.Selection
                     if (bestDist < 0.01 && bestIdx > 0)
                     {
                         startIdx = bestIdx;
-                        System.Diagnostics.Debug.WriteLine($"[CalculateContourBoundingBox] Closed loop detected at segment {bestIdx}, skipping first {startIdx} segments");
                     }
                 }
             }
@@ -632,7 +585,6 @@ namespace RealtimeITagControl.Selection
                 contourPath = contour.AllSegments;
             }
             
-            System.Diagnostics.Debug.WriteLine($"[CalculateContourBoundingBox] Total segments: {contourPath?.Count ?? 0}, Start index: {startIdx}, Offset: ({offsetX:F3}, {offsetY:F3}), Scale: {scale:F3}");
             
             if (contourPath != null)
             {
@@ -640,7 +592,6 @@ namespace RealtimeITagControl.Selection
                 {
                     var segment = contourPath[i];
                     UpdateBoundsFromSegment(segment, offsetX, offsetY, scale, ref minX, ref minY, ref maxX, ref maxY);
-                    System.Diagnostics.Debug.WriteLine($"  Segment[{i}]: {segment.GetType().Name}, Bounds after: ({minX:F3},{minY:F3}) -> ({maxX:F3},{maxY:F3})");
                     hasPoints = true;
                 }
             }
@@ -658,7 +609,6 @@ namespace RealtimeITagControl.Selection
             maxY += margin;
 
             var bbox = new Rectangle2D(minX, minY, maxX - minX, maxY - minY);
-            System.Diagnostics.Debug.WriteLine($"[CalculateContourBoundingBox] Final BBox: ({bbox.MinX:F3}, {bbox.MinY:F3}) {bbox.Width:F3}x{bbox.Height:F3}");
             return bbox;
         }
 
@@ -701,7 +651,6 @@ namespace RealtimeITagControl.Selection
 
                 // Phase 7 FIX: Arc 극값점이 범위에 포함되는지 체크
                 // 디버그: Arc 정보 출력
-                System.Diagnostics.Debug.WriteLine($"    Arc: Start=({arc.Start.X:F3},{arc.Start.Y:F3}) End=({arc.End.X:F3},{arc.End.Y:F3}) Center=({arc.Center.X:F3},{arc.Center.Y:F3}) R={arc.Radius:F3} Angles={arc.StartAngle:F1}°~{arc.EndAngle:F1}° CW={arc.Clockwise}");
 
                 // 호가 0°, 90°, 180°, 270°를 포함하는지 확인 (극값)
                 CheckArcExtreme(arc, center, radius, 0, ref minX, ref minY, ref maxX, ref maxY);   // +X
@@ -832,7 +781,6 @@ namespace RealtimeITagControl.Selection
 
             bool isInside = IsPointInConvexHull(point, hull);
             
-            System.Diagnostics.Debug.WriteLine($"[IsPointInsideContourConvexHull] Point: {point}, Hull points: {hull.Count}, Result: {isInside}");
             
             return isInside;
         }

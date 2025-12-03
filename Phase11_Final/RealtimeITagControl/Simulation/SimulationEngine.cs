@@ -115,7 +115,6 @@ namespace RealtimeITagControl.Simulation
             cts = new CancellationTokenSource();
 
             simulationTask = Task.Run(() => RunSimulation(cts.Token), cts.Token);
-            Log("Simulation started");
         }
 
         /// <summary>
@@ -126,7 +125,6 @@ namespace RealtimeITagControl.Simulation
             if (state == SimulationState.Running)
             {
                 state = SimulationState.Paused;
-                Log("Simulation paused");
             }
         }
 
@@ -138,7 +136,6 @@ namespace RealtimeITagControl.Simulation
             if (state == SimulationState.Paused)
             {
                 state = SimulationState.Running;
-                Log("Simulation resumed");
             }
         }
 
@@ -156,7 +153,6 @@ namespace RealtimeITagControl.Simulation
 
                 state = SimulationState.Stopped; // 중단 상태
                 // ResetPosition()은 호출하지 않음 - 중단된 위치 유지
-                Log("Simulation stopped");
             }
         }
 
@@ -181,7 +177,6 @@ namespace RealtimeITagControl.Simulation
             {
                 state = SimulationState.Idle;
             }
-            Log("Simulation reset");
         }
 
         /// <summary>
@@ -201,7 +196,6 @@ namespace RealtimeITagControl.Simulation
                     Part part = program.Parts[pi];
                     currentPartIndex = pi;
 
-                    Log(string.Format("Starting Part {0}/{1}", pi + 1, program.Parts.Count));
 
                     for (int ci = currentContourIndex; ci < part.Contours.Count; ci++)
                     {
@@ -210,7 +204,6 @@ namespace RealtimeITagControl.Simulation
                         Contour contour = part.Contours[ci];
                         currentContourIndex = ci;
 
-                        Log(string.Format("  Starting Contour {0}/{1}", ci + 1, part.Contours.Count));
 
                         // AllSegments: LeadIn + Approach + Cutting
                         List<PathSegment> segments = contour.AllSegments;
@@ -278,12 +271,10 @@ namespace RealtimeITagControl.Simulation
                 {
                     state = SimulationState.Completed;
                     RaiseSimulationCompleted();
-                    Log("Simulation completed");
                 }
             }
             catch (Exception ex)
             {
-                Log("Simulation error: " + ex.Message);
                 state = SimulationState.Stopped;
             }
         }

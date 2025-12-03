@@ -15,21 +15,11 @@ namespace RealtimeITagControl.Selection
         /// <summary>
         /// 선택 모드
         /// </summary>
-        public enum SelectionMode
-        {
-            None,     // 선택 비활성
-            Contour,  // 컨투어 선택
-            Element   // 엘리먼트 선택
-        }
+        // SelectionMode enum 삭제: 항상 Contour 모드로 동작
 
         #endregion
 
         #region Properties
-
-        /// <summary>
-        /// 현재 선택 모드
-        /// </summary>
-        public SelectionMode CurrentMode { get; set; } = SelectionMode.None;
 
         /// <summary>
         /// 엘리먼트 다중 선택 활성화 여부
@@ -148,11 +138,6 @@ namespace RealtimeITagControl.Selection
                     // Debug: Log contour 4 (0-based, which is contour 5 in 1-based)
                     if (pi == 0 && ci == 4)
                     {
-                        System.Diagnostics.Debug.WriteLine($"[FindContourAtPoint] Checking Part {pi}, Contour {ci} (Contour 5 in 1-based)");
-                        System.Diagnostics.Debug.WriteLine($"  Click point: ({clickPoint.X:F3}, {clickPoint.Y:F3})");
-                        System.Diagnostics.Debug.WriteLine($"  Offset: ({offsetX:F3}, {offsetY:F3})");
-                        System.Diagnostics.Debug.WriteLine($"  CuttingPath count: {contour.CuttingPath?.Count ?? 0}");
-                        System.Diagnostics.Debug.WriteLine($"  AllSegments count: {contour.AllSegments?.Count ?? 0}");
                     }
 
                     // Point-in-Contour 검사 (선택 방식에 따라)
@@ -176,37 +161,30 @@ namespace RealtimeITagControl.Selection
                     }
                     catch (Exception ex)
                     {
-                        System.Diagnostics.Debug.WriteLine($"[FindContourAtPoint] Exception in Point-in-Contour check for Part {pi}, Contour {ci}: {ex.Message}");
                         continue;
                     }
                     
                     if (pi == 0 && ci == 4)
                     {
-                        System.Diagnostics.Debug.WriteLine($"  IsPointInsideContour result: {isInside}");
                     }
                     
                     if (isInside)
                     {
-                        System.Diagnostics.Debug.WriteLine($"[FindContourAtPoint] Point INSIDE Part {pi}, Contour {ci}");
                         
                         // Calculate contour area
                         double area = double.MaxValue;
                         try
                         {
                             area = GeometryUtils.CalculateContourArea(contour, scale);
-                            System.Diagnostics.Debug.WriteLine($"[FindContourAtPoint] Contour area: {area:F3}");
                         }
                         catch (Exception ex)
                         {
-                            System.Diagnostics.Debug.WriteLine($"[FindContourAtPoint] Exception in CalculateContourArea for Part {pi}, Contour {ci}: {ex.Message}");
                         }
                         
                         matchingContours.Add((pi, ci, area));
-                        System.Diagnostics.Debug.WriteLine($"[FindContourAtPoint] Added Part {pi}, Contour {ci} to matching list (area: {area:F3})");
                         
                         if (pi == 0 && ci == 4)
                         {
-                            System.Diagnostics.Debug.WriteLine($"  Added to matching contours with area: {area:F3}");
                         }
                     }
                 }
@@ -281,7 +259,6 @@ namespace RealtimeITagControl.Selection
                     }
                     catch (Exception ex)
                     {
-                        System.Diagnostics.Debug.WriteLine($"[FindAllContoursAtPoint] Exception for Part {pi}, Contour {ci}: {ex.Message}");
                         continue;
                     }
 

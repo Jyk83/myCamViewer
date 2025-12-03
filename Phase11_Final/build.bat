@@ -52,17 +52,17 @@ echo.
 
 REM 솔루션 정리
 echo [1/3] 솔루션 정리...
-%MSBUILD_PATH% RealtimeITagControl.sln /t:Clean /p:Configuration=Release /p:Platform="Any CPU" /v:minimal
+%MSBUILD_PATH% RealtimeITagControl.sln /t:Clean /p:Configuration=Release /p:Platform="x64" /v:minimal
 if errorlevel 1 (
     echo [오류] 솔루션 정리 실패
     pause
     exit /b 1
 )
 
-REM 솔루션 빌드 (Release, AnyCPU)
-echo [2/3] 솔루션 빌드 (Release, AnyCPU)...
-echo [알림] WinCC 호환성을 위해 AnyCPU(Prefer32Bit=false)로 빌드합니다.
-%MSBUILD_PATH% RealtimeITagControl.sln /t:Build /p:Configuration=Release /p:Platform="Any CPU" /v:minimal
+REM 솔루션 빌드 (Release, x64)
+echo [2/3] 솔루션 빌드 (Release, x64)...
+echo [알림] NativeRenderer.dll이 x64 전용이므로 x64로 빌드합니다.
+%MSBUILD_PATH% RealtimeITagControl.sln /t:Build /p:Configuration=Release /p:Platform="x64" /v:minimal
 if errorlevel 1 (
     echo [오류] 빌드 실패
     pause
@@ -71,17 +71,17 @@ if errorlevel 1 (
 
 REM DLL 파일들 복사
 echo [3/3] DLL 복사...
-if exist "RealtimeITagControl\bin\Release\RealtimeITagControl.dll" (
-    copy /Y "Siemens.Runtime.ControlDev.dll" "RealtimeITagControl\bin\Release\"
-    copy /Y "RealtimeITagControl\NativeRenderer.dll" "RealtimeITagControl\bin\Release\"
+if exist "RealtimeITagControl\bin\x64\Release\RealtimeITagControl.dll" (
+    copy /Y "Siemens.Runtime.ControlDev.dll" "RealtimeITagControl\bin\x64\Release\"
+    copy /Y "RealtimeITagControl\NativeRenderer.dll" "RealtimeITagControl\bin\x64\Release\"
     echo.
     echo ====================================
-    echo Phase11 빌드 완료! (AnyCPU, Prefer32Bit=false)
+    echo Phase11 빌드 완료! (x64 플랫폼)
     echo Phase8 OpenGL 렌더링 100%% 적용
-    echo WinCC Runtime 호환 빌드
+    echo NativeRenderer.dll (x64) 호환 빌드
     echo ====================================
     echo.
-    echo 출력 파일: RealtimeITagControl\bin\Release\RealtimeITagControl.dll
+    echo 출력 파일: RealtimeITagControl\bin\x64\Release\RealtimeITagControl.dll
     echo.
     echo WinCC 임포트 방법:
     echo 1. WinCC Graphics Designer 실행

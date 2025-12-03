@@ -284,7 +284,6 @@ namespace RealtimeITagControl.Rendering
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine("Failed to save settings: " + ex.Message);
             }
         }
         
@@ -348,7 +347,6 @@ namespace RealtimeITagControl.Rendering
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine("Failed to load settings: " + ex.Message);
             }
         }
         

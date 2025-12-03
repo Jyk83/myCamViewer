@@ -43,6 +43,7 @@ namespace RealtimeITagControl.UI
         private Button btnSimulation;
         private Button btnStopSimulation;
         private Button btnElementSelect;
+        private Button btnTraceTest;  // TraceTestForm 호출 버튼
 
         // ITag 서버 상태 표시
         private GroupBox grpITagStatus;
@@ -58,6 +59,7 @@ namespace RealtimeITagControl.UI
         public event EventHandler SimulationClicked;
         public event EventHandler StopSimulationClicked;
         public event EventHandler ElementSelectClicked;
+        public event EventHandler TraceTestClicked;  // TraceTestForm 호출 이벤트
         public event EventHandler<bool> ShowPartNumberChanged;
         public event EventHandler<bool> ShowContourNumberChanged;
 
@@ -169,12 +171,23 @@ namespace RealtimeITagControl.UI
             {
                 Text = "시뮬레이션 중단",
                 Location = new Point(20, y),
-                Size = new Size(260, btnHeight),
+                Size = new Size(btnWidth, btnHeight),
                 BackColor = Color.LightCoral,
                 Enabled = false  // 초기에는 비활성화
             };
             btnStopSimulation.Click += (s, e) => StopSimulationClicked?.Invoke(this, EventArgs.Empty);
             this.Controls.Add(btnStopSimulation);
+
+            // TraceTest 버튼 추가
+            btnTraceTest = new Button
+            {
+                Text = "Trace 테스트",
+                Location = new Point(20 + btnWidth + btnGap, y),
+                Size = new Size(btnWidth, btnHeight),
+                BackColor = Color.LightYellow
+            };
+            btnTraceTest.Click += (s, e) => TraceTestClicked?.Invoke(this, EventArgs.Empty);
+            this.Controls.Add(btnTraceTest);
             y += btnHeight + btnGap;
         }
 

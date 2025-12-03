@@ -15,14 +15,13 @@ namespace RealtimeITagControl.MPF
     {
         private List<string> lines;
         private List<Command> commands;
-        private bool debug;
-        private static string logFilePath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory), "MPFParser_Log.txt");
+        // debug 및 logFilePath 변수 삭제됨
 
         public MPFParser(bool enableDebug = true)
         {
             lines = new List<string>();
             commands = new List<Command>();
-            debug = enableDebug;
+            // debug = enableDebug; // 삭제됨
         }
 
         /// <summary>
@@ -38,36 +37,12 @@ namespace RealtimeITagControl.MPF
 
             commands = new List<Command>();
 
-            Log("=== MPF 파서 시작 ===");
-            Log("총 라인 수: " + lines.Count);
-
             // 모든 라인을 커맨드로 파싱
             ParseAllCommands();
-            Log("파싱된 커맨드 수: " + commands.Count);
 
             // 구조화된 데이터로 변환
             MPFProgram program = BuildMPFProgram();
-            Log("=== MPF 파서 완료 ===");
             return program;
-        }
-
-        private void Log(string message)
-        {
-            if (debug)
-            {
-                string logMessage = "[MPFParser] " + message;
-                Console.WriteLine(logMessage);
-                
-                // WinCC 환경에서도 확인할 수 있도록 파일 로깅
-                try
-                {
-                    File.AppendAllText(logFilePath, DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss") + " " + logMessage + Environment.NewLine);
-                }
-                catch
-                {
-                    // 파일 쓰기 실패는 무시
-                }
-            }
         }
 
         /// <summary>
@@ -149,8 +124,6 @@ namespace RealtimeITagControl.MPF
             string[] args = argsMatch.Success 
                 ? argsMatch.Groups[1].Value.Split(',').Select(a => a.Trim()).ToArray() 
                 : new string[0];
-
-            Log("HK 함수 파싱: " + funcName + ", 인자: " + args.Length + "개");
 
             switch (funcName)
             {
@@ -290,22 +263,15 @@ namespace RealtimeITagControl.MPF
         /// </summary>
         private MPFProgram BuildMPFProgram()
         {
-            Log("프로그램 구조 생성 시작");
-
             string version = ExtractVersion();
-            Log("버전: " + version);
 
             HKLDBCommand hkldb = ExtractHKLDB();
-            Log("HKLDB: " + (hkldb != null ? "발견" : "없음"));
 
             HKINICommand hkini = ExtractHKINI();
-            Log("HKINI: " + (hkini != null ? "발견" : "없음"));
 
             List<NestingInfo> nesting = ExtractNesting();
-            Log("네스팅 정보: " + nesting.Count + "개");
 
             List<Part> parts = ExtractParts(nesting);
-            Log("파트: " + parts.Count + "개");
 
             return new MPFProgram
             {
@@ -342,7 +308,7 @@ namespace RealtimeITagControl.MPF
             HKLDBCommand hkldb = commands.OfType<HKLDBCommand>().FirstOrDefault();
             if (hkldb == null)
             {
-                Log("WARNING: HKLDB command not found");
+                LogHelper.Log("MPFParser", "WARNING: HKLDB command not found");
             }
             return hkldb;
         }
@@ -355,7 +321,7 @@ namespace RealtimeITagControl.MPF
             HKINICommand hkini = commands.OfType<HKINICommand>().FirstOrDefault();
             if (hkini == null)
             {
-                Log("WARNING: HKINI command not found");
+                LogHelper.Log("MPFParser", "WARNING: HKINI command not found");
             }
             return hkini;
         }
@@ -365,14 +331,10 @@ namespace RealtimeITagControl.MPF
         /// </summary>
         private List<NestingInfo> ExtractNesting()
         {
-            Log("=== 네스팅 정보 추출 시작 ===");
-            Log("전체 커맨드 수: " + commands.Count);
-            
             // 커맨드 타입 분포 출력
             int nblockCount = commands.OfType<NBlockCommand>().Count();
             int hkostCount = commands.OfType<HKOSTCommand>().Count();
             int hkendCount = commands.OfType<HKENDCommand>().Count();
-            Log(string.Format("커맨드 타입 분포: NBlock={0}, HKOST={1}, HKEND={2}", nblockCount, hkostCount, hkendCount));
             
             List<NestingInfo> nesting = new List<NestingInfo>();
             int currentBlockNumber = 0;
@@ -386,7 +348,6 @@ namespace RealtimeITagControl.MPF
                 if (cmd is NBlockCommand)
                 {
                     currentBlockNumber = ((NBlockCommand)cmd).BlockNumber;
-                    Log("  N블록: " + currentBlockNumber);
                 }
 
                 // HKOST 발견
@@ -394,7 +355,6 @@ namespace RealtimeITagControl.MPF
                 {
                     HKOSTCommand hkost = (HKOSTCommand)cmd;
                     hkostIndex++;
-                    Log(string.Format("  HKOST #{0}: 블록={1}, 파트코드={2}, 컨투어수={3}", hkostIndex, currentBlockNumber, hkost.PartNumber, hkost.ContourCount));
                     nesting.Add(new NestingInfo
                     {
                         PartOriginBlockNumber = currentBlockNumber,
@@ -408,23 +368,20 @@ namespace RealtimeITagControl.MPF
                 // HKPPP 확인
                 if (cmd is HKPPPCommand)
                 {
-                    Log("  HKPPP 발견");
                 }
 
                 // HKEND 발견 시 네스팅 정보 종료 (하지만 파트 정의는 계속 읽음)
                 if (cmd is HKENDCommand)
                 {
-                    Log("  HKEND 발견 - 네스팅 영역 종료 (파트 정의는 계속 파싱)");
                     // ⚠️ break 제거: HKEND 이후에도 파트 블록(N10001~)을 읽어야 함
                     break;
                 }
             }
 
-            Log("=== 네스팅 정보 추출 완료: " + nesting.Count + "개 ===");
             
             if (nesting.Count == 0)
             {
-                Log("⚠️ WARNING: 네스팅 정보가 없습니다! HKOST 커맨드가 HKEND 이전에 존재하는지 확인하세요.");
+                LogHelper.Log("MPFParser", "⚠️ WARNING: 네스팅 정보가 없습니다! HKOST 커맨드가 HKEND 이전에 존재하는지 확인하세요.");
             }
             
             return nesting;
@@ -437,20 +394,16 @@ namespace RealtimeITagControl.MPF
         {
             List<Part> parts = new List<Part>();
 
-            Log(nesting.Count + "개 파트 추출 시작");
-
             foreach (NestingInfo nest in nesting)
             {
-                Log("파트 " + nest.PartCodeBlockNumber + " 추출 중...");
                 Part part = ExtractPart(nest);
                 if (part != null)
                 {
-                    Log("  -> " + part.Contours.Count + "개 컨투어 발견");
                     parts.Add(part);
                 }
                 else
                 {
-                    Log("  -> 파트를 찾을 수 없음!");
+                    LogHelper.Log("MPFParser", "  -> 파트를 찾을 수 없음!");
                 }
             }
 
@@ -462,11 +415,8 @@ namespace RealtimeITagControl.MPF
         /// </summary>
         private Part ExtractPart(NestingInfo nest)
         {
-            Log("파트 추출: 블록 " + nest.PartCodeBlockNumber);
-            
             // 전체 N블록 번호 출력 (디버깅용)
             var allNBlocks = commands.OfType<NBlockCommand>().Select(cmd => cmd.BlockNumber).ToList();
-            Log(string.Format("  전체 N블록 번호: {0}개 - {1}", allNBlocks.Count, string.Join(", ", allNBlocks.Take(20))));
 
             // 파트 시작 블록 찾기
             int startIdx = -1;
@@ -476,14 +426,13 @@ namespace RealtimeITagControl.MPF
                 if (cmd is NBlockCommand && ((NBlockCommand)cmd).BlockNumber == nest.PartCodeBlockNumber)
                 {
                     startIdx = i;
-                    Log("  시작 인덱스: " + startIdx);
                     break;
                 }
             }
 
             if (startIdx == -1)
             {
-                Log(string.Format("  ⚠️ ERROR: 블록 번호 {0}를 찾을 수 없음! commands에 해당 NBlock이 없습니다.", nest.PartCodeBlockNumber));
+                LogHelper.Log("MPFParser", string.Format("  ⚠️ ERROR: 블록 번호 {0}를 찾을 수 없음! commands에 해당 NBlock이 없습니다.", nest.PartCodeBlockNumber));
                 return null;
             }
 
@@ -508,8 +457,6 @@ namespace RealtimeITagControl.MPF
                 if (cmd is HKSTRCommand)
                 {
                     HKSTRCommand hkstr = (HKSTRCommand)cmd;
-                    Log(string.Format("  컨투어 시작: 블록 {0}, piercingType={1}, cuttingType={2}", 
-                        currentBlockNumber, hkstr.PiercingType, hkstr.CuttingType));
                     
                     currentContour = new Contour
                     {
@@ -532,14 +479,12 @@ namespace RealtimeITagControl.MPF
                 // HKPIE: 피어싱
                 if (cmd is HKPIECommand && currentContour != null)
                 {
-                    Log("    피어싱 실행");
                 }
 
                 // HKLEA: Lead-in 정보
                 if (cmd is HKLEACommand && currentContour != null)
                 {
                     HKLEACommand hklea = (HKLEACommand)cmd;
-                    Log(string.Format("    HKLEA: gCode={0}, x={1}, y={2}", hklea.GCode, hklea.X, hklea.Y));
                     
                     if (hklea.GCode > 0 && (hklea.X != 0 || hklea.Y != 0))
                     {
@@ -558,7 +503,6 @@ namespace RealtimeITagControl.MPF
                                 Path = new List<PathSegment> { segment }
                             };
                             currentPosition = new Point2D(hklea.X, hklea.Y);
-                            Log("    Lead-in 세그먼트 추가");
                         }
                     }
                     
@@ -569,7 +513,6 @@ namespace RealtimeITagControl.MPF
                 // HKCUT: 절단 시작 (리드인 끝)
                 if (cmd is HKCUTCommand && currentContour != null)
                 {
-                    Log("    HKCUT - 절단 시작 (리드인 종료)");
                     inCutting = true;
                 }
 
@@ -597,7 +540,6 @@ namespace RealtimeITagControl.MPF
                             {
                                 // HKLEA 이후 HKCUT 전: 리드인 경로
                                 currentContour.LeadIn.Path.Add(segment);
-                                Log("    Lead-in 경로 세그먼트 추가");
                             }
                         }
                         currentPosition = new Point2D(gcode.X.Value, gcode.Y.Value);
@@ -611,14 +553,10 @@ namespace RealtimeITagControl.MPF
                     currentContour.EndGCode = hksto.GCode;
                     currentContour.EndPosition = new Point2D(hksto.X, hksto.Y);
 
-                    Log(string.Format("    HKSTO: gCode={0}, {1}개 기존 세그먼트", hksto.GCode, currentContour.CuttingPath.Count));
-
                     // 마지막 세그먼트 추가
                     if (hksto.GCode > 0 && (hksto.X != currentPosition.X || hksto.Y != currentPosition.Y))
                     {
                         string segmentType = hksto.GCode == 1 ? "직선" : hksto.GCode == 2 ? "G2원호" : "G3원호";
-                        Log(string.Format("    마지막 세그먼트 추가: {0} ({1:F3},{2:F3}) → ({3:F3},{4:F3})",
-                            segmentType, currentPosition.X, currentPosition.Y, hksto.X, hksto.Y));
                         
                         PathSegment segment = CreateSegment(
                             hksto.GCode,
@@ -631,7 +569,6 @@ namespace RealtimeITagControl.MPF
                         {
                             currentContour.CuttingPath.Add(segment);
                             currentPosition = new Point2D(hksto.X, hksto.Y);
-                            Log("      세그먼트 추가 성공! 타입: " + segment.Type);
                         }
                     }
 
@@ -645,7 +582,6 @@ namespace RealtimeITagControl.MPF
                     currentContour.AllSegments.AddRange(currentContour.CuttingPath);
 
                     contours.Add(currentContour);
-                    Log("  컨투어 완료: " + contours.Count + "번째");
                     currentContour = null;
                     inCutting = false;
                 }
@@ -653,7 +589,6 @@ namespace RealtimeITagControl.MPF
                 // HKPED: 파트 종료
                 if (cmd is HKPEDCommand)
                 {
-                    Log("  파트 종료");
                     break;
                 }
             }
@@ -682,7 +617,7 @@ namespace RealtimeITagControl.MPF
                 Height = partHeight
             };
 
-            Log(string.Format("파트 추출 완료: {0}개 컨투어, 크기: {1:F2}x{2:F2}", 
+            LogHelper.Log("MPFParser", string.Format("파트 추출 완료: {0}개 컨투어, 크기: {1:F2}x{2:F2}", 
                 contours.Count, partWidth, partHeight));
             return part;
         }

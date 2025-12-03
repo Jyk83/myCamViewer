@@ -19,17 +19,14 @@ namespace RealtimeITagControl
     /// Phase8 (Realtime Viewer) + Phase9 (ITag Communication) 통합
     /// WinCC Graphics Designer에 임포트 가능
     /// IITagManager 인터페이스 구현 - ITag 인스턴스를 팝업 등에 전달 가능
+    /// ITagManager 싱글톤 패턴 사용 (중복 인스턴스 방지)
     /// </summary>
-    public partial class RealtimeITagControl : UserControl, IITagManager, ITagSink
+    public partial class RealtimeITagControl : UserControl, IITagManager
     {
         #region 멤버 변수
 
-        // ITag 인스턴스 (외부에서 접근 가능)
-        private ITag m_ITag;
-        private long m_RegisterCookie;
-        private bool isConnected = false;
-        private bool isCyclicReading = false;
-        private string lastErrorMessage = null;
+        // ITagManager 싱글톤 사용 (중복 방지)
+        private ITagManager tagManager => ITagManager.Instance;
 
         private ProgramInfoPanel programInfoPanel;
         private CamViewerControl camViewerControl;  // Phase8 OpenGL 렌더러 (핵심!)
@@ -39,14 +36,15 @@ namespace RealtimeITagControl
         private TagData lastTagData;
         
         // 로그 파일 경로
-        private static readonly string logFilePath = System.IO.Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.Desktop), 
-            "RealtimeITagControl_Log.txt");
         
         // Trace 상태 관리
         private TraceState currentTraceState = TraceState.Idle;
         private bool isTracing = false;
         private System.Collections.Generic.Dictionary<string, ContourTraceInfo> contourStatusMap;
+        
+        // Dispose 중복 호출 방지
+        private bool isDisposed = false;
+        private readonly object disposeLock = new object();
         
         // OpenGL 렌더링, Pan/Zoom은 CamViewerControl에서 처리
 
@@ -97,15 +95,25 @@ namespace RealtimeITagControl
 
         #endregion
 
-        #region IITagManager 구현 (속성)
+        #region IITagManager 구현 (속성) - ITagManager 싱글톤 위임
 
-        public ITag ITag => m_ITag;
-        public bool IsConnected => isConnected;
-        public bool IsCyclicReading => isCyclicReading;
-        public string LastErrorMessage => lastErrorMessage;
+        public ITag ITag => tagManager.ITagInstance;
+        public bool IsConnected => tagManager.IsConnected;
+        public bool IsCyclicReading => tagManager.IsCyclicReading;
+        public string LastErrorMessage => tagManager.LastErrorMessage;
 
-        public event EventHandler<TagDataEventArgs> DataChanged;
-        public event EventHandler<bool> ConnectionChanged;
+        // 이벤트는 ITagManager의 이벤트를 그대로 전달
+        public event EventHandler<TagDataEventArgs> DataChanged
+        {
+            add { tagManager.DataChanged += value; }
+            remove { tagManager.DataChanged -= value; }
+        }
+        
+        public event EventHandler<bool> ConnectionChanged
+        {
+            add { tagManager.ConnectionChanged += value; }
+            remove { tagManager.ConnectionChanged -= value; }
+        }
 
         #endregion
 
@@ -123,19 +131,6 @@ namespace RealtimeITagControl
         /// <summary>
         /// 파일 로그 기록 (WinCC 디버깅용)
         /// </summary>
-        private void LogToFile(string message)
-        {
-            try
-            {
-                string timestamp = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss.fff");
-                string logMessage = $"[{timestamp}] {message}\n";
-                System.IO.File.AppendAllText(logFilePath, logMessage);
-            }
-            catch
-            {
-                // 로그 실패 시 무시
-            }
-        }
         
         #endregion
 
@@ -157,6 +152,7 @@ namespace RealtimeITagControl
             programInfoPanel.SimulationClicked += ProgramInfoPanel_SimulationClicked;
             programInfoPanel.StopSimulationClicked += ProgramInfoPanel_StopSimulationClicked;
             programInfoPanel.ElementSelectClicked += ProgramInfoPanel_ElementSelectClicked;
+            programInfoPanel.TraceTestClicked += ProgramInfoPanel_TraceTestClicked;
             programInfoPanel.ShowPartNumberChanged += ProgramInfoPanel_ShowPartNumberChanged;
             programInfoPanel.ShowContourNumberChanged += ProgramInfoPanel_ShowContourNumberChanged;
             this.Controls.Add(programInfoPanel);
@@ -171,6 +167,7 @@ namespace RealtimeITagControl
                 Size = new Size(968, 630),
                 Dock = DockStyle.None
             };
+            camViewerControl.ContourSelected += CamViewerControl_ContourSelected;
             this.Controls.Add(camViewerControl);
 
             // Load 시 ITag 연결
@@ -187,6 +184,14 @@ namespace RealtimeITagControl
         {
             if (!DesignMode)
             {
+                // ITagManager 싱글톤 초기화 (Site 전달)
+                ITagManager.Initialize(this.Site);
+                
+                // ITagManager 이벤트 구독
+                tagManager.DataChanged += ITagManager_DataChanged;
+                tagManager.ConnectionChanged += ITagManager_ConnectionChanged;
+                
+                // 연결 및 주기적 읽기 시작
                 Connect();
                 StartCyclicRead(500);
             }
@@ -217,40 +222,162 @@ namespace RealtimeITagControl
         /// </summary>
         private void CleanupResources()
         {
+            // 중복 호출 방지
+            lock (disposeLock)
+            {
+                if (isDisposed)
+                {
+                    LogHelper.Log("RealtimeITagControl", "CleanupResources already called - skipping");
+                    return;
+                }
+                isDisposed = true;
+            }
+            
             try
             {
-                System.Diagnostics.Debug.WriteLine("[RealtimeITagControl] === CleanupResources 시작 ===");
-                LogToFile("=== CleanupResources 시작 ===");
+                LogHelper.Log("RealtimeITagControl", "=== CleanupResources 시작 ===");
 
-                // ITag 연결 해제
-                Disconnect();
-
-                // 이벤트 구독 해제
-                if (programInfoPanel != null)
+                // 1. ITag 연결 해제 (Cyclic Read 먼저 중단)
+                try
                 {
-                    programInfoPanel.SimulationClicked -= ProgramInfoPanel_SimulationClicked;
-                    programInfoPanel.StopSimulationClicked -= ProgramInfoPanel_StopSimulationClicked;
-                    programInfoPanel.ElementSelectClicked -= ProgramInfoPanel_ElementSelectClicked;
-                    programInfoPanel.ShowPartNumberChanged -= ProgramInfoPanel_ShowPartNumberChanged;
-                    programInfoPanel.ShowContourNumberChanged -= ProgramInfoPanel_ShowContourNumberChanged;
+                    if (tagManager != null && tagManager.IsCyclicReading)
+                    {
+                        tagManager.StopCyclicRead();
+                        LogHelper.Log("RealtimeITagControl", "Cyclic Read stopped");
+                    }
+                }
+                catch (Exception ex)
+                {
+                    LogHelper.Log("RealtimeITagControl", $"Cyclic Read stop error: {ex.Message}");
                 }
 
-                // CamViewerControl은 자체 Dispose 처리
+                // 2. ITagManager 이벤트 구독 해제
+                try
+                {
+                    if (tagManager != null)
+                    {
+                        tagManager.DataChanged -= ITagManager_DataChanged;
+                        tagManager.ConnectionChanged -= ITagManager_ConnectionChanged;
+                        LogHelper.Log("RealtimeITagControl", "ITagManager events unsubscribed");
+                    }
+                }
+                catch (Exception ex)
+                {
+                    LogHelper.Log("RealtimeITagControl", $"ITagManager event unsubscribe error: {ex.Message}");
+                }
 
-                // MPF 데이터 정리
-                currentMpfPath = null;
-                mpfProgram = null;  // MPF 프로그램 데이터 해제
-                lastTagData = default(TagData);
+                // 3. ITag 연결 해제
+                try
+                {
+                    Disconnect();
+                    LogHelper.Log("RealtimeITagControl", "ITag Disconnected");
+                }
+                catch (Exception ex)
+                {
+                    LogHelper.Log("RealtimeITagControl", $"ITag Disconnect error: {ex.Message}");
+                }
+
+                // 4. UI 이벤트 구독 해제
+                try
+                {
+                    if (programInfoPanel != null)
+                    {
+                        programInfoPanel.SimulationClicked -= ProgramInfoPanel_SimulationClicked;
+                        programInfoPanel.StopSimulationClicked -= ProgramInfoPanel_StopSimulationClicked;
+                        programInfoPanel.ElementSelectClicked -= ProgramInfoPanel_ElementSelectClicked;
+                        programInfoPanel.TraceTestClicked -= ProgramInfoPanel_TraceTestClicked;
+                        programInfoPanel.ShowPartNumberChanged -= ProgramInfoPanel_ShowPartNumberChanged;
+                        programInfoPanel.ShowContourNumberChanged -= ProgramInfoPanel_ShowContourNumberChanged;
+                        LogHelper.Log("RealtimeITagControl", "ProgramInfoPanel events unsubscribed");
+                    }
+                }
+                catch (Exception ex)
+                {
+                    LogHelper.Log("RealtimeITagControl", $"ProgramInfoPanel event unsubscribe error: {ex.Message}");
+                }
                 
-                // 컨투어 상태는 CamViewerControl에서 관리
-                
-                System.Diagnostics.Debug.WriteLine("[RealtimeITagControl] === CleanupResources 완료 ===");
-                LogToFile("=== CleanupResources 완료 ===");
+                // 5. CamViewerControl 이벤트 구독 해제 및 Dispose
+                try
+                {
+                    if (camViewerControl != null && !camViewerControl.IsDisposed)
+                    {
+                        try
+                        {
+                            camViewerControl.ContourSelected -= CamViewerControl_ContourSelected;
+                            LogHelper.Log("RealtimeITagControl", "CamViewerControl events unsubscribed");
+                        }
+                        catch (Exception unsubEx)
+                        {
+                            LogHelper.Log("RealtimeITagControl", $"CamViewerControl event unsubscribe error: {unsubEx.Message}");
+                        }
+                        
+                        // WinCC 환경에서 Controls.Clear() 시도 시 null 참조 발생
+                        // OpenGL 및 ITag 리소스는 이미 정리되었으므로 생략
+                        
+                        try
+                        {
+                            // CamViewerControl 자체 Dispose 호출 (OpenGL 리소스 정리)
+                            camViewerControl.Dispose();
+                            LogHelper.Log("RealtimeITagControl", "CamViewerControl disposed (OpenGL cleanup)");
+                        }
+                        catch (Exception disposeEx)
+                        {
+                            // WinCC FwDotNetContainer 오류는 무시 (정상 동작)
+                            if (disposeEx.Message.Contains("GetService") || disposeEx.Message.Contains("FwDotNetContainer"))
+                            {
+                                LogHelper.Log("RealtimeITagControl", "CamViewerControl dispose completed (WinCC Container error ignored)");
+                            }
+                            else
+                            {
+                                LogHelper.Log("RealtimeITagControl", $"CamViewerControl dispose error: {disposeEx.Message}\n{disposeEx.StackTrace}");
+                            }
+                        }
+                        
+                        camViewerControl = null;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    LogHelper.Log("RealtimeITagControl", $"CamViewerControl cleanup error: {ex.Message}\n{ex.StackTrace}");
+                }
+
+                // 6. ProgramInfoPanel Dispose
+                try
+                {
+                    if (programInfoPanel != null && !programInfoPanel.IsDisposed)
+                    {
+                        // WinCC 환경에서 ProgramInfoPanel Dispose 시 오류 발생
+                        // 이벤트 구독 해제만으로 충분하므로 Dispose 생략
+                        LogHelper.Log("RealtimeITagControl", "ProgramInfoPanel cleanup skipped (WinCC managed)");
+                        
+                        programInfoPanel = null;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    LogHelper.Log("RealtimeITagControl", $"ProgramInfoPanel cleanup error: {ex.Message}");
+                }
+
+                // 7. MPF 데이터 정리
+                try
+                {
+                    currentMpfPath = null;
+                    mpfProgram = null;
+                    lastTagData = default(TagData);
+                    contourStatusMap?.Clear();
+                    contourStatusMap = null;
+                    LogHelper.Log("RealtimeITagControl", "MPF data cleared");
+                }
+                catch (Exception ex)
+                {
+                    LogHelper.Log("RealtimeITagControl", $"MPF data clear error: {ex.Message}");
+                }
+
+                LogHelper.Log("RealtimeITagControl", "=== CleanupResources 완료 ===");
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"[RealtimeITagControl] CleanupResources 오류: {ex.Message}");
-                LogToFile($"CleanupResources 오류: {ex.Message}");
+                LogHelper.Log("RealtimeITagControl", $"CleanupResources critical error: {ex.Message}\n{ex.StackTrace}");
             }
         }
 
@@ -266,126 +393,22 @@ namespace RealtimeITagControl
             // 로그 파일 초기화
             try
             {
-                if (System.IO.File.Exists(logFilePath))
-                    System.IO.File.Delete(logFilePath);
-                LogToFile("========================================");
-                LogToFile("RealtimeITagControl 시작");
-                LogToFile($"시작 시간: {DateTime.Now:yyyy-MM-dd HH:mm:ss}");
-                LogToFile("========================================\n");
             }
             catch { }
             
-            if (isConnected && m_ITag != null)
+            // ITagManager 싱글톤에 위임
+            bool result = tagManager.Connect();
+            
+            if (result)
             {
-                LogToFile("이미 ITag에 연결되어 있음");
-                return true;
-            }
-
-            try
-            {
-                lastErrorMessage = null;
-                LogToFile("=== ITag 연결 시작 ===");
-
-                // 1순위: Site.GetService (WinCC 내부)
-                if (this.Site != null)
-                {
-                    System.Diagnostics.Debug.WriteLine("[RealtimeITagControl] Site.GetService 시도...");
-                    try
-                    {
-                        m_ITag = (ITag)this.Site.GetService(typeof(ITag));
-                        if (m_ITag != null)
-                        {
-                            System.Diagnostics.Debug.WriteLine("[RealtimeITagControl] ✅ Site.GetService로 획득 성공");
-                        }
-                        else
-                        {
-                            System.Diagnostics.Debug.WriteLine("[RealtimeITagControl] ⚠️ Site.GetService 반환값 null");
-                        }
-                    }
-                    catch (Exception ex)
-                    {
-                        System.Diagnostics.Debug.WriteLine($"[RealtimeITagControl] ❌ Site.GetService 오류: {ex.Message}");
-                        lastErrorMessage = $"Site.GetService 실패: {ex.Message}";
-                    }
-                }
-                else
-                {
-                    System.Diagnostics.Debug.WriteLine("[RealtimeITagControl] ⚠️ Site가 null입니다.");
-                    lastErrorMessage = "IServiceProvider가 null (WinCC 외부 실행?)";
-                }
-
-                // 2순위: COM ProgID로 생성 (독립 실행)
-                if (m_ITag == null)
-                {
-                    System.Diagnostics.Debug.WriteLine("[RealtimeITagControl] COM ProgID 생성 시도...");
-                    try
-                    {
-                        Type itagType = Type.GetTypeFromProgID("CCITagControl.ITagControl.1");
-                        if (itagType != null)
-                        {
-                            System.Diagnostics.Debug.WriteLine($"[RealtimeITagControl] COM Type 획득: {itagType.FullName}");
-                            m_ITag = (ITag)Activator.CreateInstance(itagType);
-                            if (m_ITag != null)
-                            {
-                                System.Diagnostics.Debug.WriteLine("[RealtimeITagControl] ✅ COM ProgID로 생성 성공");
-                            }
-                            else
-                            {
-                                System.Diagnostics.Debug.WriteLine("[RealtimeITagControl] ❌ Activator.CreateInstance 반환값 null");
-                                lastErrorMessage = "COM 인스턴스 생성 실패 (WinCC Runtime 미실행?)";
-                            }
-                        }
-                        else
-                        {
-                            System.Diagnostics.Debug.WriteLine("[RealtimeITagControl] ❌ COM ProgID를 찾을 수 없습니다.");
-                            lastErrorMessage = "COM ProgID 'CCITagControl.ITagControl.1'을 찾을 수 없습니다";
-                        }
-                    }
-                    catch (Exception ex)
-                    {
-                        System.Diagnostics.Debug.WriteLine($"[RealtimeITagControl] ❌ COM 생성 오류: {ex.Message}");
-                        lastErrorMessage = $"COM 생성 실패: {ex.Message}";
-                    }
-                }
-
-                if (m_ITag == null)
-                {
-                    string errorMsg = "ITag 인스턴스 생성 실패 - WinCC Runtime이 실행 중인지 확인하세요";
-                    System.Diagnostics.Debug.WriteLine($"[RealtimeITagControl] ❌ {errorMsg}");
-                    if (string.IsNullOrEmpty(lastErrorMessage))
-                    {
-                        lastErrorMessage = errorMsg;
-                    }
-                    isConnected = false;
-                    ConnectionChanged?.Invoke(this, false);
-                    UpdateConnectionStatusUI();
-                    return false;
-                }
-
-                // ITagSink 콜백 등록 (this = RealtimeITagControl)
-                System.Diagnostics.Debug.WriteLine("[RealtimeITagControl] ITagSink 등록 시도...");
-                m_RegisterCookie = m_ITag.Register(this);
-                System.Diagnostics.Debug.WriteLine($"[RealtimeITagControl] ✅ ITagSink 등록 완료 (Cookie: {m_RegisterCookie})");
-
-                isConnected = true;
-                ConnectionChanged?.Invoke(this, true);
-                LogToFile("✅ ITag 서버 연결 성공");
-                LogToFile("=== ITag 연결 완료 ===\n");
-                
                 UpdateConnectionStatusUI();
-                return true;
             }
-            catch (Exception ex)
+            else
             {
-                string errorMsg = $"Connect 예외 발생: {ex.Message}";
-                System.Diagnostics.Debug.WriteLine($"[RealtimeITagControl] ❌ {errorMsg}");
-                System.Diagnostics.Debug.WriteLine($"[RealtimeITagControl] 스택 트레이스: {ex.StackTrace}");
-                lastErrorMessage = errorMsg;
-                isConnected = false;
-                ConnectionChanged?.Invoke(this, false);
                 UpdateConnectionStatusUI();
-                return false;
             }
+            
+            return result;
         }
 
         /// <summary>
@@ -393,72 +416,9 @@ namespace RealtimeITagControl
         /// </summary>
         public void Disconnect()
         {
-            try
-            {
-                System.Diagnostics.Debug.WriteLine("[RealtimeITagControl] Disconnect 시작...");
-
-                // 1. 주기적 읽기 중지
-                StopCyclicRead();
-
-                // 2. ITagSink 등록 해제
-                if (m_ITag != null && isConnected)
-                {
-                    try
-                    {
-                        m_ITag.Unregister((int)m_RegisterCookie);
-                        System.Diagnostics.Debug.WriteLine("[RealtimeITagControl] ✅ ITagSink 등록 해제 완료");
-                    }
-                    catch (Exception ex)
-                    {
-                        System.Diagnostics.Debug.WriteLine($"[RealtimeITagControl] ⚠️ ITagSink Unregister 오류: {ex.Message}");
-                    }
-                }
-
-                // 3. 상태 초기화
-                isConnected = false;
-                isCyclicReading = false;
-                
-                // 4. COM 객체 명시적 해제 (Deadlock 방지)
-                if (m_ITag != null)
-                {
-                    try
-                    {
-                        // COM 객체 참조 카운트 감소
-                        if (Marshal.IsComObject(m_ITag))
-                        {
-                            int refCount = Marshal.ReleaseComObject(m_ITag);
-                            System.Diagnostics.Debug.WriteLine($"[RealtimeITagControl] COM ReleaseComObject: refCount={refCount}");
-                        }
-                    }
-                    catch (Exception ex)
-                    {
-                        System.Diagnostics.Debug.WriteLine($"[RealtimeITagControl] ⚠️ ReleaseComObject 오류: {ex.Message}");
-                    }
-                    finally
-                    {
-                        m_ITag = null;
-                    }
-                }
-                
-                m_RegisterCookie = 0;
-
-                // 5. 이벤트 발생
-                ConnectionChanged?.Invoke(this, false);
-                
-                // 6. UI 업데이트
-                UpdateConnectionStatusUI();
-
-                // 7. Garbage Collection 강제 실행 (COM 리소스 정리)
-                GC.Collect();
-                GC.WaitForPendingFinalizers();
-                GC.Collect();
-
-                System.Diagnostics.Debug.WriteLine("[RealtimeITagControl] ✅ Disconnect 완료");
-            }
-            catch (Exception ex)
-            {
-                System.Diagnostics.Debug.WriteLine($"[RealtimeITagControl] ❌ Disconnect 오류: {ex.Message}");
-            }
+            // ITagManager 싱글톤에 위임
+            tagManager.Disconnect();
+            UpdateConnectionStatusUI();
         }
 
         /// <summary>
@@ -466,45 +426,10 @@ namespace RealtimeITagControl
         /// </summary>
         public bool StartCyclicRead(int cycleMs = 500)
         {
-            if (!isConnected)
-            {
-                System.Diagnostics.Debug.WriteLine("[RealtimeITagControl] StartCyclicRead: 연결 안됨");
-                return false;
-            }
-
-            if (isCyclicReading)
-            {
-                System.Diagnostics.Debug.WriteLine("[RealtimeITagControl] StartCyclicRead: 이미 실행 중");
-                return true;
-            }
-
-            try
-            {
-                int tagCount = TagDefinitions.AllTagNames.Length;
-                int[] cycles = Enumerable.Repeat(cycleMs, tagCount).ToArray();
-                int[] cookies = Enumerable.Range(1, tagCount).ToArray();
-
-                object serverCookie = null;
-
-                m_ITag.ReadTagCyclic(
-                    (int)m_RegisterCookie,
-                    (object)TagDefinitions.AllTagNames,
-                    (object)cycles,
-                    (object)cookies,
-                    out serverCookie
-                );
-
-                isCyclicReading = true;
-                System.Diagnostics.Debug.WriteLine($"[RealtimeITagControl] ✅ 주기적 읽기 시작 ({tagCount}개 Tag, {cycleMs}ms)");
-                
-                UpdateConnectionStatusUI();
-                return true;
-            }
-            catch (Exception ex)
-            {
-                System.Diagnostics.Debug.WriteLine($"[RealtimeITagControl] ❌ StartCyclicRead 오류: {ex.Message}");
-                return false;
-            }
+            // ITagManager 싱글톤에 위임
+            bool result = tagManager.StartCyclicRead(cycleMs);
+            UpdateConnectionStatusUI();
+            return result;
         }
 
         /// <summary>
@@ -512,21 +437,9 @@ namespace RealtimeITagControl
         /// </summary>
         public void StopCyclicRead()
         {
-            if (!isConnected || !isCyclicReading)
-                return;
-
-            try
-            {
-                m_ITag.Cancel((int)m_RegisterCookie);
-                isCyclicReading = false;
-                System.Diagnostics.Debug.WriteLine("[RealtimeITagControl] 주기적 읽기 중지");
-                
-                UpdateConnectionStatusUI();
-            }
-            catch (Exception ex)
-            {
-                System.Diagnostics.Debug.WriteLine($"[RealtimeITagControl] StopCyclicRead 오류: {ex.Message}");
-            }
+            // ITagManager 싱글톤에 위임
+            tagManager.StopCyclicRead();
+            UpdateConnectionStatusUI();
         }
         
         #endregion
@@ -540,26 +453,8 @@ namespace RealtimeITagControl
         /// </summary>
         public bool ReadTag(string tagName, out object value)
         {
-            value = null;
-
-            if (!isConnected)
-            {
-                System.Diagnostics.Debug.WriteLine("[RealtimeITagControl] ReadTag: 연결 안됨");
-                return false;
-            }
-
-            try
-            {
-                object result = m_ITag.ReadTag((int)m_RegisterCookie, tagName);
-                value = result;
-                System.Diagnostics.Debug.WriteLine($"[RealtimeITagControl] ReadTag '{tagName}' = {value}");
-                return true;
-            }
-            catch (Exception ex)
-            {
-                System.Diagnostics.Debug.WriteLine($"[RealtimeITagControl] ReadTag 오류: {ex.Message}");
-                return false;
-            }
+            // ITagManager 싱글톤에 위임
+            return tagManager.ReadTag(tagName, out value);
         }
 
         /// <summary>
@@ -567,36 +462,8 @@ namespace RealtimeITagControl
         /// </summary>
         public bool ReadTags(string[] tagNames, out object[] values)
         {
-            values = null;
-
-            if (!isConnected)
-            {
-                System.Diagnostics.Debug.WriteLine("[RealtimeITagControl] ReadTags: 연결 안됨");
-                return false;
-            }
-
-            try
-            {
-                object result = m_ITag.ReadTag((int)m_RegisterCookie, (object)tagNames);
-
-                if (result is Array resultArr)
-                {
-                    values = new object[resultArr.Length];
-                    for (int i = 0; i < resultArr.Length; i++)
-                    {
-                        values[i] = resultArr.GetValue(i);
-                    }
-                    System.Diagnostics.Debug.WriteLine($"[RealtimeITagControl] ReadTags: {values.Length}개 읽기 성공");
-                    return true;
-                }
-
-                return false;
-            }
-            catch (Exception ex)
-            {
-                System.Diagnostics.Debug.WriteLine($"[RealtimeITagControl] ReadTags 오류: {ex.Message}");
-                return false;
-            }
+            // ITagManager 싱글톤에 위임
+            return tagManager.ReadTags(tagNames, out values);
         }
 
         /// <summary>
@@ -604,98 +471,22 @@ namespace RealtimeITagControl
         /// </summary>
         public bool WriteTag(string tagName, object value)
         {
-            if (!isConnected)
-            {
-                System.Diagnostics.Debug.WriteLine("[RealtimeITagControl] WriteTag: 연결 안됨");
-                return false;
-            }
-
-            try
-            {
-                m_ITag.WriteTag((int)m_RegisterCookie, tagName, value);
-                System.Diagnostics.Debug.WriteLine($"[RealtimeITagControl] WriteTag '{tagName}' = {value}");
-                return true;
-            }
-            catch (Exception ex)
-            {
-                System.Diagnostics.Debug.WriteLine($"[RealtimeITagControl] WriteTag 오류: {ex.Message}");
-                return false;
-            }
+            // ITagManager 싱글톤에 위임
+            return tagManager.WriteTag(tagName, value);
         }
 
         #endregion
 
-        #region ITagSink 구현
+        #region ITagManager 이벤트 핸들러
 
-        public void OnDataChanged(int RegisterCookie, object TagNames, object Values, 
-            object Qualities, object VarStates, object TimeStamps, object Cookies)
+        /// <summary>
+        /// ITagManager DataChanged 이벤트 핸들러 (ITagSink 대체)
+        /// </summary>
+        private void ITagManager_DataChanged(object sender, TagDataEventArgs e)
         {
             try
             {
-                if (!(TagNames is Array tagArr) || !(Values is Array valArr))
-                    return;
-
-                // TagData 구조체 생성
-                var tagData = new TagData();
-
-                for (int i = 0; i < tagArr.Length; i++)
-                {
-                    string tagName = tagArr.GetValue(i)?.ToString();
-                    object value = valArr.GetValue(i);
-
-                    if (string.IsNullOrEmpty(tagName))
-                        continue;
-
-                    // Tag 이름에 따라 값 할당
-                    switch (tagName)
-                    {
-                        case TagDefinitions.X_MCS:
-                            tagData.X_MCS = Convert.ToDouble(value);
-                            break;
-                        case TagDefinitions.Y_MCS:
-                            tagData.Y_MCS = Convert.ToDouble(value);
-                            break;
-                        case TagDefinitions.X_WCS:
-                            tagData.X_WCS = Convert.ToDouble(value);
-                            break;
-                        case TagDefinitions.Y_WCS:
-                            tagData.Y_WCS = Convert.ToDouble(value);
-                            break;
-                        case TagDefinitions.PROGRESS_DISTANCE:
-                            tagData.ProgressDistance = Convert.ToDouble(value);
-                            break;
-                        case TagDefinitions.CURRENT_PART:
-                            tagData.CurrentPart = Convert.ToInt32(value);
-                            break;
-                        case TagDefinitions.CURRENT_CONT:
-                            tagData.CurrentContour = Convert.ToInt32(value);
-                            break;
-                        case TagDefinitions.WORK_DIR:
-                            tagData.WorkDir = value?.ToString() ?? "";
-                            break;
-                        case TagDefinitions.WORK_MPF_NAME:
-                            tagData.WorkMpfName = value?.ToString() ?? "";
-                            break;
-                        case TagDefinitions.WORK_STATUS:
-                            tagData.WorkStatus = (TagDefinitions.WorkStatus)Convert.ToInt32(value);
-                            break;
-                        case TagDefinitions.ACT_LINE_CODE:
-                            tagData.ActLineCode = value?.ToString() ?? "";
-                            break;
-                        case TagDefinitions.ACT_LINE_NUM:
-                            tagData.ActLineNum = Convert.ToInt32(value);
-                            break;
-                        case TagDefinitions.SEARCH_PART:
-                            tagData.SearchPart = Convert.ToInt32(value);
-                            break;
-                        case TagDefinitions.SEARCH_CONT:
-                            tagData.SearchContour = Convert.ToInt32(value);
-                            break;
-                        case TagDefinitions.DIR_TYPE:
-                            tagData.DirType = (TagDefinitions.DirectionType)Convert.ToInt32(value);
-                            break;
-                    }
-                }
+                TagData tagData = e.Data;
 
                 // 내부 처리
                 lastTagData = tagData;
@@ -712,25 +503,17 @@ namespace RealtimeITagControl
                 // 디버깅 로그 (최초 1회만)
                 if (currentMpfPath == null && !string.IsNullOrEmpty(newMpfPath))
                 {
-                    LogToFile("=== MPF 경로 정보 (최초) ===");
-                    LogToFile($"WorkDir: '{tagData.WorkDir}'");
-                    LogToFile($"WorkMpfName: '{tagData.WorkMpfName}'");
-                    LogToFile($"FullMpfPath: '{newMpfPath}'");
-                    LogToFile("===========================\n");
                 }
                 
                 if (!string.IsNullOrEmpty(newMpfPath) && newMpfPath != currentMpfPath)
                 {
-                    LogToFile($"📂 새 MPF 파일 감지: {newMpfPath}");
                     bool loaded = LoadMpfFile(newMpfPath);
                     if (loaded)
                     {
                         currentTraceState = TraceState.Loaded;
-                        LogToFile($"✅ MPF 로드 및 상태 변경: Loaded");
                     }
                     else
                     {
-                        LogToFile($"❌ MPF 로드 실패");
                     }
                 }
 
@@ -739,36 +522,18 @@ namespace RealtimeITagControl
 
                 // Viewer 업데이트
                 UpdateViewer(tagData);
-
-                // 이벤트 발생 (외부 구독자에게 전달)
-                DataChanged?.Invoke(this, new TagDataEventArgs(tagData));
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"[RealtimeITagControl] OnDataChanged 오류: {ex.Message}");
             }
         }
 
-        public void OnWriteComplete(int RegisterCookie, object TagNames, object Cookies)
+        /// <summary>
+        /// ITagManager ConnectionChanged 이벤트 핸들러
+        /// </summary>
+        private void ITagManager_ConnectionChanged(object sender, bool isConnected)
         {
-            // 필요 시 구현
-        }
-
-        public void OnError(int RegisterCookie, object TagNames, object Cookies, object Errors)
-        {
-            System.Diagnostics.Debug.WriteLine($"[RealtimeITagControl] OnError: RegisterCookie={RegisterCookie}");
-        }
-
-        public void OnCanceled(int RegisterCookie)
-        {
-            isCyclicReading = false;
-            System.Diagnostics.Debug.WriteLine("[RealtimeITagControl] OnCanceled: 주기적 읽기 취소됨");
             UpdateConnectionStatusUI();
-        }
-
-        public void OnRemoved(int RegisterCookie, object Cookies)
-        {
-            System.Diagnostics.Debug.WriteLine("[RealtimeITagControl] OnRemoved");
         }
 
         #endregion
@@ -781,12 +546,11 @@ namespace RealtimeITagControl
             {
                 if (programInfoPanel != null && !programInfoPanel.IsDisposed)
                 {
-                    programInfoPanel.UpdateConnectionStatus(isConnected, isCyclicReading, lastErrorMessage);
+                    programInfoPanel.UpdateConnectionStatus(tagManager.IsConnected, tagManager.IsCyclicReading, tagManager.LastErrorMessage);
                 }
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"[RealtimeITagControl] UpdateConnectionStatusUI 오류: {ex.Message}");
             }
         }
 
@@ -803,38 +567,30 @@ namespace RealtimeITagControl
         {
             try
             {
-                LogToFile("=== LoadMpfFile 시작 ===");
-                LogToFile($"요청 경로: {mpfPath}");
                 
                 // 1. 파일 경로 유효성 검사
                 if (string.IsNullOrEmpty(mpfPath))
                 {
-                    LogToFile("❌ 파일 경로가 비어있음");
                     return false;
                 }
 
                 // 2. 파일 존재 확인
                 bool fileExists = File.Exists(mpfPath);
-                LogToFile($"파일 존재 여부: {fileExists}");
                 
                 if (!fileExists)
                 {
-                    LogToFile($"❌ 파일 없음: {mpfPath}");
                     return false;
                 }
 
                 // 3. 이미 로드된 파일인지 확인 (재로드 방지)
                 if (currentMpfPath == mpfPath && mpfProgram != null)
                 {
-                    LogToFile($"ℹ️ 이미 로드된 파일 (재로드 안함)");
                     return true;
                 }
 
-                LogToFile($"📂 MPF 파일 파싱 시작...");
 
                 // 4. MPF 파일 읽기
                 string fileContent = System.IO.File.ReadAllText(mpfPath);
-                LogToFile($"   - 파일 읽기 완료: {fileContent.Length} bytes");
 
                 // 5. MPF 파일 파싱
                 var parser = new MPFParser();
@@ -842,7 +598,6 @@ namespace RealtimeITagControl
 
                 if (mpfProgram == null)
                 {
-                    LogToFile($"❌ MPF 파싱 결과 null");
                     return false;
                 }
 
@@ -857,10 +612,6 @@ namespace RealtimeITagControl
                     }
                 }
 
-                LogToFile($"✅ MPF 파싱 성공!");
-                LogToFile($"   - 파일명: {Path.GetFileName(mpfPath)}");
-                LogToFile($"   - 파트 수: {totalParts}");
-                LogToFile($"   - 컨투어 수: {totalContours}");
 
                 // 7. 현재 로드된 파일 경로 저장
                 currentMpfPath = mpfPath;
@@ -869,19 +620,12 @@ namespace RealtimeITagControl
                 if (camViewerControl != null && !camViewerControl.IsDisposed)
                 {
                     camViewerControl.LoadMPFFile(mpfPath);
-                    LogToFile("CamViewerControl에 MPF 파일 로드 완료");
                 }
 
-                LogToFile("=== LoadMpfFile 완료 ===\n");
                 return true;
             }
             catch (Exception ex)
             {
-                LogToFile($"❌ LoadMpfFile 예외 발생!");
-                LogToFile($"   Exception: {ex.GetType().Name}");
-                LogToFile($"   Message: {ex.Message}");
-                LogToFile($"   StackTrace: {ex.StackTrace}");
-                LogToFile("=== LoadMpfFile 실패 ===\n");
                 return false;
             }
         }
@@ -898,7 +642,7 @@ namespace RealtimeITagControl
             try
             {
                 // 1. ITag 연결 확인
-                if (!isConnected)
+                if (!tagManager.IsConnected)
                 {
                     return;
                 }
@@ -918,7 +662,6 @@ namespace RealtimeITagControl
                         if (currentTraceState != TraceState.Tracing)
                         {
                             StartTracing();
-                            System.Diagnostics.Debug.WriteLine("[RealtimeITagControl] 🔄 Trace 시작 (처음부터)");
                         }
                         
                         // 실시간 컨투어 상태 업데이트
@@ -939,13 +682,11 @@ namespace RealtimeITagControl
                             {
                                 // 마지막까지 완료된 경우 모든 컨투어를 Completed 처리
                                 CompleteTracing();
-                                System.Diagnostics.Debug.WriteLine("[RealtimeITagControl] ✅ Trace 완료 - 마지막 파트/컨투어 도달");
                             }
                             else
                             {
                                 // 중간에 멈춘 경우 현재까지만 업데이트
                                 UpdateContourStatus(tagData);
-                                System.Diagnostics.Debug.WriteLine($"[RealtimeITagControl] ⏹️ Trace 중지 - Part {tagData.CurrentPart}, Contour {tagData.CurrentContour}");
                             }
                         }
                         currentTraceState = TraceState.Completed;
@@ -958,7 +699,6 @@ namespace RealtimeITagControl
                         if (currentTraceState == TraceState.Tracing)
                         {
                             PauseTracing();
-                            System.Diagnostics.Debug.WriteLine($"[RealtimeITagControl] ⏸️ Trace 일시정지 (WorkStatus={tagData.WorkStatus})");
                         }
                         currentTraceState = TraceState.Paused;
                         isTracing = false;
@@ -970,7 +710,6 @@ namespace RealtimeITagControl
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"[RealtimeITagControl] ProcessTraceLogic 오류: {ex.Message}");
             }
         }
         
@@ -1055,7 +794,6 @@ namespace RealtimeITagControl
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"[RealtimeITagControl] UpdateContourStatus 오류: {ex.Message}");
             }
         }
 
@@ -1066,7 +804,6 @@ namespace RealtimeITagControl
         {
             try
             {
-                System.Diagnostics.Debug.WriteLine("[RealtimeITagControl] StartTracing 호출 - 렌더링 상태 초기화");
                 
                 // 1. 컨투어 상태 맵 초기화
                 if (contourStatusMap == null)
@@ -1098,7 +835,6 @@ namespace RealtimeITagControl
                     }
                 }
                 
-                System.Diagnostics.Debug.WriteLine($"[RealtimeITagControl] 렌더링 초기화 완료 - {contourStatusMap?.Count ?? 0}개 컨투어");
                 
                 // 3. CamViewerControl Trace 시작
                 if (camViewerControl != null && !camViewerControl.IsDisposed)
@@ -1108,7 +844,6 @@ namespace RealtimeITagControl
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"[RealtimeITagControl] StartTracing 오류: {ex.Message}");
             }
         }
 
@@ -1119,7 +854,6 @@ namespace RealtimeITagControl
         {
             try
             {
-                System.Diagnostics.Debug.WriteLine("[RealtimeITagControl] CompleteTracing 호출 - 모든 컨투어 완료 처리");
                 
                 // 모든 컨투어를 Completed 상태로 변경
                 if (contourStatusMap != null)
@@ -1138,7 +872,6 @@ namespace RealtimeITagControl
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"[RealtimeITagControl] CompleteTracing 오류: {ex.Message}");
             }
         }
 
@@ -1149,14 +882,12 @@ namespace RealtimeITagControl
         {
             try
             {
-                System.Diagnostics.Debug.WriteLine("[RealtimeITagControl] PauseTracing 호출 - 현재 상태 유지");
                 
                 // 현재 상태 유지 (아무 동작 안함)
                 // Viewer는 자동으로 현재 상태 유지
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"[RealtimeITagControl] PauseTracing 오류: {ex.Message}");
             }
         }
 
@@ -1178,7 +909,6 @@ namespace RealtimeITagControl
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"[RealtimeITagControl] UpdateViewer 오류: {ex.Message}");
             }
         }
 
@@ -1188,7 +918,6 @@ namespace RealtimeITagControl
 
         private void ProgramInfoPanel_SimulationClicked(object sender, EventArgs e)
         {
-            System.Diagnostics.Debug.WriteLine("[RealtimeITagControl] 시뮬레이션 버튼 클릭");
             
             // 시뮬레이션 상태에 따라 토글 (시작/일시정지/재개)
             if (camViewerControl != null)
@@ -1202,21 +931,18 @@ namespace RealtimeITagControl
                     case Simulation.SimulationState.Completed:
                         // 시뮬레이션 시작
                         camViewerControl.StartSimulation();
-                        System.Diagnostics.Debug.WriteLine("[RealtimeITagControl] 시뮬레이션 시작");
                         UpdateSimulationButtonUI();
                         break;
                         
                     case Simulation.SimulationState.Running:
                         // 일시정지
                         camViewerControl.PauseSimulation();
-                        System.Diagnostics.Debug.WriteLine("[RealtimeITagControl] 시뮬레이션 일시정지");
                         UpdateSimulationButtonUI();
                         break;
                         
                     case Simulation.SimulationState.Paused:
                         // 재개
                         camViewerControl.ResumeSimulation();
-                        System.Diagnostics.Debug.WriteLine("[RealtimeITagControl] 시뮬레이션 재개");
                         UpdateSimulationButtonUI();
                         break;
                 }
@@ -1225,13 +951,11 @@ namespace RealtimeITagControl
 
         private void ProgramInfoPanel_StopSimulationClicked(object sender, EventArgs e)
         {
-            System.Diagnostics.Debug.WriteLine("[RealtimeITagControl] 시뮬레이션 중단 버튼 클릭");
             
             // 시뮬레이션 중단
             if (camViewerControl != null)
             {
                 camViewerControl.StopSimulation();
-                System.Diagnostics.Debug.WriteLine("[RealtimeITagControl] 시뮬레이션 중단됨");
                 UpdateSimulationButtonUI();
             }
         }
@@ -1253,28 +977,120 @@ namespace RealtimeITagControl
 
         private void ProgramInfoPanel_ElementSelectClicked(object sender, EventArgs e)
         {
-            System.Diagnostics.Debug.WriteLine("[RealtimeITagControl] 엘리먼트 선택 버튼 클릭");
-            
-            // Toggle Contour Selection Mode
-            if (camViewerControl != null)
+            // Element 선택 팝업 호출
+            if (mpfProgram == null)
             {
-                var selectionManager = camViewerControl.GetSelectionManager();
-                if (selectionManager != null)
+                MessageBox.Show("MPF 파일을 먼저 로드하세요.", "Element 선택", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+
+            try
+            {
+                // Element 선택 팝업 폼 생성
+                var elementSelectForm = new System.Windows.Forms.Form
                 {
-                    // Toggle between None and Contour selection mode
-                    if (selectionManager.CurrentMode == Selection.SelectionManager.SelectionMode.Contour)
+                    Text = "Element 선택",
+                    Size = new System.Drawing.Size(400, 250),
+                    StartPosition = System.Windows.Forms.FormStartPosition.CenterParent,
+                    FormBorderStyle = System.Windows.Forms.FormBorderStyle.FixedDialog,
+                    MaximizeBox = false,
+                    MinimizeBox = false
+                };
+
+                var lblPart = new Label { Text = "Part 번호:", Location = new System.Drawing.Point(20, 20), Size = new System.Drawing.Size(80, 20) };
+                var numPart = new NumericUpDown { Location = new System.Drawing.Point(110, 20), Size = new System.Drawing.Size(100, 20), Minimum = 1, Maximum = mpfProgram.Parts.Count, Value = 1 };
+
+                var lblContour = new Label { Text = "Contour 번호:", Location = new System.Drawing.Point(20, 50), Size = new System.Drawing.Size(80, 20) };
+                var numContour = new NumericUpDown { Location = new System.Drawing.Point(110, 50), Size = new System.Drawing.Size(100, 20), Minimum = 1, Maximum = 1, Value = 1 };
+
+                var lblElement = new Label { Text = "Element 번호:", Location = new System.Drawing.Point(20, 80), Size = new System.Drawing.Size(80, 20) };
+                var numElement = new NumericUpDown { Location = new System.Drawing.Point(110, 80), Size = new System.Drawing.Size(100, 20), Minimum = 0, Maximum = 0, Value = 0 };
+
+                // Part 변경 시 Contour 최댓값 업데이트
+                numPart.ValueChanged += (s, args) =>
+                {
+                    int partIdx = (int)numPart.Value - 1;
+                    if (partIdx >= 0 && partIdx < mpfProgram.Parts.Count)
                     {
-                        // Turn off selection mode
-                        camViewerControl.SetSelectionMode(Selection.SelectionManager.SelectionMode.None);
-                        System.Diagnostics.Debug.WriteLine("[RealtimeITagControl] Contour Selection OFF");
+                        numContour.Maximum = mpfProgram.Parts[partIdx].Contours.Count;
+                        numContour.Value = 1;
                     }
-                    else
+                };
+
+                // Contour 변경 시 Element 최댓값 업데이트
+                numContour.ValueChanged += (s, args) =>
+                {
+                    int partIdx = (int)numPart.Value - 1;
+                    int contourIdx = (int)numContour.Value - 1;
+                    if (partIdx >= 0 && partIdx < mpfProgram.Parts.Count && 
+                        contourIdx >= 0 && contourIdx < mpfProgram.Parts[partIdx].Contours.Count)
                     {
-                        // Turn on contour selection mode
-                        camViewerControl.SetSelectionMode(Selection.SelectionManager.SelectionMode.Contour);
-                        System.Diagnostics.Debug.WriteLine("[RealtimeITagControl] Contour Selection ON");
+                        var contour = mpfProgram.Parts[partIdx].Contours[contourIdx];
+                        numElement.Maximum = contour.AllSegments.Count - 1;
+                        numElement.Value = 0;
+                    }
+                };
+
+                // 초기값 설정
+                numPart.Value = 1;
+
+                var btnOk = new Button { Text = "선택", Location = new System.Drawing.Point(120, 150), Size = new System.Drawing.Size(80, 30), DialogResult = DialogResult.OK };
+                var btnCancel = new Button { Text = "취소", Location = new System.Drawing.Point(210, 150), Size = new System.Drawing.Size(80, 30), DialogResult = DialogResult.Cancel };
+
+                elementSelectForm.Controls.AddRange(new Control[] { lblPart, numPart, lblContour, numContour, lblElement, numElement, btnOk, btnCancel });
+                elementSelectForm.AcceptButton = btnOk;
+                elementSelectForm.CancelButton = btnCancel;
+
+                if (elementSelectForm.ShowDialog() == DialogResult.OK)
+                {
+                    int partIdx = (int)numPart.Value - 1;
+                    int contourIdx = (int)numContour.Value - 1;
+                    int elementIdx = (int)numElement.Value;
+
+                    // Element 선택 호출
+                    if (camViewerControl != null)
+                    {
+                        var selectionManager = camViewerControl.GetSelectionManager();
+                        if (selectionManager != null)
+                        {
+                            selectionManager.SelectElement(partIdx, contourIdx, elementIdx, false);
+                            camViewerControl.Invalidate();
+                            LogHelper.Log("RealtimeITagControl", $"Element Selected: Part {partIdx + 1}, Contour {contourIdx + 1}, Element {elementIdx}");
+                        }
                     }
                 }
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Element 선택 오류: {ex.Message}", "오류", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
+
+        /// <summary>
+        /// TraceTestForm 호출 이벤트
+        /// </summary>
+        private void ProgramInfoPanel_TraceTestClicked(object sender, EventArgs e)
+        {
+            if (mpfProgram == null)
+            {
+                MessageBox.Show("MPF 파일을 먼저 로드하세요.", "Trace Test", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+
+            try
+            {
+                // CuttingProgressManager 생성
+                var progressManager = new Trace.CuttingProgressManager();
+                progressManager.SetProgram(mpfProgram);
+                
+                var traceTestForm = new Trace.TraceTestForm(progressManager, mpfProgram, camViewerControl);
+                traceTestForm.Show();
+                LogHelper.Log("RealtimeITagControl", "TraceTestForm opened");
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"TraceTestForm 오류: {ex.Message}", "오류", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                LogHelper.Log("RealtimeITagControl", $"TraceTestForm error: {ex.Message}");
             }
         }
 
@@ -1283,7 +1099,6 @@ namespace RealtimeITagControl
         /// </summary>
         private void ProgramInfoPanel_ShowPartNumberChanged(object sender, bool isChecked)
         {
-            System.Diagnostics.Debug.WriteLine($"[RealtimeITagControl] 파트 번호 표시: {isChecked}");
             
             if (camViewerControl != null)
             {
@@ -1303,7 +1118,6 @@ namespace RealtimeITagControl
         /// </summary>
         private void ProgramInfoPanel_ShowContourNumberChanged(object sender, bool isChecked)
         {
-            System.Diagnostics.Debug.WriteLine($"[RealtimeITagControl] 컨투어 번호 표시: {isChecked}");
             
             if (camViewerControl != null)
             {
@@ -1312,6 +1126,31 @@ namespace RealtimeITagControl
                 
                 // 화면 갱신
                 camViewerControl.Invalidate();
+            }
+        }
+
+        /// <summary>
+        /// 컨투어 선택 이벤트 핸들러 (ITag Write 수행)
+        /// </summary>
+        private void CamViewerControl_ContourSelected(object sender, CamViewerControl.ContourSelectedEventArgs e)
+        {
+            // ITag가 연결되어 있을 때만 Write 수행
+            if (!tagManager.IsConnected)
+            {
+                return;
+            }
+            
+            try
+            {
+                // HMI_VIEW_SEARCH_PART에 Part 번호 Write (1-based)
+                tagManager.WriteTag(TagDefinitions.SEARCH_PART, e.PartNumber);
+                
+                // HMI_VIEW_SEARCH_CONT에 Contour 번호 Write (1-based)
+                tagManager.WriteTag(TagDefinitions.SEARCH_CONT, e.ContourNumber);
+                
+            }
+            catch (Exception ex)
+            {
             }
         }
 

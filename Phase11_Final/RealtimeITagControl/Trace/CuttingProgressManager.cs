@@ -93,7 +93,6 @@ namespace RealtimeITagControl.Trace
         {
             if (program == null || program.Parts == null)
             {
-                System.Diagnostics.Debug.WriteLine("[CuttingProgress] No program loaded");
                 return false;
             }
 
@@ -104,13 +103,11 @@ namespace RealtimeITagControl.Trace
             // Validate indices
             if (partIdx < 0 || partIdx >= program.Parts.Count)
             {
-                System.Diagnostics.Debug.WriteLine($"[CuttingProgress] Invalid part number: {partNumber}");
                 return false;
             }
 
             if (contourIdx < 0 || contourIdx >= program.Parts[partIdx].Contours.Count)
             {
-                System.Diagnostics.Debug.WriteLine($"[CuttingProgress] Invalid contour number: {contourNumber}");
                 return false;
             }
 
@@ -128,7 +125,6 @@ namespace RealtimeITagControl.Trace
             isUnderCuttingProgress = true;
             hasCuttingProgress = false;
 
-            System.Diagnostics.Debug.WriteLine($"[CuttingProgress] Started: Part {partNumber}, Contour {contourNumber}, Reverse={reverse}");
             
             OnProgressUpdated(new CuttingProgressEventArgs
             {
@@ -149,7 +145,6 @@ namespace RealtimeITagControl.Trace
         {
             if (!isUnderCuttingProgress)
             {
-                System.Diagnostics.Debug.WriteLine("[CuttingProgress] Not under cutting progress");
                 return false;
             }
 
@@ -190,7 +185,6 @@ namespace RealtimeITagControl.Trace
             // TODO: Implement precise distance calculation
             totalCutDistance += GetElementLength(partIdx, contourIdx, elementIndex) * progress;
 
-            System.Diagnostics.Debug.WriteLine($"[CuttingProgress] Update: P{partNumber} C{contourNumber} E{elementIndex} Prog={progress:F2}");
 
             OnProgressUpdated(new CuttingProgressEventArgs
             {
@@ -256,7 +250,6 @@ namespace RealtimeITagControl.Trace
         public void StopCuttingProgress()
         {
             isUnderCuttingProgress = false;
-            System.Diagnostics.Debug.WriteLine("[CuttingProgress] Stopped");
             
             OnProgressUpdated(new CuttingProgressEventArgs
             {
@@ -285,7 +278,6 @@ namespace RealtimeITagControl.Trace
             elementProgress = 0.0;
             totalCutDistance = 0.0;
 
-            System.Diagnostics.Debug.WriteLine("[CuttingProgress] Reset");
             
             OnProgressUpdated(new CuttingProgressEventArgs
             {
@@ -302,7 +294,6 @@ namespace RealtimeITagControl.Trace
                 return;
 
             elementProgress = 1.0;
-            System.Diagnostics.Debug.WriteLine($"[CuttingProgress] Completed element: P{currentPartIndex+1} C{currentContourIndex+1} E{currentElementIndex}");
             
             OnProgressUpdated(new CuttingProgressEventArgs
             {
@@ -326,7 +317,6 @@ namespace RealtimeITagControl.Trace
             currentElementIndex = contour.AllSegments.Count - 1;
             elementProgress = 1.0;
 
-            System.Diagnostics.Debug.WriteLine($"[CuttingProgress] Completed contour: P{currentPartIndex+1} C{currentContourIndex+1}");
             
             OnProgressUpdated(new CuttingProgressEventArgs
             {

@@ -41,20 +41,17 @@ namespace RealtimeITagControl.Trace
             // 유효성 검사
             if (_mpfProgram == null)
             {
-                System.Diagnostics.Debug.WriteLine("TraceManager: MPF program not loaded");
                 return false;
             }
 
             if (startPart < 1 || startPart > _mpfProgram.Parts.Count)
             {
-                System.Diagnostics.Debug.WriteLine($"TraceManager: Invalid part number {startPart}");
                 return false;
             }
 
             var part = _mpfProgram.Parts[startPart - 1];
             if (startContour < 1 || startContour > part.Contours.Count)
             {
-                System.Diagnostics.Debug.WriteLine($"TraceManager: Invalid contour number {startContour}");
                 return false;
             }
 
@@ -74,12 +71,10 @@ namespace RealtimeITagControl.Trace
             try
             {
                 NativeRenderer.StartCuttingTrace(startPart, startContour, isReverse ? 1 : 0);
-                System.Diagnostics.Debug.WriteLine($"TraceManager: Started trace at Part {startPart}, Contour {startContour}");
                 return true;
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"TraceManager: Failed to start trace - {ex.Message}");
                 _isActive = false;
                 _currentProgress.IsActive = false;
                 return false;
@@ -102,7 +97,6 @@ namespace RealtimeITagControl.Trace
         {
             if (!_isActive)
             {
-                System.Diagnostics.Debug.WriteLine("TraceManager: Update called but trace not active");
                 return false;
             }
 
@@ -114,14 +108,12 @@ namespace RealtimeITagControl.Trace
 
             if (part < 1 || part > _mpfProgram.Parts.Count)
             {
-                System.Diagnostics.Debug.WriteLine($"TraceManager: Invalid part number {part} in update");
                 return false;
             }
 
             var currentPart = _mpfProgram.Parts[part - 1];
             if (contour < 1 || contour > currentPart.Contours.Count)
             {
-                System.Diagnostics.Debug.WriteLine($"TraceManager: Invalid contour number {contour} in update");
                 return false;
             }
 
@@ -145,7 +137,6 @@ namespace RealtimeITagControl.Trace
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"TraceManager: Failed to update trace - {ex.Message}");
                 return false;
             }
         }
@@ -167,11 +158,9 @@ namespace RealtimeITagControl.Trace
             try
             {
                 NativeRenderer.StopCuttingTrace();
-                System.Diagnostics.Debug.WriteLine("TraceManager: Stopped trace");
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"TraceManager: Failed to stop trace - {ex.Message}");
             }
         }
 
@@ -226,7 +215,6 @@ namespace RealtimeITagControl.Trace
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"TraceManager: Failed to draw laser head marker - {ex.Message}");
             }
         }
     }

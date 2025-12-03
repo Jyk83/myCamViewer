@@ -391,6 +391,7 @@ namespace RealtimeITagControl.Trace
             if (success)
             {
                 AddLog($"✓ 절단 시작: Part {partNo}, Contour {contourNo}");
+                LogHelper.Log("TraceTestForm", $"Cutting Start: Part {partNo}, Contour {contourNo}");
                 lblStatus.Text = "상태: 진행 중 (In Progress)";
                 lblStatus.ForeColor = Color.LimeGreen;
             }
@@ -429,6 +430,7 @@ namespace RealtimeITagControl.Trace
         {
             progressManager.StopCuttingProgress();
             AddLog("■ 절단 중지");
+            LogHelper.Log("TraceTestForm", "Cutting Stopped");
             lblStatus.Text = "상태: 중지됨 (Stopped)";
             lblStatus.ForeColor = Color.Orange;
             UpdateButtonStates();
@@ -437,6 +439,7 @@ namespace RealtimeITagControl.Trace
         private void BtnReset_Click(object sender, EventArgs e)
         {
             progressManager.ResetCuttingProgress();
+            LogHelper.Log("TraceTestForm", "Cutting Progress Reset");
             AddLog("⟲ 진행 상태 리셋");
             lblStatus.Text = "상태: 대기 중 (Idle)";
             lblStatus.ForeColor = Color.Yellow;

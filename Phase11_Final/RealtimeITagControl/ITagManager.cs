@@ -115,72 +115,59 @@ namespace RealtimeITagControl
                 // 이미 연결되어 있으면 성공 반환
                 if (isConnected && m_ITag != null)
                 {
-                    System.Diagnostics.Debug.WriteLine("[ITagManager] 이미 연결되어 있습니다.");
                     return true;
                 }
 
                 try
                 {
-                    System.Diagnostics.Debug.WriteLine("[ITagManager] === ITag 연결 시작 ===");
                     
                     // 1순위: Site.GetService (WinCC 내부)
                     if (siteProvider != null)
                     {
-                        System.Diagnostics.Debug.WriteLine("[ITagManager] Site.GetService 시도...");
                         try
                         {
                             m_ITag = (ITag)siteProvider.GetService(typeof(ITag));
                             if (m_ITag != null)
                             {
-                                System.Diagnostics.Debug.WriteLine("[ITagManager] ✅ ITag: Site.GetService로 획득 성공");
                             }
                             else
                             {
-                                System.Diagnostics.Debug.WriteLine("[ITagManager] ⚠️ Site.GetService 반환값 null");
                             }
                         }
                         catch (Exception ex)
                         {
-                            System.Diagnostics.Debug.WriteLine($"[ITagManager] ❌ Site.GetService 오류: {ex.Message}");
                             LastErrorMessage = $"Site.GetService 실패: {ex.Message}";
                         }
                     }
                     else
                     {
-                        System.Diagnostics.Debug.WriteLine("[ITagManager] ⚠️ siteProvider가 null입니다.");
                         LastErrorMessage = "IServiceProvider가 null입니다 (WinCC 외부 실행?)";
                     }
 
                     // 2순위: COM ProgID로 생성 (독립 실행)
                     if (m_ITag == null)
                     {
-                        System.Diagnostics.Debug.WriteLine("[ITagManager] COM ProgID 생성 시도...");
                         try
                         {
                             Type itagType = Type.GetTypeFromProgID("CCITagControl.ITagControl.1");
                             if (itagType != null)
                             {
-                                System.Diagnostics.Debug.WriteLine($"[ITagManager] COM Type 획득: {itagType.FullName}");
                                 m_ITag = (ITag)Activator.CreateInstance(itagType);
                                 if (m_ITag != null)
                                 {
-                                    System.Diagnostics.Debug.WriteLine("[ITagManager] ✅ ITag: COM ProgID로 생성 성공");
                                 }
                                 else
                                 {
-                                    System.Diagnostics.Debug.WriteLine("[ITagManager] ❌ Activator.CreateInstance 반환값 null");
                                     LastErrorMessage = "COM 인스턴스 생성 실패 (WinCC Runtime 미실행?)";
                                 }
                             }
                             else
                             {
-                                System.Diagnostics.Debug.WriteLine("[ITagManager] ❌ COM ProgID를 찾을 수 없습니다.");
                                 LastErrorMessage = "COM ProgID 'CCITagControl.ITagControl.1'을 찾을 수 없습니다";
                             }
                         }
                         catch (Exception ex)
                         {
-                            System.Diagnostics.Debug.WriteLine($"[ITagManager] ❌ COM 생성 오류: {ex.Message}");
                             LastErrorMessage = $"COM 생성 실패: {ex.Message}";
                         }
                     }
@@ -188,7 +175,6 @@ namespace RealtimeITagControl
                     if (m_ITag == null)
                     {
                         string errorMsg = "ITag 인스턴스 생성 실패 - WinCC Runtime이 실행 중인지 확인하세요";
-                        System.Diagnostics.Debug.WriteLine($"[ITagManager] ❌ {errorMsg}");
                         if (string.IsNullOrEmpty(LastErrorMessage))
                         {
                             LastErrorMessage = errorMsg;
@@ -198,21 +184,15 @@ namespace RealtimeITagControl
                     }
 
                     // ITagSink 콜백 등록 (this = ITagManager 자신)
-                    System.Diagnostics.Debug.WriteLine("[ITagManager] ITagSink 등록 시도...");
                     m_RegisterCookie = m_ITag.Register(this);
-                    System.Diagnostics.Debug.WriteLine($"[ITagManager] ✅ ITagSink 등록 완료 (Cookie: {m_RegisterCookie})");
 
                     isConnected = true;
                     ConnectionChanged?.Invoke(this, true);
-                    System.Diagnostics.Debug.WriteLine("[ITagManager] ✅ ITag 서버 연결 성공 (전역 공유)");
-                    System.Diagnostics.Debug.WriteLine("[ITagManager] === ITag 연결 완료 ===");
                     return true;
                 }
                 catch (Exception ex)
                 {
                     string errorMsg = $"Connect 예외 발생: {ex.Message}";
-                    System.Diagnostics.Debug.WriteLine($"[ITagManager] ❌ {errorMsg}");
-                    System.Diagnostics.Debug.WriteLine($"[ITagManager] 스택 트레이스: {ex.StackTrace}");
                     LastErrorMessage = errorMsg;
                     ConnectionChanged?.Invoke(this, false);
                     return false;
@@ -233,17 +213,17 @@ namespace RealtimeITagControl
 
                     if (m_ITag != null && isConnected)
                     {
+                        LogHelper.Log("ITagManager", "m_RegisterCookie");
                         m_ITag.Unregister((int)m_RegisterCookie);
-                        System.Diagnostics.Debug.WriteLine("[ITagManager] ITagSink 등록 해제");
                     }
 
                     isConnected = false;
                     ConnectionChanged?.Invoke(this, false);
-                    System.Diagnostics.Debug.WriteLine("[ITagManager] ITag 서버 연결 해제");
+                    m_ITag = null;  // ITag 참조 완전 해제 (중요!)
                 }
                 catch (Exception ex)
                 {
-                    System.Diagnostics.Debug.WriteLine($"[ITagManager] Disconnect 오류: {ex.Message}");
+                    LogHelper.Log("ITagManager", "exception m_RegisterCookie");
                 }
             }
         }
@@ -261,13 +241,11 @@ namespace RealtimeITagControl
             {
                 if (!isConnected)
                 {
-                    System.Diagnostics.Debug.WriteLine("[ITagManager] StartCyclicRead: 연결 안됨");
                     return false;
                 }
 
                 if (isCyclicReading)
                 {
-                    System.Diagnostics.Debug.WriteLine("[ITagManager] StartCyclicRead: 이미 실행 중");
                     return true;
                 }
 
@@ -288,12 +266,10 @@ namespace RealtimeITagControl
                     );
 
                     isCyclicReading = true;
-                    System.Diagnostics.Debug.WriteLine($"[ITagManager] ✅ 주기적 읽기 시작 ({tagCount}개 Tag, {cycleMs}ms)");
                     return true;
                 }
                 catch (Exception ex)
                 {
-                    System.Diagnostics.Debug.WriteLine($"[ITagManager] ❌ StartCyclicRead 오류: {ex.Message}");
                     return false;
                 }
             }
@@ -313,11 +289,9 @@ namespace RealtimeITagControl
                 {
                     m_ITag.Cancel((int)m_RegisterCookie);
                     isCyclicReading = false;
-                    System.Diagnostics.Debug.WriteLine("[ITagManager] 주기적 읽기 중지");
                 }
                 catch (Exception ex)
                 {
-                    System.Diagnostics.Debug.WriteLine($"[ITagManager] StopCyclicRead 오류: {ex.Message}");
                 }
             }
         }
@@ -331,7 +305,6 @@ namespace RealtimeITagControl
 
             if (!isConnected)
             {
-                System.Diagnostics.Debug.WriteLine("[ITagManager] ReadTag: 연결 안됨");
                 return false;
             }
 
@@ -339,12 +312,10 @@ namespace RealtimeITagControl
             {
                 object result = m_ITag.ReadTag((int)m_RegisterCookie, tagName);
                 value = result;
-                System.Diagnostics.Debug.WriteLine($"[ITagManager] ReadTag '{tagName}' = {value}");
                 return true;
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"[ITagManager] ReadTag 오류: {ex.Message}");
                 return false;
             }
         }
@@ -358,7 +329,6 @@ namespace RealtimeITagControl
 
             if (!isConnected)
             {
-                System.Diagnostics.Debug.WriteLine("[ITagManager] ReadTags: 연결 안됨");
                 return false;
             }
 
@@ -373,7 +343,6 @@ namespace RealtimeITagControl
                     {
                         values[i] = resultArr.GetValue(i);
                     }
-                    System.Diagnostics.Debug.WriteLine($"[ITagManager] ReadTags: {values.Length}개 읽기 성공");
                     return true;
                 }
 
@@ -381,7 +350,6 @@ namespace RealtimeITagControl
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"[ITagManager] ReadTags 오류: {ex.Message}");
                 return false;
             }
         }
@@ -393,19 +361,16 @@ namespace RealtimeITagControl
         {
             if (!isConnected)
             {
-                System.Diagnostics.Debug.WriteLine("[ITagManager] WriteTag: 연결 안됨");
                 return false;
             }
 
             try
             {
                 m_ITag.WriteTag((int)m_RegisterCookie, tagName, value);
-                System.Diagnostics.Debug.WriteLine($"[ITagManager] WriteTag '{tagName}' = {value}");
                 return true;
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"[ITagManager] WriteTag 오류: {ex.Message}");
                 return false;
             }
         }
@@ -492,7 +457,6 @@ namespace RealtimeITagControl
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"[ITagManager] OnDataChanged 오류: {ex.Message}");
             }
         }
 
@@ -509,7 +473,6 @@ namespace RealtimeITagControl
         /// </summary>
         public void OnError(int RegisterCookie, object TagNames, object Cookies, object Errors)
         {
-            System.Diagnostics.Debug.WriteLine($"[ITagManager] OnError: RegisterCookie={RegisterCookie}");
         }
 
         /// <summary>
@@ -518,7 +481,6 @@ namespace RealtimeITagControl
         public void OnCanceled(int RegisterCookie)
         {
             isCyclicReading = false;
-            System.Diagnostics.Debug.WriteLine("[ITagManager] OnCanceled: 주기적 읽기 취소됨");
         }
 
         /// <summary>
@@ -526,7 +488,6 @@ namespace RealtimeITagControl
         /// </summary>
         public void OnRemoved(int RegisterCookie, object Cookies)
         {
-            System.Diagnostics.Debug.WriteLine("[ITagManager] OnRemoved");
         }
 
         #endregion

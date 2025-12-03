@@ -19,70 +19,72 @@ namespace RealtimeITagControl
     internal static class NativeRenderer
     {
         private const string DllName = "NativeRenderer.dll";
+        private const CallingConvention CallConv = CallingConvention.Cdecl;
+        private const CharSet CharSetType = CharSet.Ansi;
 
-        [DllImport(DllName, CallingConvention = CallingConvention.Cdecl)]
+        [DllImport(DllName, CallingConvention = CallConv, CharSet = CharSetType)]
         public static extern int InitializeRenderer(IntPtr windowHandle);
 
-        [DllImport(DllName, CallingConvention = CallingConvention.Cdecl)]
+        [DllImport(DllName, CallingConvention = CallConv, CharSet = CharSetType)]
         public static extern void CleanupRenderer();
 
-        [DllImport(DllName, CallingConvention = CallingConvention.Cdecl)]
+        [DllImport(DllName, CallingConvention = CallConv, CharSet = CharSetType)]
         public static extern void ResizeViewport(int width, int height);
 
-        [DllImport(DllName, CallingConvention = CallingConvention.Cdecl)]
+        [DllImport(DllName, CallingConvention = CallConv, CharSet = CharSetType)]
         public static extern void RenderFrame();
 
-        [DllImport(DllName, CallingConvention = CallingConvention.Cdecl)]
+        [DllImport(DllName, CallingConvention = CallConv, CharSet = CharSetType)]
         public static extern void DrawRectangle(float x, float y, float width, float height, 
                                                 float r, float g, float b);
 
-        [DllImport(DllName, CallingConvention = CallingConvention.Cdecl)]
+        [DllImport(DllName, CallingConvention = CallConv, CharSet = CharSetType)]
         public static extern void DrawCircle(float x, float y, float radius, 
                                              float r, float g, float b);
 
-        [DllImport(DllName, CallingConvention = CallingConvention.Cdecl)]
+        [DllImport(DllName, CallingConvention = CallConv, CharSet = CharSetType)]
         public static extern void ClearShapes();
 
-        [DllImport(DllName, CallingConvention = CallingConvention.Cdecl)]
+        [DllImport(DllName, CallingConvention = CallConv, CharSet = CharSetType)]
         public static extern void SetViewTransform(float zoom, float panX, float panY);
 
         // MPF drawing functions
-        [DllImport(DllName, CallingConvention = CallingConvention.Cdecl)]
+        [DllImport(DllName, CallingConvention = CallConv, CharSet = CharSetType)]
         public static extern void BeginMPFRender();
 
-        [DllImport(DllName, CallingConvention = CallingConvention.Cdecl)]
+        [DllImport(DllName, CallingConvention = CallConv, CharSet = CharSetType)]
         public static extern void BeginMPFRenderWithBackground(float bgR, float bgG, float bgB);
 
-        [DllImport(DllName, CallingConvention = CallingConvention.Cdecl)]
+        [DllImport(DllName, CallingConvention = CallConv, CharSet = CharSetType)]
         public static extern void EndMPFRender();
 
-        [DllImport(DllName, CallingConvention = CallingConvention.Cdecl)]
+        [DllImport(DllName, CallingConvention = CallConv, CharSet = CharSetType)]
         public static extern void SwapBuffersNow();
 
-        [DllImport(DllName, CallingConvention = CallingConvention.Cdecl)]
+        [DllImport(DllName, CallingConvention = CallConv, CharSet = CharSetType)]
         public static extern void DrawLine(float x1, float y1, float x2, float y2, 
                                           float r, float g, float b, float lineWidth);
 
-        [DllImport(DllName, CallingConvention = CallingConvention.Cdecl)]
+        [DllImport(DllName, CallingConvention = CallConv, CharSet = CharSetType)]
         public static extern void DrawArc(float centerX, float centerY, float radius, 
                                          float startAngle, float endAngle, int clockwise, 
                                          float r, float g, float b, float lineWidth);
 
-        [DllImport(DllName, CallingConvention = CallingConvention.Cdecl)]
+        [DllImport(DllName, CallingConvention = CallConv, CharSet = CharSetType)]
         public static extern void DrawPoint(float x, float y, float size, 
                                            float r, float g, float b);
 
-        [DllImport(DllName, CallingConvention = CallingConvention.Cdecl)]
+        [DllImport(DllName, CallingConvention = CallConv, CharSet = CharSetType)]
         public static extern void DrawFilledRectangle(float x, float y, float width, float height,
                                                       float r, float g, float b);
 
         // Phase 5.3: Dashed rectangle for part boundaries
-        [DllImport(DllName, CallingConvention = CallingConvention.Cdecl)]
+        [DllImport(DllName, CallingConvention = CallConv, CharSet = CharSetType)]
         public static extern void DrawDashedRectangle(float x, float y, float width, float height,
                                                       float r, float g, float b, float lineWidth, int dashPattern);
 
         // Phase 5.5: Canvas orientation
-        [DllImport(DllName, CallingConvention = CallingConvention.Cdecl)]
+        [DllImport(DllName, CallingConvention = CallConv, CharSet = CharSetType)]
         public static extern void SetCanvasOrientation(int orientation);
 
         // Phase 8.1: Text rendering for part/contour numbers
@@ -158,7 +160,11 @@ namespace RealtimeITagControl
         
         // Phase 5 Debug: Show selection areas
         private bool showSelectionAreas = false;
-
+        
+        // Dispose 중복 호출 방지
+        private bool isDisposed = false;
+        private readonly object disposeLock = new object();
+        
         public CamViewerControl()
         {
             InitializeComponent();
@@ -243,19 +249,23 @@ namespace RealtimeITagControl
                 }
 
                 int result = NativeRenderer.InitializeRenderer(renderPanel.Handle);
-                if (result == 0)
+                if (result == 0)  // ✅ NativeRenderer 규약: 0 = 실패, 1 = 성공
                 {
-                    MessageBox.Show("Failed to initialize OpenGL renderer.\n\n" +
+                    MessageBox.Show($"Failed to initialize OpenGL renderer (Error code: {result}).\n\n" +
                                     "Possible causes:\n" +
                                     "- Graphics driver doesn't support OpenGL\n" +
                                     "- Failed to create OpenGL context\n" +
-                                    "- Invalid pixel format\n\n" +
-                                    "Please update your graphics drivers.", 
+                                    "- Invalid pixel format\n" +
+                                    "- Invalid window handle\n\n" +
+                                    "Please update your graphics drivers or check system configuration.", 
                                     "OpenGL Initialization Error", 
                                     MessageBoxButtons.OK, 
                                     MessageBoxIcon.Error);
+                    LogHelper.Log("CamViewerCore", $"InitializeRenderer failed with error code: {result}");
                     return;
                 }
+                
+                LogHelper.Log("CamViewerCore", "OpenGL renderer initialized successfully");
 
                 isInitialized = true;
                 NativeRenderer.ResizeViewport(renderPanel.Width, renderPanel.Height);
@@ -942,9 +952,8 @@ namespace RealtimeITagControl
             };
             redrawTimer.Start();
 
-            // Phase 5: Setup selection managers
+            // Phase 5: Setup selection managers (\ud56d\uc0c1 Contour \ubaa8\ub4dc)
             selectionManager = new SelectionManager();
-            selectionManager.CurrentMode = SelectionManager.SelectionMode.None;
             selectionManager.SelectionChanged += SelectionManager_SelectionChanged;
 
             numberPositionManager = new NumberPositionManager();
@@ -978,7 +987,6 @@ namespace RealtimeITagControl
         {
             // Redraw to show cutting progress
             needsRedraw = true;
-            Log($"[CuttingProgress] P{e.PartIndex+1} C{e.ContourIndex+1} E{e.ElementIndex} = {e.Progress:F2}");
         }
 
         /// <summary>
@@ -1137,7 +1145,6 @@ namespace RealtimeITagControl
             // 로그는 MainForm에 전달
             if (SimulationLog != null)
             {
-                SimulationLog(this, message);
             }
         }
 
@@ -1162,6 +1169,9 @@ namespace RealtimeITagControl
         // General log event (for debug and selection logs)
         public event EventHandler<string> LogMessage;
         
+        // Contour selection event (for ITag write)
+        public event EventHandler<ContourSelectedEventArgs> ContourSelected;
+        
         public class MPFLoadedEventArgs : EventArgs
         {
             public string Version { get; set; }
@@ -1169,6 +1179,14 @@ namespace RealtimeITagControl
             public double WorkpieceHeight { get; set; }
             public int PartCount { get; set; }
             public int ContourCount { get; set; }
+        }
+        
+        public class ContourSelectedEventArgs : EventArgs
+        {
+            public int PartIndex { get; set; }      // 0-based index
+            public int ContourIndex { get; set; }   // 0-based index
+            public int PartNumber { get; set; }     // 1-based number (for display/ITag)
+            public int ContourNumber { get; set; }  // 1-based number (for display/ITag)
         }
 
         private void UpdateViewTransform()
@@ -1563,22 +1581,12 @@ namespace RealtimeITagControl
                 return; // Don't start panning or selection
             }
 
-            // Phase 5: Handle selection modes
+            // Phase 5: 항상 Contour 선택 모드로 동작
             if (e.Button == MouseButtons.Left && selectionManager != null)
             {
-                if (selectionManager.CurrentMode == SelectionManager.SelectionMode.Contour)
-                {
-                    // Contour selection mode
-                    HandleContourSelection(e.Location);
-                    return; // Don't start panning
-                }
-                else if (selectionManager.CurrentMode == SelectionManager.SelectionMode.Element)
-                {
-                    // Element selection mode
-                    bool isCtrlPressed = (Control.ModifierKeys & Keys.Control) == Keys.Control;
-                    HandleElementSelection(e.Location, isCtrlPressed);
-                    return; // Don't start panning
-                }
+                // Contour selection mode (항상 활성)
+                HandleContourSelection(e.Location);
+                return; // Don't start panning
             }
 
             // Phase4: Left click also enables panning (only if not in selection mode)
@@ -1650,8 +1658,6 @@ namespace RealtimeITagControl
             float objectY = (float)(ndcY / zoom + panY);
 
             // Debug log
-            Log($"ScreenToObject: Screen({screenPos.X},{screenPos.Y}) → NDC({ndcX:F3},{ndcY:F3}) → Object({objectX:F3},{objectY:F3})");
-            Log($"  Zoom: {zoom:F3}, Pan: ({panX:F3},{panY:F3}), Scale: {workpieceScale:F3}");
 
             return new GeometryUtils.Point2D(objectX, objectY);
         }
@@ -1673,11 +1679,9 @@ namespace RealtimeITagControl
             (float X, float Y)[] partOffsets = CalculatePartOffsets();
 
             // Debug: log coordinates and part offsets
-            Log($"Click position: Screen({screenPos.X},{screenPos.Y}) → Object({objectPos.X:F3},{objectPos.Y:F3})");
             for (int i = 0; i < partOffsets.Length; i++)
             {
                 var part = currentProgram.Parts[i];
-                Log($"  Part[{i}]: Origin({part.Origin.X:F2},{part.Origin.Y:F2}mm), Offset({partOffsets[i].X:F2},{partOffsets[i].Y:F2}), Size({part.Width:F2}x{part.Height:F2}mm)");
             }
 
             // Phase 6: Find all overlapping contours
@@ -1686,14 +1690,24 @@ namespace RealtimeITagControl
             if (allContours.Count == 0)
             {
                 selectionManager.ClearContourSelection();
-                Log("✗ No contour found at click position");
             }
             else if (allContours.Count >= 1)
             {
                 // Phase 7: 자동으로 첫 번째(정렬된) 컨투어 선택
                 // 정렬 규칙: 1) 작은 면적 우선, 2) 같은 영역이면 큰 번호 우선
-                selectionManager.SelectContour(allContours[0].partIndex, allContours[0].contourIndex);
-                Log($"✓ Auto-selected: Part {allContours[0].partIndex + 1}, Contour {allContours[0].contourIndex + 1} (from {allContours.Count} overlapping)");
+                int selectedPartIndex = allContours[0].partIndex;
+                int selectedContourIndex = allContours[0].contourIndex;
+                
+                selectionManager.SelectContour(selectedPartIndex, selectedContourIndex);
+                
+                // 선택 이벤트 발생 (ITag Write를 위해)
+                ContourSelected?.Invoke(this, new ContourSelectedEventArgs
+                {
+                    PartIndex = selectedPartIndex,
+                    ContourIndex = selectedContourIndex,
+                    PartNumber = selectedPartIndex + 1,     // 1-based
+                    ContourNumber = selectedContourIndex + 1  // 1-based
+                });
                 
                 // 명시적으로 다시 그리기 (색상 변경 적용)
                 Invalidate();
@@ -1726,7 +1740,6 @@ namespace RealtimeITagControl
                 item.Click += (sender, e) =>
                 {
                     selectionManager.SelectContour(capturedPartIndex, capturedContourIndex);
-                    Log($"✓ Selected: Part {capturedPartIndex + 1}, Contour {capturedContourIndex + 1}");
                 };
                 
                 menu.Items.Add(item);
@@ -1742,7 +1755,10 @@ namespace RealtimeITagControl
         /// <summary>
         /// Handle element selection at screen position
         /// </summary>
-        private void HandleElementSelection(Point screenPos, bool addToSelection)
+        /// <summary>
+        /// Element \uc120\ud0dd \uae30\ub2a5 (\ubcc4\ub3c4 \ud568\uc218\ub85c \ubd84\ub9ac)
+        /// </summary>
+        public void HandleElementSelection(Point screenPos, bool addToSelection)
         {
             if (currentProgram == null || currentProgram.Parts == null || currentProgram.Parts.Count == 0)
                 return;
@@ -1758,13 +1774,23 @@ namespace RealtimeITagControl
 
             if (result.HasValue)
             {
-                selectionManager.SelectElement(result.Value.Item1, result.Value.Item2, result.Value.Item3, addToSelection);
-                Log($"✓ Selected: Part {result.Value.Item1}, Contour {result.Value.Item2}, Element {result.Value.Item3}");
+                int partIndex = result.Value.Item1;
+                int contourIndex = result.Value.Item2;
+                
+                selectionManager.SelectElement(partIndex, contourIndex, result.Value.Item3, addToSelection);
+                
+                // 선택 이벤트 발생 (Element 선택 시에도 Part/Contour 정보 전달)
+                ContourSelected?.Invoke(this, new ContourSelectedEventArgs
+                {
+                    PartIndex = partIndex,
+                    ContourIndex = contourIndex,
+                    PartNumber = partIndex + 1,     // 1-based
+                    ContourNumber = contourIndex + 1  // 1-based
+                });
             }
             else if (!addToSelection)
             {
                 selectionManager.ClearElementSelection();
-                Log("✗ No element found at click position");
             }
         }
 
@@ -1804,23 +1830,7 @@ namespace RealtimeITagControl
         /// <summary>
         /// Public method to set selection mode
         /// </summary>
-        public void SetSelectionMode(SelectionManager.SelectionMode mode)
-        {
-            if (selectionManager != null)
-            {
-                selectionManager.CurrentMode = mode;
-                
-                // Clear selections when changing mode
-                if (mode == SelectionManager.SelectionMode.None)
-                {
-                    selectionManager.ClearAllSelections();
-                }
-                
-                // Update cursor
-                UpdateCursor();
-                Log($"Selection mode: {mode}");
-            }
-        }
+        // SetSelectionMode 메서드 삭제됨: 항상 Contour 모드로 동작
 
         /// <summary>
         /// Public method to set multi-select mode
@@ -1830,7 +1840,6 @@ namespace RealtimeITagControl
             if (selectionManager != null)
             {
                 selectionManager.IsMultiSelectEnabled = enabled;
-                Log($"Multi-select: {(enabled ? "Enabled" : "Disabled")}");
             }
         }
 
@@ -1842,7 +1851,6 @@ namespace RealtimeITagControl
             if (selectionManager != null)
             {
                 selectionManager.SelectionMethod = method;
-                Log($"Contour selection method: {method}");
             }
         }
 
@@ -1852,7 +1860,6 @@ namespace RealtimeITagControl
         public void SetShowSelectionAreas(bool show)
         {
             showSelectionAreas = show;
-            Log($"Show Selection Areas: {(show ? "ON" : "OFF")}");
         }
 
         /// <summary>
@@ -1900,19 +1907,10 @@ namespace RealtimeITagControl
                     return;
                 }
 
-                // Phase 5.2: Selection modes
+                // Phase 5.2: 항상 Contour 선택 모드 (커서: Cross)
                 if (selectionManager != null)
                 {
-                    switch (selectionManager.CurrentMode)
-                    {
-                        case SelectionManager.SelectionMode.Contour:
-                        case SelectionManager.SelectionMode.Element:
-                            renderPanel.Cursor = Cursors.Cross;
-                            break;
-                        default:
-                            renderPanel.Cursor = Cursors.Default;
-                            break;
-                    }
+                    renderPanel.Cursor = Cursors.Cross;
                 }
                 else
                 {
@@ -1934,7 +1932,6 @@ namespace RealtimeITagControl
             {
                 numberPositionManager.EnablePositioningMode(type);
                 UpdateCursor();
-                Log($"Number positioning mode enabled: {type}");
             }
         }
 
@@ -1947,7 +1944,6 @@ namespace RealtimeITagControl
             {
                 numberPositionManager.DisablePositioningMode();
                 UpdateCursor();
-                Log("Number positioning mode disabled");
             }
         }
 
@@ -1983,14 +1979,12 @@ namespace RealtimeITagControl
                         objectPos.Y >= offsetY && objectPos.Y <= offsetY + partHeight)
                     {
                         numberPositionManager.SetPosition(pi, null, objectPos);
-                        Log($"Part {pi} number position set to: {objectPos}");
                         numberPositionManager.DisablePositioningMode();
                         needsRedraw = true;
                         return;
                     }
                 }
 
-                Log("No part found at click position");
             }
             else if (numberPositionManager.PositioningTarget == NumberPositionManager.NumberType.Contour)
             {
@@ -2000,13 +1994,11 @@ namespace RealtimeITagControl
                 if (result.HasValue)
                 {
                     numberPositionManager.SetPosition(result.Value.Item1, result.Value.Item2, objectPos);
-                    Log($"Contour ({result.Value.Item1}, {result.Value.Item2}) number position set to: {objectPos}");
                     numberPositionManager.DisablePositioningMode();
                     needsRedraw = true;
                 }
                 else
                 {
-                    Log("No contour found at click position");
                 }
             }
         }
@@ -2049,14 +2041,7 @@ namespace RealtimeITagControl
         /// <summary>
         /// 디버그 로그 메시지 출력
         /// </summary>
-        private void Log(string message)
-        {
-            // Output to MainForm's log window via event
-            LogMessage?.Invoke(this, message);
-            
-            // Also keep Debug output for development/debugging
-            System.Diagnostics.Debug.WriteLine($"[CamViewerControl] {message}");
-        }
+        // Log 메서드 삭제됨
 
         #endregion
 
@@ -2083,12 +2068,10 @@ namespace RealtimeITagControl
 
                 if (!textRendererInitialized)
                 {
-                    Log("Warning: Failed to initialize text renderer");
                 }
             }
             catch (Exception ex)
             {
-                Log($"Error initializing text renderer: {ex.Message}");
             }
         }
 
@@ -2139,7 +2122,6 @@ namespace RealtimeITagControl
                     }
                     catch (Exception ex)
                     {
-                        Log($"Error drawing part {partIndex + 1} label: {ex.Message}");
                     }
                 }
             }
@@ -2181,7 +2163,6 @@ namespace RealtimeITagControl
                         }
                         catch (Exception ex)
                         {
-                            Log($"Error drawing contour {contourIndex + 1} label: {ex.Message}");
                         }
                     }
                 }
@@ -2203,14 +2184,12 @@ namespace RealtimeITagControl
         {
             if (traceManager == null || currentProgram == null)
             {
-                Log("Cannot start trace: No MPF program loaded");
                 return false;
             }
 
             bool success = traceManager.StartTrace(startPart, startContour, isReverse);
             if (success)
             {
-                Log($"Trace started: Part {startPart}, Contour {startContour}");
                 Invalidate();  // 화면 갱신
             }
             return success;
@@ -2250,7 +2229,6 @@ namespace RealtimeITagControl
             if (traceManager != null && traceManager.IsActive)
             {
                 traceManager.StopTrace();
-                Log("Trace stopped");
                 Invalidate();  // 화면 갱신
             }
         }
@@ -2302,11 +2280,9 @@ namespace RealtimeITagControl
                 if (File.Exists(settingsPath))
                 {
                     RenderSettings.Instance.LoadFromFile(settingsPath);
-                    Log($"[RenderSettings] Loaded from: {settingsPath}");
                 }
                 else
                 {
-                    Log($"[RenderSettings] File not found: {settingsPath}, using defaults");
                     
                     // Create default settings file
                     if (!Directory.Exists(appDataPath))
@@ -2314,12 +2290,10 @@ namespace RealtimeITagControl
                         Directory.CreateDirectory(appDataPath);
                     }
                     RenderSettings.Instance.SaveToFile(settingsPath);
-                    Log($"[RenderSettings] Created default settings at: {settingsPath}");
                 }
             }
             catch (Exception ex)
             {
-                Log($"[RenderSettings] Failed to load: {ex.Message}");
             }
         }
 
@@ -2329,27 +2303,115 @@ namespace RealtimeITagControl
         {
             if (disposing)
             {
-                // Phase 8.1: Cleanup text renderer
-                if (textRendererInitialized)
+                // 중복 호출 방지
+                lock (disposeLock)
                 {
+                    if (isDisposed)
+                    {
+                        LogHelper.Log("CamViewerCore", "Dispose already called - skipping");
+                        return;
+                    }
+                    isDisposed = true;
+                }
+                
+                try
+                {
+                    LogHelper.Log("CamViewerCore", "=== Dispose 시작 ===");
+
+                    // 1. 시뮬레이션 중단
                     try
                     {
-                        NativeRenderer.CleanupTextRenderer();
+                        if (simulationEngine != null)
+                        {
+                            simulationEngine.Stop();
+                            simulationEngine.Dispose();
+                            simulationEngine = null;
+                            LogHelper.Log("CamViewerCore", "SimulationEngine disposed");
+                        }
                     }
                     catch (Exception ex)
                     {
-                        Log($"Error cleaning up text renderer: {ex.Message}");
+                        LogHelper.Log("CamViewerCore", $"SimulationEngine dispose error: {ex.Message}");
                     }
-                    textRendererInitialized = false;
-                }
 
-                if (isInitialized)
+                    // 2. 이벤트 구독 해제
+                    try
+                    {
+                        if (selectionManager != null)
+                        {
+                            selectionManager.SelectionChanged -= SelectionManager_SelectionChanged;
+                            LogHelper.Log("CamViewerCore", "SelectionManager events unsubscribed");
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        LogHelper.Log("CamViewerCore", $"Event unsubscribe error: {ex.Message}");
+                    }
+
+                    // 3. Phase 8.1: Cleanup text renderer
+                    if (textRendererInitialized)
+                    {
+                        try
+                        {
+                            NativeRenderer.CleanupTextRenderer();
+                            textRendererInitialized = false;
+                            LogHelper.Log("CamViewerCore", "Text renderer cleaned up");
+                        }
+                        catch (Exception ex)
+                        {
+                            LogHelper.Log("CamViewerCore", $"Text renderer cleanup error: {ex.Message}");
+                        }
+                    }
+
+                    // 4. OpenGL Renderer Cleanup
+                    if (isInitialized)
+                    {
+                        try
+                        {
+                            NativeRenderer.CleanupRenderer();
+                            isInitialized = false;
+                            LogHelper.Log("CamViewerCore", "OpenGL renderer cleaned up");
+                        }
+                        catch (Exception ex)
+                        {
+                            LogHelper.Log("CamViewerCore", $"OpenGL renderer cleanup error: {ex.Message}");
+                        }
+                    }
+
+                    // 5. RenderPanel 및 자식 컨트롤 정리 (WinCC 관리로 위임)
+                    // WinCC 환경에서는 base.Dispose()가 자동으로 자식 컨트롤(renderPanel 등)을 정리
+                    // 직접 Dispose 시도 시 중복 정리로 null 참조 발생
+                    // OpenGL 및 중요 리소스는 이미 위에서 정리 완료
+                    renderPanel = null;
+                    LogHelper.Log("CamViewerCore", "RenderPanel cleanup skipped (WinCC managed)");
+
+                    // 6. 데이터 정리
+                    try
+                    {
+                        currentProgram = null;
+                        selectionManager = null;
+                        numberPositionManager = null;
+                        traceManager = null;
+                        LogHelper.Log("CamViewerCore", "Data cleared");
+                    }
+                    catch (Exception ex)
+                    {
+                        LogHelper.Log("CamViewerCore", $"Data clear error: {ex.Message}");
+                    }
+
+                    LogHelper.Log("CamViewerCore", "=== Dispose 완료 ===");
+                }
+                catch (Exception ex)
                 {
-                    NativeRenderer.CleanupRenderer();
-                    isInitialized = false;
+                    LogHelper.Log("CamViewerCore", $"Dispose critical error: {ex.Message}\n{ex.StackTrace}");
                 }
             }
-            base.Dispose(disposing);
+            
+            // WinCC 환경: this.Controls 및 base.Dispose()는 WinCC가 자동 관리
+            // 중요 리소스(OpenGL, ITag, SimulationEngine 등)는 이미 위에서 정리 완료
+            // WinCC Container가 Controls 및 UserControl Dispose를 처리하므로 직접 호출 불필요
+            // 직접 호출 시 null 참조 발생 (WinCC가 이미 정리한 후)
+            LogHelper.Log("CamViewerCore", "CamViewerControl disposed (WinCC manages Controls and base.Dispose)");
         }
     }
 }
