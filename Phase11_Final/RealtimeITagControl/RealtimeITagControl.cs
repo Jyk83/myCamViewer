@@ -33,7 +33,7 @@ namespace RealtimeITagControl
 
         private string currentMpfPath;      // 현재 로드된 MPF 파일 경로
         private MPFProgram mpfProgram;      // MPF 프로그램 데이터 (파싱 결과)
-        private TagData lastTagData;
+        private TagData? lastTagData = null;  // Nullable struct
         
         // 로그 파일 경로
         
@@ -803,8 +803,20 @@ namespace RealtimeITagControl
                             // Phase 11: progressManager에도 업데이트 전달
                             if (camViewerControl?.progressManager != null)
                             {
+                                // Contour의 총 길이 계산 (AllSegments의 Length 합산)
+                                double totalDistance = 0.0;
+                                if (contour.AllSegments != null)
+                                {
+                                    foreach (var segment in contour.AllSegments)
+                                    {
+                                        if (segment != null)
+                                        {
+                                            totalDistance += segment.Length;
+                                        }
+                                    }
+                                }
+                                
                                 // progressDistance를 progress 비율로 변환 (0.0~1.0)
-                                double totalDistance = contour.TotalLength;
                                 double progressRatio = totalDistance > 0 ? progressDistance / totalDistance : 0.0;
                                 progressRatio = Math.Max(0.0, Math.Min(1.0, progressRatio));  // Clamp to [0, 1]
                                 
@@ -865,14 +877,14 @@ namespace RealtimeITagControl
                 
                 
                 // 3. progressManager 시작 (최초 Part/Contour는 ITag 데이터에서 받음)
-                if (camViewerControl?.progressManager != null && lastTagData != null)
+                if (camViewerControl?.progressManager != null && lastTagData.HasValue)
                 {
-                    int partIdx = lastTagData.CurrentPart - 1;  // 0-based
-                    int contIdx = lastTagData.CurrentContour - 1;  // 0-based
+                    int partIdx = lastTagData.Value.CurrentPart - 1;  // 0-based
+                    int contIdx = lastTagData.Value.CurrentContour - 1;  // 0-based
                     if (partIdx >= 0 && contIdx >= 0)
                     {
-                        camViewerControl.progressManager.StartCuttingProgress(lastTagData.CurrentPart, lastTagData.CurrentContour, false);
-                        LogHelper.Log("RealtimeITagControl", $"CuttingProgress Started: Part {lastTagData.CurrentPart}, Contour {lastTagData.CurrentContour}");
+                        camViewerControl.progressManager.StartCuttingProgress(lastTagData.Value.CurrentPart, lastTagData.Value.CurrentContour, false);
+                        LogHelper.Log("RealtimeITagControl", $"CuttingProgress Started: Part {lastTagData.Value.CurrentPart}, Contour {lastTagData.Value.CurrentContour}");
                     }
                 }
                 
