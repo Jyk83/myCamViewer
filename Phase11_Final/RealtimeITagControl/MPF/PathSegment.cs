@@ -20,6 +20,11 @@ namespace RealtimeITagControl.MPF
         public Point2D Start { get; set; }
         public Point2D End { get; set; }
         public string OriginalGCode { get; set; } // 원본 G-Code 라인
+        
+        /// <summary>
+        /// 세그먼트의 길이를 계산 (추상 메서드)
+        /// </summary>
+        public abstract double GetLength();
     }
 
     /// <summary>
@@ -37,6 +42,19 @@ namespace RealtimeITagControl.MPF
             Type = PathSegmentType.Line;
             Start = start;
             End = end;
+        }
+        
+        /// <summary>
+        /// 직선 길이 계산: √((x2-x1)² + (y2-y1)²)
+        /// </summary>
+        public override double GetLength()
+        {
+            if (Start == null || End == null)
+                return 0.0;
+            
+            double dx = End.X - Start.X;
+            double dy = End.Y - Start.Y;
+            return Math.Sqrt(dx * dx + dy * dy);
         }
     }
 
@@ -71,6 +89,24 @@ namespace RealtimeITagControl.MPF
             EndAngle = endAngle;
             I = i;
             J = j;
+        }
+        
+        /// <summary>
+        /// 원호 길이 계산: Arc Length = Radius × |ΔAngle|
+        /// </summary>
+        public override double GetLength()
+        {
+            // 각도 차이 계산 (라디안)
+            double angleDiff = Math.Abs(EndAngle - StartAngle);
+            
+            // 360도(2π)를 넘는 경우 보정
+            if (angleDiff > 2 * Math.PI)
+            {
+                angleDiff = 2 * Math.PI - (angleDiff % (2 * Math.PI));
+            }
+            
+            // 호의 길이 = 반지름 × 각도(라디안)
+            return Radius * angleDiff;
         }
     }
 }

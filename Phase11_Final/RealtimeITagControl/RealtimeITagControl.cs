@@ -803,7 +803,7 @@ namespace RealtimeITagControl
                             // Phase 11: progressManager에도 업데이트 전달
                             if (camViewerControl?.progressManager != null)
                             {
-                                // Contour의 총 길이 계산 (AllSegments의 Length 합산)
+                                // Contour의 총 길이 계산 (AllSegments의 GetLength() 합산)
                                 double totalDistance = 0.0;
                                 if (contour.AllSegments != null)
                                 {
@@ -811,7 +811,7 @@ namespace RealtimeITagControl
                                     {
                                         if (segment != null)
                                         {
-                                            totalDistance += segment.Length;
+                                            totalDistance += segment.GetLength();
                                         }
                                     }
                                 }
