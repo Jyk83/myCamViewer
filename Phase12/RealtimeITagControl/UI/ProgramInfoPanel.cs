@@ -39,6 +39,7 @@ namespace RealtimeITagControl.UI
 
         private CheckBox chkShowPartNumber;
         private CheckBox chkShowContourNumber;
+        private CheckBox chkEnableContourSelection;  // 컨투어 선택 활성화 체크박스
 
         private Button btnSimulation;
         private Button btnStopSimulation;
@@ -62,6 +63,7 @@ namespace RealtimeITagControl.UI
         public event EventHandler TraceTestClicked;  // TraceTestForm 호출 이벤트
         public event EventHandler<bool> ShowPartNumberChanged;
         public event EventHandler<bool> ShowContourNumberChanged;
+        public event EventHandler<bool> EnableContourSelectionChanged;  // 컨투어 선택 활성화 이벤트
 
         #endregion
 
@@ -137,6 +139,18 @@ namespace RealtimeITagControl.UI
             };
             chkShowContourNumber.CheckedChanged += (s, e) => ShowContourNumberChanged?.Invoke(this, chkShowContourNumber.Checked);
             this.Controls.Add(chkShowContourNumber);
+            y += 30;
+
+            // 컨투어 선택 활성화 체크박스 추가
+            chkEnableContourSelection = new CheckBox
+            {
+                Text = "컨투어 선택",
+                Location = new Point(20, y),
+                Size = new Size(260, 25),
+                Checked = false  // 기본값: 비활성화
+            };
+            chkEnableContourSelection.CheckedChanged += (s, e) => EnableContourSelectionChanged?.Invoke(this, chkEnableContourSelection.Checked);
+            this.Controls.Add(chkEnableContourSelection);
             y += 35;
 
             // 버튼 (2열 배치, 크기 절반)

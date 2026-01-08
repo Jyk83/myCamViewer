@@ -136,6 +136,9 @@ namespace RealtimeITagControl
         private Point lastMousePos;
         private bool isPanning = false;
 
+        // Phase 12: Contour selection enable flag
+        private bool enableContourSelection = false;
+
         // MPF data
         private MPFProgram currentProgram = null;
         private float workpieceScale = 0.001f; // mm to OpenGL units
@@ -1609,16 +1612,15 @@ namespace RealtimeITagControl
                 return; // Don't start panning or selection
             }
 
-            // Phase 5: 항상 Contour 선택 모드로 동작
-            if (e.Button == MouseButtons.Left && selectionManager != null)
+            // Phase 12: Contour 선택 모드 (체크박스로 제어)
+            if (e.Button == MouseButtons.Left && enableContourSelection && selectionManager != null)
             {
-                // Contour selection mode (항상 활성)
                 HandleContourSelection(e.Location);
                 return; // Don't start panning
             }
 
-            // Phase4: Left click also enables panning (only if not in selection mode)
-            if (e.Button == MouseButtons.Left || e.Button == MouseButtons.Middle || e.Button == MouseButtons.Right)
+            // Phase 12: 왼쪽 버튼으로 패닝 (오른쪽 버튼 제거)
+            if (e.Button == MouseButtons.Left)
             {
                 isPanning = true;
                 lastMousePos = e.Location;
@@ -1644,8 +1646,8 @@ namespace RealtimeITagControl
 
         private void RenderPanel_MouseUp(object sender, MouseEventArgs e)
         {
-            // Phase4: Left click also enables panning
-            if (e.Button == MouseButtons.Left || e.Button == MouseButtons.Middle || e.Button == MouseButtons.Right)
+            // Phase 12: 왼쪽 버튼으로 패닝
+            if (e.Button == MouseButtons.Left)
             {
                 isPanning = false;
                 renderPanel.Cursor = Cursors.Default;
@@ -1880,6 +1882,15 @@ namespace RealtimeITagControl
             {
                 selectionManager.SelectionMethod = method;
             }
+        }
+
+        /// <summary>
+        /// Phase 12: Enable/Disable contour selection on left click
+        /// </summary>
+        public void SetEnableContourSelection(bool enabled)
+        {
+            enableContourSelection = enabled;
+            LogHelper.Log("Selection", $"Contour selection {(enabled ? "enabled" : "disabled")}");
         }
 
         /// <summary>

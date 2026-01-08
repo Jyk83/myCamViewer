@@ -155,6 +155,7 @@ namespace RealtimeITagControl
             programInfoPanel.TraceTestClicked += ProgramInfoPanel_TraceTestClicked;
             programInfoPanel.ShowPartNumberChanged += ProgramInfoPanel_ShowPartNumberChanged;
             programInfoPanel.ShowContourNumberChanged += ProgramInfoPanel_ShowContourNumberChanged;
+            programInfoPanel.EnableContourSelectionChanged += ProgramInfoPanel_EnableContourSelectionChanged;  // Phase 12
             this.Controls.Add(programInfoPanel);
             
             // 초기 연결 상태 표시
@@ -304,6 +305,7 @@ namespace RealtimeITagControl
                         programInfoPanel.TraceTestClicked -= ProgramInfoPanel_TraceTestClicked;
                         programInfoPanel.ShowPartNumberChanged -= ProgramInfoPanel_ShowPartNumberChanged;
                         programInfoPanel.ShowContourNumberChanged -= ProgramInfoPanel_ShowContourNumberChanged;
+                        programInfoPanel.EnableContourSelectionChanged -= ProgramInfoPanel_EnableContourSelectionChanged;  // Phase 12
                         LogHelper.Log("RealtimeITagControl", "ProgramInfoPanel events unsubscribed");
                     }
                 }
@@ -1195,6 +1197,18 @@ namespace RealtimeITagControl
                 
                 // 화면 갱신
                 camViewerControl.Invalidate();
+            }
+        }
+
+        /// <summary>
+        /// Phase 12: 컨투어 선택 활성화 체크박스 변경 이벤트
+        /// </summary>
+        private void ProgramInfoPanel_EnableContourSelectionChanged(object sender, bool isChecked)
+        {
+            if (camViewerControl != null)
+            {
+                camViewerControl.SetEnableContourSelection(isChecked);
+                LogHelper.Log("RealtimeITagControl", $"Contour selection {(isChecked ? "enabled" : "disabled")}");
             }
         }
 
