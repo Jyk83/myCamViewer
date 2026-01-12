@@ -1668,6 +1668,14 @@ namespace RealtimeITagControl
 
         private void RenderPanel_MouseWheel(object sender, MouseEventArgs e)
         {
+            // Phase 12 FIX: Zoom at mouse pointer position instead of center
+            
+            // Get mouse position in object space BEFORE zoom
+            GeometryUtils.Point2D mouseObjectPos = ScreenToObject(e.Location);
+            
+            // Store old zoom
+            float oldZoom = zoom;
+            
             // Reversed zoom direction: scroll up = zoom in, scroll down = zoom out
             float zoomFactor = e.Delta > 0 ? 1.1f : 0.9f;
             zoom *= zoomFactor;
@@ -1675,6 +1683,30 @@ namespace RealtimeITagControl
             // Phase 7: Increased max zoom limit to 30000.0 for extreme detail
             if (zoom < 0.1f) zoom = 0.1f;
             if (zoom > 30000.0f) zoom = 30000.0f;
+            
+            // Adjust pan so that the mouse position stays at the same object space coordinate
+            // After zoom, we want: ScreenToObject(mouseScreenPos) == mouseObjectPos
+            // 
+            // ScreenToObject formula:
+            //   objectX = ndcX / zoom + panX
+            //   objectY = ndcY / zoom / aspect + panY
+            //
+            // We want the same objectX, objectY after zoom change:
+            //   mouseObjectPos.X = ndcX / oldZoom + oldPanX  (before)
+            //   mouseObjectPos.X = ndcX / newZoom + newPanX  (after)
+            //
+            // Solving for newPanX:
+            //   ndcX / newZoom + newPanX = ndcX / oldZoom + oldPanX
+            //   newPanX = oldPanX + ndcX * (1/oldZoom - 1/newZoom)
+            //   newPanX = oldPanX + ndcX * (newZoom - oldZoom) / (oldZoom * newZoom)
+            //
+            // But simpler approach: calculate delta in object space
+            //   deltaPanX = (mouseObjectPos.X - panX) * (1 - oldZoom/zoom)
+            //   newPanX = panX + deltaPanX
+            
+            float zoomRatio = oldZoom / zoom;
+            panX = (float)(mouseObjectPos.X + (panX - mouseObjectPos.X) * zoomRatio);
+            panY = (float)(mouseObjectPos.Y + (panY - mouseObjectPos.Y) * zoomRatio);
             
             UpdateViewTransform();
         }
