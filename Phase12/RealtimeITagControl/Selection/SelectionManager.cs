@@ -100,11 +100,13 @@ namespace RealtimeITagControl.Selection
 
         /// <summary>
         /// 현재 컨투어 선택 방식
+        /// Phase 12: 바운딩 박스 방식 사용 (표시된 영역 = 선택 가능 영역)
         /// </summary>
         public ContourSelectionMethod SelectionMethod { get; set; } = ContourSelectionMethod.BoundingBox;
 
         /// <summary>
         /// 클릭 위치에서 컨투어 찾기 (Point-in-Polygon)
+        /// Phase 12: 먼저 파트 바운딩 박스를 체크하여 파트 경계를 넘지 않도록 수정
         /// </summary>
         /// <param name="clickPoint">클릭 위치 (월드 좌표)</param>
         /// <param name="parts">파트 리스트</param>
@@ -115,98 +117,93 @@ namespace RealtimeITagControl.Selection
             if (parts == null || partOffsets == null)
                 return null;
 
-            // Phase 5 Fix: Area-based priority - smaller contours have higher priority
-            // Collect all contours that contain the click point, then select the smallest one
-            
-            List<(int partIndex, int contourIndex, double area)> matchingContours = new List<(int, int, double)>();
-
+            // Phase 12: 먼저 클릭한 점이 어느 파트 안에 있는지 확인
+            int targetPartIndex = -1;
             for (int pi = 0; pi < parts.Count; pi++)
             {
                 Part part = parts[pi];
-                if (part == null || part.Contours == null)
+                if (part == null)
                     continue;
 
                 float offsetX = partOffsets[pi].X;
                 float offsetY = partOffsets[pi].Y;
 
-                for (int ci = 0; ci < part.Contours.Count; ci++)
+                // 파트 바운딩 박스 계산 (origin + width/height)
+                double partMinX = offsetX;
+                double partMinY = offsetY;
+                double partMaxX = offsetX + part.Width * scale;
+                double partMaxY = offsetY + part.Height * scale;
+
+                // 클릭 점이 파트 바운딩 박스 안에 있는지 확인
+                if (clickPoint.X >= partMinX && clickPoint.X <= partMaxX &&
+                    clickPoint.Y >= partMinY && clickPoint.Y <= partMaxY)
                 {
-                    Contour contour = part.Contours[ci];
-                    if (contour == null)
-                        continue;
-
-                    // Debug: Log contour 4 (0-based, which is contour 5 in 1-based)
-                    if (pi == 0 && ci == 4)
-                    {
-                    }
-
-                    // Point-in-Contour 검사 (선택 방식에 따라)
-                    bool isInside = false;
-                    try
-                    {
-                        switch (SelectionMethod)
-                        {
-                            case ContourSelectionMethod.BoundingBox:
-                                isInside = GeometryUtils.IsPointInsideContour(clickPoint, contour, offsetX, offsetY, scale);
-                                break;
-                            case ContourSelectionMethod.ConvexHull:
-                                isInside = GeometryUtils.IsPointInsideContourConvexHull(clickPoint, contour, offsetX, offsetY, scale);
-                                break;
-                            case ContourSelectionMethod.Polygon:
-                                // Ray-casting 방식 (폴리곤 변환 후 체크)
-                                var polygon = GeometryUtils.ConvertContourToPolygon(contour, offsetX, offsetY, scale);
-                                isInside = GeometryUtils.IsPointInPolygon(clickPoint, polygon);
-                                break;
-                        }
-                    }
-                    catch (Exception ex)
-                    {
-                        continue;
-                    }
-                    
-                    if (pi == 0 && ci == 4)
-                    {
-                    }
-                    
-                    if (isInside)
-                    {
-                        
-                        // Calculate contour area
-                        double area = double.MaxValue;
-                        try
-                        {
-                            area = GeometryUtils.CalculateContourArea(contour, scale);
-                        }
-                        catch (Exception ex)
-                        {
-                        }
-                        
-                        matchingContours.Add((pi, ci, area));
-                        
-                        if (pi == 0 && ci == 4)
-                        {
-                        }
-                    }
+                    targetPartIndex = pi;
+                    break; // 첫 번째 매칭되는 파트 선택
                 }
             }
 
-            // If no contours found, return null
-            if (matchingContours.Count == 0)
+            // 파트를 찾지 못하면 null 반환
+            if (targetPartIndex < 0)
                 return null;
 
-            // If only one contour found, return it
-            if (matchingContours.Count == 1)
-                return (matchingContours[0].partIndex, matchingContours[0].contourIndex);
+            // Phase 12: 해당 파트 내에서만 컨투어 검색 (낮은 번호 우선)
+            Part targetPart = parts[targetPartIndex];
+            if (targetPart == null || targetPart.Contours == null)
+                return null;
 
-            // Multiple contours found - return the one with smallest area
-            var smallest = matchingContours[0];
-            for (int i = 1; i < matchingContours.Count; i++)
+            float targetOffsetX = partOffsets[targetPartIndex].X;
+            float targetOffsetY = partOffsets[targetPartIndex].Y;
+
+            // Phase 12 개선: 낮은 컨투어 번호부터 순차적으로 검사하고, 첫 매칭 시 즉시 반환
+            // 불필요한 area 계산 및 중복 검사 제거
+            for (int ci = 0; ci < targetPart.Contours.Count; ci++)
             {
-                if (matchingContours[i].area < smallest.area)
-                    smallest = matchingContours[i];
+                Contour contour = targetPart.Contours[ci];
+                if (contour == null)
+                    continue;
+
+                System.Diagnostics.Debug.WriteLine($"[FindContourAtPoint] Checking Part {targetPartIndex}, Contour {ci}");
+
+                // Point-in-Contour 검사 (선택 방식에 따라)
+                bool isInside = false;
+                try
+                {
+                    System.Diagnostics.Debug.WriteLine($"[Selection] Part {targetPartIndex}, Contour {ci}, Method: {SelectionMethod}");
+                    
+                    switch (SelectionMethod)
+                    {
+                        case ContourSelectionMethod.BoundingBox:
+                            isInside = GeometryUtils.IsPointInsideContour(clickPoint, contour, targetOffsetX, targetOffsetY, scale);
+                            System.Diagnostics.Debug.WriteLine($"[Selection] BoundingBox result: {isInside}");
+                            break;
+                        case ContourSelectionMethod.ConvexHull:
+                            isInside = GeometryUtils.IsPointInsideContourConvexHull(clickPoint, contour, targetOffsetX, targetOffsetY, scale);
+                            break;
+                        case ContourSelectionMethod.Polygon:
+                            // Ray-casting 방식 (폴리곤 변환 후 체크)
+                            var polygon = GeometryUtils.ConvertContourToPolygon(contour, targetOffsetX, targetOffsetY, scale);
+                            isInside = GeometryUtils.IsPointInPolygon(clickPoint, polygon);
+                            break;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    System.Diagnostics.Debug.WriteLine($"[Selection] Exception: {ex.Message}");
+                    // 오류 발생 시 다음 컨투어로 계속
+                    continue;
+                }
+                
+                // 첫 번째 매칭된 컨투어 즉시 반환 (낮은 번호가 우선)
+                if (isInside)
+                {
+                    System.Diagnostics.Debug.WriteLine($"[Selection] ✅ Selected Part {targetPartIndex}, Contour {ci}");
+                    return (targetPartIndex, ci);
+                }
             }
 
-            return (smallest.partIndex, smallest.contourIndex);
+            // 매칭된 컨투어가 없으면 null 반환
+            return null;
         }
 
         /// <summary>

@@ -143,6 +143,16 @@ namespace RealtimeITagControl
         private MPFProgram currentProgram = null;
         private float workpieceScale = 0.001f; // mm to OpenGL units
 
+        /// <summary>
+        /// 현재 로드된 MPF 프로그램 (읽기 전용)
+        /// </summary>
+        public MPFProgram CurrentProgram => currentProgram;
+
+        /// <summary>
+        /// Phase 12: 표시할 컨투어 인덱스 집합 (외부에서 설정 가능)
+        /// </summary>
+        public System.Collections.Generic.HashSet<int> VisibleContours { get; set; } = null;
+
         // Simulation engine
         private SimulationEngine simulationEngine = null;
         private int currentSimPartIndex = -1;
@@ -543,6 +553,7 @@ namespace RealtimeITagControl
             if (textRendererInitialized)
             {
                 DrawPartAndContourNumbers();
+                DrawContourSelectionBoxes();
             }
         }
 
@@ -1480,6 +1491,7 @@ namespace RealtimeITagControl
             if (textRendererInitialized)
             {
                 DrawPartAndContourNumbers();
+                DrawContourSelectionBoxes();
             }
         }
         
@@ -1677,17 +1689,29 @@ namespace RealtimeITagControl
             if (renderPanel == null)
                 return new GeometryUtils.Point2D(0, 0);
 
+            System.Diagnostics.Debug.WriteLine($"[ScreenToObject] Input screenPos: X={screenPos.X}, Y={screenPos.Y}");
+            System.Diagnostics.Debug.WriteLine($"[ScreenToObject] renderPanel size: W={renderPanel.Width}, H={renderPanel.Height}");
+            System.Diagnostics.Debug.WriteLine($"[ScreenToObject] zoom={zoom:F6}, panX={panX:F6}, panY={panY:F6}");
+
             // Normalize to [-1, 1] range (NDC)
             float ndcX = (screenPos.X / (float)renderPanel.Width) * 2.0f - 1.0f;
+            // Phase 12 FIX: Y 좌표 변환 - 화면 좌표(위→아래 증가)를 OpenGL 좌표(아래→위 증가)로 변환
             float ndcY = -((screenPos.Y / (float)renderPanel.Height) * 2.0f - 1.0f); // Flip Y
 
-            // Apply inverse projection (NDC → Object Space)
-            // Matches glOrtho: objectX = ndcX * (viewWidth/2) + panX
-            //                         = ndcX / zoom + panX
-            float objectX = (float)(ndcX / zoom + panX);
-            float objectY = (float)(ndcY / zoom + panY);
+            System.Diagnostics.Debug.WriteLine($"[ScreenToObject] NDC: ndcX={ndcX:F6}, ndcY={ndcY:F6}");
 
-            // Debug log
+            // Apply inverse projection (NDC → Object Space)
+            // glOrtho: left=-viewWidth/2+panX, right=viewWidth/2+panX, bottom=-viewHeight/2+panY, top=viewHeight/2+panY
+            // viewWidth = 2.0/zoom, viewHeight = viewWidth/aspect
+            // 역변환: objectX = ndcX * (viewWidth/2) + panX = ndcX/zoom + panX
+            //        objectY = ndcY * (viewHeight/2) + panY = ndcY/zoom/aspect + panY
+            float objectX = (float)(ndcX / zoom + panX);
+            float aspect = (float)renderPanel.Width / (float)renderPanel.Height;
+            float objectY = (float)(ndcY / zoom / aspect + panY);
+
+            System.Diagnostics.Debug.WriteLine($"[ScreenToObject] Object space: X={objectX:F6}, Y={objectY:F6}");
+            
+            System.Diagnostics.Debug.WriteLine($"[ScreenToObject] Object space (final): X={objectX:F6}, Y={objectY:F6}");
 
             return new GeometryUtils.Point2D(objectX, objectY);
         }
@@ -1708,25 +1732,22 @@ namespace RealtimeITagControl
             // Calculate part offsets (in object space)
             (float X, float Y)[] partOffsets = CalculatePartOffsets();
 
-            // Debug: log coordinates and part offsets
-            for (int i = 0; i < partOffsets.Length; i++)
-            {
-                var part = currentProgram.Parts[i];
-            }
+            System.Diagnostics.Debug.WriteLine($"[HandleContourSelection] Click position: ({objectPos.X:F6}, {objectPos.Y:F6})");
 
-            // Phase 6: Find all overlapping contours
-            var allContours = selectionManager.FindAllContoursAtPoint(objectPos, currentProgram.Parts, partOffsets, workpieceScale);
+            // Phase 12: 개선된 선택 로직 사용 (파트 경계 체크 + 낮은 번호 우선)
+            var result = selectionManager.FindContourAtPoint(objectPos, currentProgram.Parts, partOffsets, workpieceScale);
 
-            if (allContours.Count == 0)
+            if (result == null)
             {
+                System.Diagnostics.Debug.WriteLine($"[HandleContourSelection] No contour found");
                 selectionManager.ClearContourSelection();
             }
-            else if (allContours.Count >= 1)
+            else
             {
-                // Phase 7: 자동으로 첫 번째(정렬된) 컨투어 선택
-                // 정렬 규칙: 1) 작은 면적 우선, 2) 같은 영역이면 큰 번호 우선
-                int selectedPartIndex = allContours[0].partIndex;
-                int selectedContourIndex = allContours[0].contourIndex;
+                int selectedPartIndex = result.Value.Item1;
+                int selectedContourIndex = result.Value.Item2;
+                
+                System.Diagnostics.Debug.WriteLine($"[HandleContourSelection] Selected Part {selectedPartIndex}, Contour {selectedContourIndex}");
                 
                 selectionManager.SelectContour(selectedPartIndex, selectedContourIndex);
                 
@@ -2203,6 +2224,97 @@ namespace RealtimeITagControl
                         catch (Exception ex)
                         {
                         }
+                    }
+                }
+            }
+        }
+
+        /// <summary>
+        /// 컨투어 선택 박스 그리기 (디버그용)
+        /// </summary>
+        private void DrawContourSelectionBoxes()
+        {
+            if (currentProgram == null) return;
+
+            // VisibleContours가 null이거나 비어있으면 아무것도 그리지 않음
+            if (VisibleContours == null || VisibleContours.Count == 0)
+                return;
+
+            float lineWidth = 2.0f;  // 좀 더 굵게
+
+            // Rainbow colors for different contours
+            Color[] colors = new Color[]
+            {
+                Color.FromArgb(255, 0, 0),      // Red
+                Color.FromArgb(255, 127, 0),    // Orange
+                Color.FromArgb(255, 255, 0),    // Yellow
+                Color.FromArgb(0, 255, 0),      // Green
+                Color.FromArgb(0, 255, 255),    // Cyan
+                Color.FromArgb(0, 0, 255),      // Blue
+                Color.FromArgb(139, 0, 255),    // Purple
+                Color.FromArgb(255, 0, 255)     // Magenta
+            };
+
+            int globalContourIndex = 0;
+
+            for (int partIndex = 0; partIndex < currentProgram.Parts.Count; partIndex++)
+            {
+                var part = currentProgram.Parts[partIndex];
+                if (part == null || part.Contours == null) continue;
+
+                float offsetX = (float)(part.Origin.X * workpieceScale);
+                float offsetY = (float)(part.Origin.Y * workpieceScale);
+
+                for (int contourIndex = 0; contourIndex < part.Contours.Count; contourIndex++)
+                {
+                    var contour = part.Contours[contourIndex];
+                    if (contour == null) continue;
+
+                    // 이 컨투어가 표시 대상인지 확인
+                    if (!VisibleContours.Contains(globalContourIndex))
+                    {
+                        globalContourIndex++;
+                        continue;
+                    }
+
+                    try
+                    {
+                        // Calculate bounding box for drawing (with offset applied to arc extremes)
+                        var bbox = GeometryUtils.CalculateContourBoundingBoxForDrawing(
+                            contour, offsetX, offsetY, (float)workpieceScale);
+
+                        // Get color for this contour
+                        var color = colors[globalContourIndex % colors.Length];
+                        var boxColor = new float[] { color.R / 255.0f, color.G / 255.0f, color.B / 255.0f };
+
+                        // Draw rectangle (4 lines)
+                        // Bottom
+                        NativeRenderer.DrawLine(
+                            (float)bbox.MinX, (float)bbox.MinY,
+                            (float)bbox.MaxX, (float)bbox.MinY,
+                            lineWidth, boxColor[0], boxColor[1], boxColor[2]);
+                        // Right
+                        NativeRenderer.DrawLine(
+                            (float)bbox.MaxX, (float)bbox.MinY,
+                            (float)bbox.MaxX, (float)bbox.MaxY,
+                            lineWidth, boxColor[0], boxColor[1], boxColor[2]);
+                        // Top
+                        NativeRenderer.DrawLine(
+                            (float)bbox.MaxX, (float)bbox.MaxY,
+                            (float)bbox.MinX, (float)bbox.MaxY,
+                            lineWidth, boxColor[0], boxColor[1], boxColor[2]);
+                        // Left
+                        NativeRenderer.DrawLine(
+                            (float)bbox.MinX, (float)bbox.MaxY,
+                            (float)bbox.MinX, (float)bbox.MinY,
+                            lineWidth, boxColor[0], boxColor[1], boxColor[2]);
+
+                        globalContourIndex++;
+                    }
+                    catch (Exception ex)
+                    {
+                        // Ignore errors
+                        globalContourIndex++;
                     }
                 }
             }

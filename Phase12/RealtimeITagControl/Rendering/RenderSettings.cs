@@ -150,6 +150,9 @@ namespace RealtimeITagControl.Rendering
         /// <summary>Show/hide contour numbers</summary>
         public bool ShowContourNumbers { get; set; }
 
+        /// <summary>Show/hide contour selection bounding boxes</summary>
+        public bool ShowContourSelectionBoxes { get; set; }
+
         // Phase 5.3: Part boundary settings
         /// <summary>Show/hide part boundaries (dashed rectangles)</summary>
         public bool ShowPartBoundaries { get; set; }
@@ -162,6 +165,12 @@ namespace RealtimeITagControl.Rendering
 
         /// <summary>Part boundary dash pattern (0-5)</summary>
         public DashPattern PartBoundaryDashPattern { get; set; }
+
+        /// <summary>Contour selection box color</summary>
+        public Color ContourSelectionBoxColor { get; set; }
+
+        /// <summary>Contour selection box line width</summary>
+        public float ContourSelectionBoxWidth { get; set; }
 
         // Phase 5.5: Canvas orientation
         /// <summary>Canvas orientation (rotation)</summary>
@@ -213,12 +222,17 @@ namespace RealtimeITagControl.Rendering
             ShowWorkpieceBoundary = false; // Hide workpiece boundary (external line)
             ShowPartNumbers = true; // Show part numbers by default
             ShowContourNumbers = true; // Show contour numbers by default
+            ShowContourSelectionBoxes = false; // Hide contour selection boxes by default
 
             // Phase 5.3: Part boundary defaults
             ShowPartBoundaries = false; // Hide by default (shown when part numbers are visible)
             PartBoundaryColor = Color.FromArgb(100, 200, 255); // Light Blue
             PartBoundaryWidth = 1.5f;
             PartBoundaryDashPattern = DashPattern.Dash3; // Short dash (fixed)
+
+            // Contour selection box defaults
+            ContourSelectionBoxColor = Color.FromArgb(255, 255, 0); // Yellow
+            ContourSelectionBoxWidth = 1.0f;
 
             // Phase 5.5: Canvas orientation default
             Orientation = CanvasOrientation.Normal; // No rotation by default

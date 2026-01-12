@@ -40,6 +40,7 @@ namespace RealtimeITagControl.UI
         private CheckBox chkShowPartNumber;
         private CheckBox chkShowContourNumber;
         private CheckBox chkEnableContourSelection;  // 컨투어 선택 활성화 체크박스
+        private Button btnShowContourSelectionBoxes;  // 컨투어 선택 박스 표시 버튼
 
         private Button btnSimulation;
         private Button btnStopSimulation;
@@ -64,6 +65,7 @@ namespace RealtimeITagControl.UI
         public event EventHandler<bool> ShowPartNumberChanged;
         public event EventHandler<bool> ShowContourNumberChanged;
         public event EventHandler<bool> EnableContourSelectionChanged;  // 컨투어 선택 활성화 이벤트
+        public event EventHandler ShowContourSelectionBoxesClicked;  // 컨투어 선택 박스 표시 버튼 클릭
 
         #endregion
 
@@ -118,40 +120,56 @@ namespace RealtimeITagControl.UI
             this.Controls.Add(grpLineInfo);
             y += grpLineInfo.Height + padding;
 
-            // 체크박스
+            // 체크박스 (2열 배치)
+            int chkWidth = 130;
+            int chkHeight = 22;
+            int chkGap = 10;
+            int chkX1 = 15;
+            int chkX2 = chkX1 + chkWidth + chkGap;
+
+            // 1행: 파트 번호, 컨투어 번호
             chkShowPartNumber = new CheckBox
             {
-                Text = "파트 번호 표시",
-                Location = new Point(20, y),
-                Size = new Size(260, 25),
+                Text = "파트번호",
+                Location = new Point(chkX1, y),
+                Size = new Size(chkWidth, chkHeight),
                 Checked = true
             };
             chkShowPartNumber.CheckedChanged += (s, e) => ShowPartNumberChanged?.Invoke(this, chkShowPartNumber.Checked);
             this.Controls.Add(chkShowPartNumber);
-            y += 30;
 
             chkShowContourNumber = new CheckBox
             {
-                Text = "컨투어 번호 표시",
-                Location = new Point(20, y),
-                Size = new Size(260, 25),
+                Text = "컨투어번호",
+                Location = new Point(chkX2, y),
+                Size = new Size(chkWidth, chkHeight),
                 Checked = true
             };
             chkShowContourNumber.CheckedChanged += (s, e) => ShowContourNumberChanged?.Invoke(this, chkShowContourNumber.Checked);
             this.Controls.Add(chkShowContourNumber);
-            y += 30;
+            y += 25;
 
-            // 컨투어 선택 활성화 체크박스 추가
+            // 2행: 컨투어 선택, 선택 영역 보기
             chkEnableContourSelection = new CheckBox
             {
-                Text = "컨투어 선택",
-                Location = new Point(20, y),
-                Size = new Size(260, 25),
-                Checked = false  // 기본값: 비활성화
+                Text = "컨투어선택",
+                Location = new Point(chkX1, y),
+                Size = new Size(chkWidth, chkHeight),
+                Checked = false
             };
             chkEnableContourSelection.CheckedChanged += (s, e) => EnableContourSelectionChanged?.Invoke(this, chkEnableContourSelection.Checked);
             this.Controls.Add(chkEnableContourSelection);
-            y += 35;
+
+            btnShowContourSelectionBoxes = new Button
+            {
+                Text = "선택영역",
+                Location = new Point(chkX2, y),
+                Size = new Size(chkWidth, chkHeight),
+                BackColor = Color.FromArgb(255, 200, 100)
+            };
+            btnShowContourSelectionBoxes.Click += (s, e) => ShowContourSelectionBoxesClicked?.Invoke(this, EventArgs.Empty);
+            this.Controls.Add(btnShowContourSelectionBoxes);
+            y += 30;
 
             // 버튼 (2열 배치, 크기 절반)
             int btnWidth = 125;  // 절반 크기

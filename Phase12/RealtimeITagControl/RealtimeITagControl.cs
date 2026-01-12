@@ -30,6 +30,7 @@ namespace RealtimeITagControl
 
         private ProgramInfoPanel programInfoPanel;
         private CamViewerControl camViewerControl;  // Phase8 OpenGL 렌더러 (핵심!)
+        private ContourColorLegendForm contourLegendForm;  // Phase 12: 컨투어 색상 범례 폼
 
         private string currentMpfPath;      // 현재 로드된 MPF 파일 경로
         private MPFProgram mpfProgram;      // MPF 프로그램 데이터 (파싱 결과)
@@ -156,6 +157,7 @@ namespace RealtimeITagControl
             programInfoPanel.ShowPartNumberChanged += ProgramInfoPanel_ShowPartNumberChanged;
             programInfoPanel.ShowContourNumberChanged += ProgramInfoPanel_ShowContourNumberChanged;
             programInfoPanel.EnableContourSelectionChanged += ProgramInfoPanel_EnableContourSelectionChanged;  // Phase 12
+            programInfoPanel.ShowContourSelectionBoxesClicked += ProgramInfoPanel_ShowContourSelectionBoxesClicked;  // Phase 12
             this.Controls.Add(programInfoPanel);
             
             // 초기 연결 상태 표시
@@ -1197,6 +1199,60 @@ namespace RealtimeITagControl
                 
                 // 화면 갱신
                 camViewerControl.Invalidate();
+            }
+        }
+
+        /// <summary>
+        /// 컨투어 선택 박스 표시 버튼 클릭 이벤트
+        /// </summary>
+        private void ProgramInfoPanel_ShowContourSelectionBoxesClicked(object sender, EventArgs e)
+        {
+            if (camViewerControl != null && camViewerControl.CurrentProgram != null)
+            {
+                // 이미 열려있으면 닫기
+                if (contourLegendForm != null && !contourLegendForm.IsDisposed)
+                {
+                    contourLegendForm.Close();
+                    contourLegendForm = null;
+                    camViewerControl.VisibleContours = null;
+                    camViewerControl.Invalidate();
+                    return;
+                }
+
+                int totalContours = 0;
+                foreach (var part in camViewerControl.CurrentProgram.Parts)
+                {
+                    if (part != null && part.Contours != null)
+                    {
+                        totalContours += part.Contours.Count;
+                    }
+                }
+
+                if (totalContours > 0)
+                {
+                    contourLegendForm = new ContourColorLegendForm(totalContours);
+                    
+                    // CamViewerControl에 VisibleContours 참조 전달
+                    camViewerControl.VisibleContours = contourLegendForm.VisibleContours;
+                    
+                    // 컨투어 표시 변경 이벤트 처리
+                    contourLegendForm.ContourVisibilityChanged += (s, args) =>
+                    {
+                        // 화면 갱신
+                        camViewerControl.Invalidate();
+                    };
+                    
+                    // 폼이 닫힐 때 참조 제거
+                    contourLegendForm.FormClosed += (s, args) =>
+                    {
+                        contourLegendForm = null;
+                        camViewerControl.VisibleContours = null;
+                        camViewerControl.Invalidate();
+                    };
+                    
+                    // 모달리스로 표시
+                    contourLegendForm.Show(this);
+                }
             }
         }
 

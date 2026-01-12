@@ -73,15 +73,19 @@ namespace RealtimeITagControl.Selection
         /// <returns>내부에 있으면 true</returns>
         public static bool IsPointInsideContour(Point2D point, Contour contour, float offsetX, float offsetY, float scale = 1.0f)
         {
-            // 컨투어의 바운딩 박스 계산
-            Rectangle2D boundingBox = CalculateContourBoundingBox(contour, offsetX, offsetY, scale);
+            // Phase 12: 그리기용 바운딩 박스 사용 (표시된 영역 = 선택 가능 영역)
+            Rectangle2D boundingBox = CalculateContourBoundingBoxForDrawing(contour, offsetX, offsetY, scale);
 
             if (boundingBox.Width == 0 || boundingBox.Height == 0)
                 return false; // 유효하지 않은 바운딩 박스
 
+            System.Diagnostics.Debug.WriteLine($"[IsPointInsideContour] Point: ({point.X:F6}, {point.Y:F6})");
+            System.Diagnostics.Debug.WriteLine($"[IsPointInsideContour] BBox: MinX={boundingBox.MinX:F6}, MinY={boundingBox.MinY:F6}, MaxX={boundingBox.MaxX:F6}, MaxY={boundingBox.MaxY:F6}");
+            
             // 점이 바운딩 박스 내부에 있는지 확인
             bool isInside = IsPointInBoundingBox(point, boundingBox);
             
+            System.Diagnostics.Debug.WriteLine($"[IsPointInsideContour] Result: {isInside}");
             
             return isInside;
         }
@@ -601,8 +605,8 @@ namespace RealtimeITagControl.Selection
                 return new Rectangle2D(0, 0, 0, 0);
             }
 
-            // Phase 7 FIX: Arc 극값점 및 부동소수점 오차를 고려하여 1픽셀(0.001) 여유 추가
-            const double margin = 0.001;
+            // Phase 12 FIX: Arc 극값점 및 부동소수점 오차를 고려하여 2mm(0.002) 여유 추가
+            const double margin = 0.002;
             minX -= margin;
             minY -= margin;
             maxX += margin;
@@ -610,6 +614,104 @@ namespace RealtimeITagControl.Selection
 
             var bbox = new Rectangle2D(minX, minY, maxX - minX, maxY - minY);
             return bbox;
+        }
+
+        /// <summary>
+        /// Phase 12: 컨투어 바운딩 박스 계산 (그리기 전용 - Arc 극값점에도 offset 적용)
+        /// 선택 기능과 달리, Arc 극값점에도 offset을 적용하여 정확한 화면 좌표 반환
+        /// </summary>
+        public static Rectangle2D CalculateContourBoundingBoxForDrawing(Contour contour, float offsetX, float offsetY, float scale = 1.0f)
+        {
+            double minX = double.MaxValue;
+            double minY = double.MaxValue;
+            double maxX = double.MinValue;
+            double maxY = double.MinValue;
+            bool hasPoints = false;
+
+            List<PathSegment> contourPath = null;
+            int startIdx = 0;
+
+            // CuttingPath 우선 사용
+            if (contour.CuttingPath != null && contour.CuttingPath.Count > 0)
+            {
+                contourPath = contour.CuttingPath;
+            }
+            else
+            {
+                contourPath = contour.AllSegments;
+            }
+
+            if (contourPath != null)
+            {
+                for (int i = startIdx; i < contourPath.Count; i++)
+                {
+                    var segment = contourPath[i];
+                    
+                    if (segment is LineSegment line)
+                    {
+                        // Line: Start/End에 offset 적용
+                        UpdateBounds(new Point2D(line.Start.X * scale + offsetX, line.Start.Y * scale + offsetY),
+                            ref minX, ref minY, ref maxX, ref maxY);
+                        UpdateBounds(new Point2D(line.End.X * scale + offsetX, line.End.Y * scale + offsetY),
+                            ref minX, ref minY, ref maxX, ref maxY);
+                        hasPoints = true;
+                    }
+                    else if (segment is ArcSegment arc)
+                    {
+                        // Arc: Start/End에 offset 적용
+                        UpdateBounds(new Point2D(arc.Start.X * scale + offsetX, arc.Start.Y * scale + offsetY),
+                            ref minX, ref minY, ref maxX, ref maxY);
+                        UpdateBounds(new Point2D(arc.End.X * scale + offsetX, arc.End.Y * scale + offsetY),
+                            ref minX, ref minY, ref maxX, ref maxY);
+
+                        // Arc 극값점: centerRaw에 offset 적용하여 화면 좌표로 변환
+                        Point2D centerWithOffset = new Point2D(
+                            arc.Center.X * scale + offsetX,
+                            arc.Center.Y * scale + offsetY);
+                        double radius = arc.Radius * scale;
+
+                        // 극값점 체크 (centerWithOffset 사용)
+                        CheckArcExtremeForDrawing(arc, centerWithOffset, radius, 0, ref minX, ref minY, ref maxX, ref maxY);
+                        CheckArcExtremeForDrawing(arc, centerWithOffset, radius, 90, ref minX, ref minY, ref maxX, ref maxY);
+                        CheckArcExtremeForDrawing(arc, centerWithOffset, radius, 180, ref minX, ref minY, ref maxX, ref maxY);
+                        CheckArcExtremeForDrawing(arc, centerWithOffset, radius, 270, ref minX, ref minY, ref maxX, ref maxY);
+                        
+                        hasPoints = true;
+                    }
+                }
+            }
+
+            if (!hasPoints)
+            {
+                return new Rectangle2D(0, 0, 0, 0);
+            }
+
+            // Margin 추가
+            const double margin = 0.002;
+            minX -= margin;
+            minY -= margin;
+            maxX += margin;
+            maxY += margin;
+
+            return new Rectangle2D(minX, minY, maxX - minX, maxY - minY);
+        }
+
+        /// <summary>
+        /// Phase 12: Arc 극값점 체크 (그리기 전용 - offset이 이미 적용된 center 사용)
+        /// </summary>
+        private static void CheckArcExtremeForDrawing(
+            ArcSegment arc, Point2D centerWithOffset, double radius, double extremeAngle,
+            ref double minX, ref double minY, ref double maxX, ref double maxY)
+        {
+            if (IsAngleInRange(extremeAngle, arc.StartAngle, arc.EndAngle, arc.Clockwise))
+            {
+                // 극값점 계산 (centerWithOffset에 이미 offset 적용됨)
+                Point2D extremePoint = new Point2D(
+                    centerWithOffset.X + radius * Math.Cos(extremeAngle * Math.PI / 180.0),
+                    centerWithOffset.Y + radius * Math.Sin(extremeAngle * Math.PI / 180.0)
+                );
+                UpdateBounds(extremePoint, ref minX, ref minY, ref maxX, ref maxY);
+            }
         }
 
         /// <summary>
@@ -646,17 +748,19 @@ namespace RealtimeITagControl.Selection
                     ref minX, ref minY, ref maxX, ref maxY);
 
                 // 극값점 검사를 위해 center와 radius 계산
-                Point2D center = new Point2D(arc.Center.X * scale + offsetX, arc.Center.Y * scale + offsetY);
+                // Phase 7 FIX: Center는 절대 좌표이므로 scale만 적용 (offset은 선택 기능에서 중복 적용 방지)
+                Point2D centerRaw = new Point2D(arc.Center.X * scale, arc.Center.Y * scale);
                 double radius = arc.Radius * scale;
 
                 // Phase 7 FIX: Arc 극값점이 범위에 포함되는지 체크
                 // 디버그: Arc 정보 출력
+                System.Diagnostics.Debug.WriteLine($"[Arc Center] Raw: ({arc.Center.X:F3}, {arc.Center.Y:F3}), Scaled: ({centerRaw.X:F6}, {centerRaw.Y:F6}), Radius: {radius:F6}");
 
                 // 호가 0°, 90°, 180°, 270°를 포함하는지 확인 (극값)
-                CheckArcExtreme(arc, center, radius, 0, ref minX, ref minY, ref maxX, ref maxY);   // +X
-                CheckArcExtreme(arc, center, radius, 90, ref minX, ref minY, ref maxX, ref maxY);  // +Y
-                CheckArcExtreme(arc, center, radius, 180, ref minX, ref minY, ref maxX, ref maxY); // -X
-                CheckArcExtreme(arc, center, radius, 270, ref minX, ref minY, ref maxX, ref maxY); // -Y
+                CheckArcExtreme(arc, centerRaw, radius, offsetX, offsetY, 0, ref minX, ref minY, ref maxX, ref maxY);   // +X
+                CheckArcExtreme(arc, centerRaw, radius, offsetX, offsetY, 90, ref minX, ref minY, ref maxX, ref maxY);  // +Y
+                CheckArcExtreme(arc, centerRaw, radius, offsetX, offsetY, 180, ref minX, ref minY, ref maxX, ref maxY); // -X
+                CheckArcExtreme(arc, centerRaw, radius, offsetX, offsetY, 270, ref minX, ref minY, ref maxX, ref maxY); // -Y
             }
         }
 
@@ -870,42 +974,41 @@ namespace RealtimeITagControl.Selection
             }
             else if (segment is ArcSegment arc)
             {
-                Point2D center = new Point2D(arc.Center.X + offsetX, arc.Center.Y + offsetY);
+                // Phase 7 FIX: Arc의 Start/End 포인트를 직접 사용 (각도 재계산으로 인한 부동소수점 오차 방지)
+                UpdateBounds(new Point2D(arc.Start.X + offsetX, arc.Start.Y + offsetY),
+                    ref minX, ref minY, ref maxX, ref maxY);
+                UpdateBounds(new Point2D(arc.End.X + offsetX, arc.End.Y + offsetY),
+                    ref minX, ref minY, ref maxX, ref maxY);
+
+                // 극값점 검사를 위해 center와 radius 사용 (offset 미적용)
+                Point2D centerRaw = new Point2D(arc.Center.X, arc.Center.Y);
                 double radius = arc.Radius;
 
-                // 호의 시작/끝점
-                Point2D arcStart = new Point2D(
-                    center.X + radius * Math.Cos(arc.StartAngle * Math.PI / 180.0),
-                    center.Y + radius * Math.Sin(arc.StartAngle * Math.PI / 180.0)
-                );
-                Point2D arcEnd = new Point2D(
-                    center.X + radius * Math.Cos(arc.EndAngle * Math.PI / 180.0),
-                    center.Y + radius * Math.Sin(arc.EndAngle * Math.PI / 180.0)
-                );
-
-                UpdateBounds(arcStart, ref minX, ref minY, ref maxX, ref maxY);
-                UpdateBounds(arcEnd, ref minX, ref minY, ref maxX, ref maxY);
-
                 // 호가 0°, 90°, 180°, 270°를 포함하는지 확인 (극값)
-                CheckArcExtreme(arc, center, radius, 0, ref minX, ref minY, ref maxX, ref maxY);   // +X
-                CheckArcExtreme(arc, center, radius, 90, ref minX, ref minY, ref maxX, ref maxY);  // +Y
-                CheckArcExtreme(arc, center, radius, 180, ref minX, ref minY, ref maxX, ref maxY); // -X
-                CheckArcExtreme(arc, center, radius, 270, ref minX, ref minY, ref maxX, ref maxY); // -Y
+                CheckArcExtreme(arc, centerRaw, radius, offsetX, offsetY, 0, ref minX, ref minY, ref maxX, ref maxY);   // +X
+                CheckArcExtreme(arc, centerRaw, radius, offsetX, offsetY, 90, ref minX, ref minY, ref maxX, ref maxY);  // +Y
+                CheckArcExtreme(arc, centerRaw, radius, offsetX, offsetY, 180, ref minX, ref minY, ref maxX, ref maxY); // -X
+                CheckArcExtreme(arc, centerRaw, radius, offsetX, offsetY, 270, ref minX, ref minY, ref maxX, ref maxY); // -Y
             }
         }
 
         /// <summary>
         /// 호가 특정 각도를 포함하는지 확인하고 바운딩 박스 업데이트
         /// </summary>
-        private static void CheckArcExtreme(ArcSegment arc, Point2D center, double radius, double extremeAngle,
+        /// <summary>
+        /// Arc 극값점 검사 (0°, 90°, 180°, 270°)
+        /// </summary>
+        private static void CheckArcExtreme(ArcSegment arc, Point2D centerRaw, double radius, float offsetX, float offsetY, double extremeAngle,
             ref double minX, ref double minY, ref double maxX, ref double maxY)
         {
             if (IsAngleInRange(extremeAngle, arc.StartAngle, arc.EndAngle, arc.Clockwise))
             {
+                // 극값점 계산 (centerRaw는 scale만 적용, offset은 호출자에서 처리)
                 Point2D extremePoint = new Point2D(
-                    center.X + radius * Math.Cos(extremeAngle * Math.PI / 180.0),
-                    center.Y + radius * Math.Sin(extremeAngle * Math.PI / 180.0)
+                    centerRaw.X + radius * Math.Cos(extremeAngle * Math.PI / 180.0),
+                    centerRaw.Y + radius * Math.Sin(extremeAngle * Math.PI / 180.0)
                 );
+                System.Diagnostics.Debug.WriteLine($"[Arc Extreme {extremeAngle}°] CenterRaw: ({centerRaw.X:F6}, {centerRaw.Y:F6}), Radius: {radius:F6}, Extreme: ({extremePoint.X:F6}, {extremePoint.Y:F6})");
                 UpdateBounds(extremePoint, ref minX, ref minY, ref maxX, ref maxY);
             }
         }
