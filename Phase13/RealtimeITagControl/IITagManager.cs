@@ -42,7 +42,7 @@ namespace RealtimeITagControl
         /// <summary>
         /// 14개 Tag 주기적 읽기 시작
         /// </summary>
-        bool StartCyclicRead(int cycleMs = 500);
+        bool StartCyclicRead(int cycleMs);
 
         /// <summary>
         /// 주기적 읽기 중지

@@ -35,11 +35,11 @@ namespace RealtimeITagControl
         public static extern void RenderFrame();
 
         [DllImport(DllName, CallingConvention = CallConv, CharSet = CharSetType)]
-        public static extern void DrawRectangle(float x, float y, float width, float height, 
+        public static extern void DrawRectangle(float x, float y, float width, float height,
                                                 float r, float g, float b);
 
         [DllImport(DllName, CallingConvention = CallConv, CharSet = CharSetType)]
-        public static extern void DrawCircle(float x, float y, float radius, 
+        public static extern void DrawCircle(float x, float y, float radius,
                                              float r, float g, float b);
 
         [DllImport(DllName, CallingConvention = CallConv, CharSet = CharSetType)]
@@ -62,16 +62,16 @@ namespace RealtimeITagControl
         public static extern void SwapBuffersNow();
 
         [DllImport(DllName, CallingConvention = CallConv, CharSet = CharSetType)]
-        public static extern void DrawLine(float x1, float y1, float x2, float y2, 
+        public static extern void DrawLine(float x1, float y1, float x2, float y2,
                                           float r, float g, float b, float lineWidth);
 
         [DllImport(DllName, CallingConvention = CallConv, CharSet = CharSetType)]
-        public static extern void DrawArc(float centerX, float centerY, float radius, 
-                                         float startAngle, float endAngle, int clockwise, 
+        public static extern void DrawArc(float centerX, float centerY, float radius,
+                                         float startAngle, float endAngle, int clockwise,
                                          float r, float g, float b, float lineWidth);
 
         [DllImport(DllName, CallingConvention = CallConv, CharSet = CharSetType)]
-        public static extern void DrawPoint(float x, float y, float size, 
+        public static extern void DrawPoint(float x, float y, float size,
                                            float r, float g, float b);
 
         [DllImport(DllName, CallingConvention = CallConv, CharSet = CharSetType)]
@@ -86,6 +86,10 @@ namespace RealtimeITagControl
         // Phase 5.5: Canvas orientation
         [DllImport(DllName, CallingConvention = CallConv, CharSet = CharSetType)]
         public static extern void SetCanvasOrientation(int orientation);
+
+        // Phase 13: View direction (origin position)
+        [DllImport(DllName, CallingConvention = CallConv, CharSet = CharSetType)]
+        public static extern void SetViewDirection(int direction);
 
         // Phase 8.1: Text rendering for part/contour numbers
         [DllImport(DllName, CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Unicode)]
@@ -111,7 +115,7 @@ namespace RealtimeITagControl
         public static extern void StartCuttingTrace(int startPart, int startContour, int isReverse);
 
         [DllImport(DllName, CallingConvention = CallingConvention.Cdecl)]
-        public static extern void UpdateCuttingTrace(int currentPart, int currentContour, 
+        public static extern void UpdateCuttingTrace(int currentPart, int currentContour,
                                                       double progress, float posX, float posY);
 
         [DllImport(DllName, CallingConvention = CallingConvention.Cdecl)]
@@ -158,7 +162,7 @@ namespace RealtimeITagControl
         private int currentSimPartIndex = -1;
         private int currentSimContourIndex = -1;
         private int currentSimElementIndex = -1;
-        
+
         // Throttle redraw to reduce flickering
         private System.Windows.Forms.Timer redrawTimer = null;
         private bool needsRedraw = false;
@@ -167,24 +171,24 @@ namespace RealtimeITagControl
         // Phase 5: Selection management
         private SelectionManager selectionManager = null;
         private NumberPositionManager numberPositionManager = null;
-        
+
         // Phase 8.2: Real-time trace management
         private TraceManager traceManager = null;
-        
+
         // Phase 11: Cutting progress manager (public for TraceTestForm access)
         public Trace.CuttingProgressManager progressManager = null;
-        
+
         // Phase 5 Debug: Show selection areas
         private bool showSelectionAreas = false;
-        
+
         // Dispose 중복 호출 방지
         private bool isDisposed = false;
         private readonly object disposeLock = new object();
-        
+
         public CamViewerControl()
         {
             InitializeComponent();
-            
+
             // WinCC Graphics Designer 디자인 모드 체크
             if (!DesignMode)
             {
@@ -206,14 +210,14 @@ namespace RealtimeITagControl
         private void InitializeComponent()
         {
             this.SuspendLayout();
-            
+
             // CamViewerControl
             this.AutoScaleDimensions = new System.Drawing.SizeF(6F, 13F);
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
             this.Name = "CamViewerControl";
             this.Size = new System.Drawing.Size(800, 600);
             this.Load += new System.EventHandler(this.CamViewerControl_Load);
-            
+
             this.ResumeLayout(false);
         }
 
@@ -224,11 +228,11 @@ namespace RealtimeITagControl
                 Dock = DockStyle.Fill,
                 BackColor = Color.Black
             };
-            
+
             // Enable double buffering to prevent flickering
             typeof(Panel).InvokeMember("DoubleBuffered",
-                System.Reflection.BindingFlags.SetProperty | 
-                System.Reflection.BindingFlags.Instance | 
+                System.Reflection.BindingFlags.SetProperty |
+                System.Reflection.BindingFlags.Instance |
                 System.Reflection.BindingFlags.NonPublic,
                 null, renderPanel, new object[] { true });
 
@@ -257,9 +261,9 @@ namespace RealtimeITagControl
                 // Check if panel handle is valid
                 if (renderPanel.Handle == IntPtr.Zero)
                 {
-                    MessageBox.Show("Invalid window handle. Panel not created properly.", 
-                                    "Initialization Error", 
-                                    MessageBoxButtons.OK, 
+                    MessageBox.Show("Invalid window handle. Panel not created properly.",
+                                    "Initialization Error",
+                                    MessageBoxButtons.OK,
                                     MessageBoxIcon.Error);
                     return;
                 }
@@ -273,28 +277,28 @@ namespace RealtimeITagControl
                                     "- Failed to create OpenGL context\n" +
                                     "- Invalid pixel format\n" +
                                     "- Invalid window handle\n\n" +
-                                    "Please update your graphics drivers or check system configuration.", 
-                                    "OpenGL Initialization Error", 
-                                    MessageBoxButtons.OK, 
+                                    "Please update your graphics drivers or check system configuration.",
+                                    "OpenGL Initialization Error",
+                                    MessageBoxButtons.OK,
                                     MessageBoxIcon.Error);
                     LogHelper.Log("CamViewerCore", $"InitializeRenderer failed with error code: {result}");
                     return;
                 }
-                
+
                 LogHelper.Log("CamViewerCore", "OpenGL renderer initialized successfully");
 
                 isInitialized = true;
                 NativeRenderer.ResizeViewport(renderPanel.Width, renderPanel.Height);
-                
+
                 // Load RenderSettings from AppData (Phase8 compatibility)
                 LoadRenderSettings();
-                
+
                 // Phase 8.1: Initialize text renderer
                 InitializeTextRendererIfNeeded();
-                
+
                 // Draw initial shapes for demo
                 DrawSampleShapes();
-                
+
                 renderPanel.Invalidate();
             }
             catch (DllNotFoundException dllEx)
@@ -302,9 +306,9 @@ namespace RealtimeITagControl
                 MessageBox.Show("NativeRenderer.dll not found!\n\n" +
                                 "Please ensure the DLL is in the application directory.\n\n" +
                                 "Expected location: " + System.IO.Path.GetDirectoryName(System.Reflection.Assembly.GetExecutingAssembly().Location) + "\\NativeRenderer.dll\n\n" +
-                                "Error: " + dllEx.Message, 
-                                "DLL Not Found", 
-                                MessageBoxButtons.OK, 
+                                "Error: " + dllEx.Message,
+                                "DLL Not Found",
+                                MessageBoxButtons.OK,
                                 MessageBoxIcon.Error);
             }
             catch (BadImageFormatException imgEx)
@@ -312,7 +316,7 @@ namespace RealtimeITagControl
                 // TIA Portal Designer 환경에서는 handle이 정상 생성되지 않아 예외 발생
                 // Runtime(HMIRTm.exe)에서는 정상 동작하므로 로그만 남기고 패스
                 LogHelper.Log("CamViewerCore", $"Platform check (TIA Designer expected): {imgEx.Message}");
-                
+
                 // MessageBox 제거 - 편집 툴에서 방해되지 않도록
                 // Runtime에서는 이 catch 블록이 실행되지 않음
                 //MessageBox.Show("Platform mismatch error!\n\n" +
@@ -329,9 +333,9 @@ namespace RealtimeITagControl
                 MessageBox.Show("Error initializing renderer!\n\n" +
                                 "Exception Type: " + ex.GetType().Name + "\n" +
                                 "Message: " + ex.Message + "\n\n" +
-                                "Stack Trace:\n" + ex.StackTrace, 
-                                "Initialization Error", 
-                                MessageBoxButtons.OK, 
+                                "Stack Trace:\n" + ex.StackTrace,
+                                "Initialization Error",
+                                MessageBoxButtons.OK,
                                 MessageBoxIcon.Error);
             }
         }
@@ -348,7 +352,7 @@ namespace RealtimeITagControl
             // Draw rectangles
             NativeRenderer.DrawRectangle(-0.5f, -0.3f, 0.4f, 0.3f, 1.0f, 0.3f, 0.3f); // Red
             NativeRenderer.DrawRectangle(0.1f, 0.1f, 0.3f, 0.4f, 0.3f, 1.0f, 0.3f);   // Green
-            
+
             // Draw circles
             NativeRenderer.DrawCircle(-0.3f, 0.3f, 0.2f, 0.3f, 0.3f, 1.0f);  // Blue
             NativeRenderer.DrawCircle(0.4f, -0.2f, 0.15f, 1.0f, 1.0f, 0.3f); // Yellow
@@ -363,10 +367,10 @@ namespace RealtimeITagControl
         public void AddRectangle(float x, float y, float width, float height, Color color)
         {
             if (!isInitialized) return;
-            
-            NativeRenderer.DrawRectangle(x, y, width, height, 
-                                        color.R / 255.0f, 
-                                        color.G / 255.0f, 
+
+            NativeRenderer.DrawRectangle(x, y, width, height,
+                                        color.R / 255.0f,
+                                        color.G / 255.0f,
                                         color.B / 255.0f);
             renderPanel.Invalidate();
         }
@@ -377,7 +381,7 @@ namespace RealtimeITagControl
         public void AddCircle(float x, float y, float radius, Color color)
         {
             if (!isInitialized) return;
-            
+
             NativeRenderer.DrawCircle(x, y, radius,
                                      color.R / 255.0f,
                                      color.G / 255.0f,
@@ -391,7 +395,7 @@ namespace RealtimeITagControl
         public void ClearScene()
         {
             if (!isInitialized) return;
-            
+
             NativeRenderer.ClearShapes();
             currentProgram = null;
             renderPanel.Invalidate();
@@ -406,9 +410,9 @@ namespace RealtimeITagControl
             {
                 if (!File.Exists(filePath))
                 {
-                    MessageBox.Show("MPF file not found: " + filePath, 
-                                    "File Error", 
-                                    MessageBoxButtons.OK, 
+                    MessageBox.Show("MPF file not found: " + filePath,
+                                    "File Error",
+                                    MessageBoxButtons.OK,
                                     MessageBoxIcon.Error);
                     return;
                 }
@@ -421,7 +425,7 @@ namespace RealtimeITagControl
                 {
                     simulationEngine.Reset(); // Stop, ResetPosition, and set state to Idle
                 }
-                
+
                 // Reset simulation tracking indices
                 currentSimPartIndex = -1;
                 currentSimContourIndex = -1;
@@ -430,13 +434,13 @@ namespace RealtimeITagControl
                 // Parse MPF file
                 MPFParser parser = new MPFParser(true);
                 currentProgram = parser.Parse(content);
-                
+
                 // Phase 8.2: Store file path
                 currentProgram.FilePath = filePath;
 
                 // Clear all selections when loading new file
                 selectionManager.ClearAllSelections();
-                
+
                 // Phase 8.2: Initialize trace manager with new program
                 if (traceManager == null)
                 {
@@ -446,7 +450,7 @@ namespace RealtimeITagControl
                 {
                     traceManager.SetMPFProgram(currentProgram);
                 }
-                
+
                 // Phase 11: Initialize progress manager with new program
                 if (progressManager == null)
                 {
@@ -513,6 +517,9 @@ namespace RealtimeITagControl
 
             // Phase 5.5: Set canvas orientation before rendering
             NativeRenderer.SetCanvasOrientation((int)settings.Orientation);
+
+            // Phase 13: Set view direction before rendering
+            NativeRenderer.SetViewDirection((int)settings.ViewDirection);
 
             // Begin MPF rendering with exterior background color
             float[] bgColor = settings.GetColorAsFloat(settings.WorkpieceExteriorColor);
@@ -605,7 +612,7 @@ namespace RealtimeITagControl
                     // Draw contour exactly as point-in-polygon test
                     // MUST use AllSegments (includes LeadIn for inside approach)
                     List<PathSegment> contourPath = contour.AllSegments ?? contour.CuttingPath;
-                    
+
                     if (contourPath != null && contourPath.Count > 0)
                     {
 
@@ -649,7 +656,7 @@ namespace RealtimeITagControl
 
                                 // Draw thick arc (Convert degrees to radians)
                                 NativeRenderer.DrawArc(centerX, centerY, radius,
-                                                     (float)(arc.StartAngle * Math.PI / 180.0), 
+                                                     (float)(arc.StartAngle * Math.PI / 180.0),
                                                      (float)(arc.EndAngle * Math.PI / 180.0),
                                                      arc.Clockwise ? 1 : 0,
                                                      r, g, b, 5.0f);
@@ -660,11 +667,11 @@ namespace RealtimeITagControl
                         if (firstPoint.HasValue && lastPoint.HasValue)
                         {
                             double gapDistance = GeometryUtils.Distance(firstPoint.Value, lastPoint.Value);
-                            
+
                             if (gapDistance > 0.001) // If gap exists (> 1mm)
                             {
 
-                                
+
                                 // Draw gap closing line with dashed pattern for visibility
                                 // Use white color to distinguish from normal contour
                                 float gapX1 = (float)lastPoint.Value.X;
@@ -684,7 +691,7 @@ namespace RealtimeITagControl
                                         float dashY1 = gapY1 + t1 * (gapY2 - gapY1);
                                         float dashX2 = gapX1 + t2 * (gapX2 - gapX1);
                                         float dashY2 = gapY1 + t2 * (gapY2 - gapY1);
-                                        
+
                                         // White dashed line for gap
                                         NativeRenderer.DrawLine(dashX1, dashY1, dashX2, dashY2, 1.0f, 1.0f, 1.0f, 5.0f);
                                     }
@@ -714,12 +721,30 @@ namespace RealtimeITagControl
             float width = (float)(currentProgram.Workpiece.Width * workpieceScale);
             float height = (float)(currentProgram.Workpiece.Height * workpieceScale);
 
-            // Draw boundary rectangle
-            NativeRenderer.DrawLine(0, 0, width, 0, color[0], color[1], color[2], lineWidth);
-            NativeRenderer.DrawLine(width, 0, width, height, color[0], color[1], color[2], lineWidth);
-            NativeRenderer.DrawLine(width, height, 0, height, color[0], color[1], color[2], lineWidth);
-            NativeRenderer.DrawLine(0, height, 0, 0, color[0], color[1], color[2], lineWidth);
+            // Phase 13: Type 1에서는 width/height swap + Y 반전 필요
+            if (settings.ViewDirection == Rendering.ViewDirectionType.RightBottom)
+            {
+                // NativeRenderer에서 swap만 하므로 여기서 width/height도 swap
+                float temp = width;
+                width = height;
+                height = temp;
+                
+                // Y축 반전을 위해 음수 좌표 사용
+                NativeRenderer.DrawLine(0, 0, width, 0, color[0], color[1], color[2], lineWidth);
+                NativeRenderer.DrawLine(width, 0, width, -height, color[0], color[1], color[2], lineWidth);
+                NativeRenderer.DrawLine(width, -height, 0, -height, color[0], color[1], color[2], lineWidth);
+                NativeRenderer.DrawLine(0, -height, 0, 0, color[0], color[1], color[2], lineWidth);
+            }
+            else
+            {
+                // Type 2: Normal
+                NativeRenderer.DrawLine(0, 0, width, 0, color[0], color[1], color[2], lineWidth);
+                NativeRenderer.DrawLine(width, 0, width, height, color[0], color[1], color[2], lineWidth);
+                NativeRenderer.DrawLine(width, height, 0, height, color[0], color[1], color[2], lineWidth);
+                NativeRenderer.DrawLine(0, height, 0, 0, color[0], color[1], color[2], lineWidth);
+            }
         }
+
 
         /// <summary>
         /// Draw a single part with all its contours
@@ -742,10 +767,13 @@ namespace RealtimeITagControl
                 {
                     float partWidth = (float)(part.Width * workpieceScale);
                     float partHeight = (float)(part.Height * workpieceScale);
-                    
+
                     float[] boundaryColor = settings.GetColorAsFloat(settings.PartBoundaryColor);
+                    
+                    // Phase 13: Type 1일 때는 좌표를 변환하지 않음
+                    // NativeRenderer에서 자동으로 swap하므로 항상 동일한 좌표 전달
                     NativeRenderer.DrawDashedRectangle(
-                        originX, originY, 
+                        originX, originY,
                         partWidth, partHeight,
                         boundaryColor[0], boundaryColor[1], boundaryColor[2],
                         settings.PartBoundaryWidth,
@@ -781,7 +809,7 @@ namespace RealtimeITagControl
             bool isMarking = (contour.CuttingType == 10);
 
             // Phase 5: Check if this contour is selected
-            bool isContourSelected = selectionManager != null && 
+            bool isContourSelected = selectionManager != null &&
                                     selectionManager.IsContourSelected(partIndex, contourIndex);
 
             // Draw piercing point (skip if PiercingType == 0, e.g., marking has no piercing)
@@ -823,11 +851,11 @@ namespace RealtimeITagControl
 
                     // Check if this segment is part of lead-in
                     bool isLeadInSegment = (contour.LeadIn != null && contour.LeadIn.Path.Contains(segment));
-                    
+
                     // Phase 11: Check cutting progress state from progressManager
                     bool isCompleted = false;
                     bool isInProgress = false;
-                    
+
                     if (progressManager != null && progressManager.HasCuttingProgress)
                     {
                         isCompleted = progressManager.IsElementCompleted(partIndex, contourIndex, elementIndex);
@@ -840,7 +868,7 @@ namespace RealtimeITagControl
                     // 2. Cutting progress state
                     // 3. Lead-in
                     // 4. Default (pending/marking)
-                    
+
                     Color segmentColor;
                     float segmentWidth;
 
@@ -892,7 +920,7 @@ namespace RealtimeITagControl
         /// <summary>
         /// Draw a path segment (line or arc)
         /// </summary>
-        private void DrawPathSegment(PathSegment segment, float offsetX, float offsetY, 
+        private void DrawPathSegment(PathSegment segment, float offsetX, float offsetY,
                                     float r, float g, float b, float lineWidth)
         {
             if (segment == null) return;
@@ -914,10 +942,13 @@ namespace RealtimeITagControl
                 float centerY = (float)(arc.Center.Y * workpieceScale) + offsetY;
                 float radius = (float)(arc.Radius * workpieceScale);
 
-                NativeRenderer.DrawArc(centerX, centerY, radius, 
-                                      (float)(arc.StartAngle * Math.PI / 180.0), 
-                                      (float)(arc.EndAngle * Math.PI / 180.0), 
-                                      arc.Clockwise ? 1 : 0, 
+                // Convert degrees to radians
+                float startAngleRad = (float)(arc.StartAngle * Math.PI / 180.0);
+                float endAngleRad = (float)(arc.EndAngle * Math.PI / 180.0);
+
+                NativeRenderer.DrawArc(centerX, centerY, radius,
+                                      startAngleRad, endAngleRad,
+                                      arc.Clockwise ? 1 : 0,
                                       r, g, b, lineWidth);
             }
         }
@@ -935,20 +966,40 @@ namespace RealtimeITagControl
             // Calculate zoom to fit workpiece at 50% of screen (1/2)
             // This provides comfortable viewing with space around workpiece
             float aspect = (float)renderPanel.Width / (float)renderPanel.Height;
-            float wpAspect = width / height;
 
             // Calculate zoom using configurable multiplier from RenderSettings
             // User can adjust InitialZoomMultiplier in Render Settings (0.001 ~ 0.1)
             float multiplier = RenderSettings.Instance.InitialZoomMultiplier;
-            float zoomByWidth = (float)renderPanel.Width / width * multiplier;
-            float zoomByHeight = (float)renderPanel.Height / height * multiplier;
-            
-            // Use the smaller zoom to ensure entire workpiece fits
-            zoom = Math.Min(zoomByWidth, zoomByHeight);
 
-            // Center the view
-            panX = width / 2.0f;
-            panY = height / 2.0f;
+            // Phase 13: Handle Type 1 (RightBottom) - coordinates are swapped
+            Rendering.ViewDirectionType viewDir = Rendering.RenderSettings.Instance.ViewDirection;
+
+            if (viewDir == Rendering.ViewDirectionType.RightBottom)
+            {
+                // Type 1: X and Y are swapped, so swap width/height for zoom calculation
+                float zoomByWidth = (float)renderPanel.Width / height * multiplier;   // Use height
+                float zoomByHeight = (float)renderPanel.Height / width * multiplier;  // Use width
+
+                // Use the smaller zoom to ensure entire workpiece fits
+                zoom = Math.Min(zoomByWidth, zoomByHeight);
+
+                // Center the view - swap dimensions
+                panX = height / 2.0f;  // Use height for panX
+                panY = width / 2.0f;   // Use width for panY
+            }
+            else
+            {
+                // Type 2: Normal (LeftBottom)
+                float zoomByWidth = (float)renderPanel.Width / width * multiplier;
+                float zoomByHeight = (float)renderPanel.Height / height * multiplier;
+
+                // Use the smaller zoom to ensure entire workpiece fits
+                zoom = Math.Min(zoomByWidth, zoomByHeight);
+
+                // Center the view
+                panX = width / 2.0f;
+                panY = height / 2.0f;
+            }
 
             UpdateViewTransform();
         }
@@ -980,7 +1031,7 @@ namespace RealtimeITagControl
             simulationEngine.ProgressUpdated += SimulationEngine_ProgressUpdated;
             simulationEngine.SimulationCompleted += SimulationEngine_SimulationCompleted;
             simulationEngine.LogMessage += SimulationEngine_LogMessage;
-            
+
             // Setup redraw throttle timer to reduce flickering
             redrawTimer = new System.Windows.Forms.Timer();
             redrawTimer.Interval = 16; // Redraw at most every 16ms (60 FPS)
@@ -1021,7 +1072,7 @@ namespace RealtimeITagControl
             // Redraw to show updated number positions
             needsRedraw = true;
         }
-        
+
         /// <summary>
         /// Phase 7: Cutting progress updated event handler
         /// </summary>
@@ -1029,6 +1080,9 @@ namespace RealtimeITagControl
         {
             // Redraw to show cutting progress
             needsRedraw = true;
+            
+            // Phase 13: 즉시 화면 갱신 (엘리먼트 단위 트레이스)
+            Invalidate();
         }
 
         /// <summary>
@@ -1051,7 +1105,7 @@ namespace RealtimeITagControl
             {
                 // Clear all selections when starting simulation
                 selectionManager.ClearAllSelections();
-                
+
                 simulationEngine.SetProgram(currentProgram);
                 simulationEngine.Start();
             }
@@ -1089,10 +1143,10 @@ namespace RealtimeITagControl
         public void StopSimulation()
         {
             simulationEngine.Stop();
-            
+
             // Keep current progress (do NOT reset indices)
             // User can see where simulation stopped
-            
+
             // Redraw to show final state
             if (currentProgram != null)
             {
@@ -1107,19 +1161,19 @@ namespace RealtimeITagControl
         {
             return simulationEngine != null ? simulationEngine.State : SimulationState.Idle;
         }
-        
+
         /// <summary>
         /// Reset simulation to beginning
         /// </summary>
         public void ResetSimulation()
         {
             simulationEngine.Reset();
-            
+
             // Reset display to initial state
             currentSimPartIndex = -1;
             currentSimContourIndex = -1;
             currentSimElementIndex = -1;
-            
+
             if (currentProgram != null)
             {
                 DisplayMPFProgram();
@@ -1175,7 +1229,7 @@ namespace RealtimeITagControl
 
             // Don't redraw - keep final simulation state visible
             // DisplayMPFProgram() would reset to preview mode, which is not desired
-            
+
             MessageBox.Show("시뮬레이션이 완료되었습니다!", "완료", MessageBoxButtons.OK, MessageBoxIcon.Information);
         }
 
@@ -1196,7 +1250,7 @@ namespace RealtimeITagControl
         private void RedrawSimulation()
         {
             if (!isInitialized || currentProgram == null) return;
-            
+
             // Set flag for throttled redraw (reduces flickering)
             needsRedraw = true;
         }
@@ -1204,16 +1258,16 @@ namespace RealtimeITagControl
         // Simulation events for MainForm
         public event EventHandler<SimulationProgressEventArgs> SimulationProgress;
         public event EventHandler<string> SimulationLog;
-        
+
         // MPF loaded event
         public event EventHandler<MPFLoadedEventArgs> MPFLoaded;
-        
+
         // General log event (for debug and selection logs)
         public event EventHandler<string> LogMessage;
-        
+
         // Contour selection event (for ITag write)
         public event EventHandler<ContourSelectedEventArgs> ContourSelected;
-        
+
         public class MPFLoadedEventArgs : EventArgs
         {
             public string Version { get; set; }
@@ -1222,7 +1276,7 @@ namespace RealtimeITagControl
             public int PartCount { get; set; }
             public int ContourCount { get; set; }
         }
-        
+
         public class ContourSelectedEventArgs : EventArgs
         {
             public int PartIndex { get; set; }      // 0-based index
@@ -1234,9 +1288,9 @@ namespace RealtimeITagControl
         private void UpdateViewTransform()
         {
             if (!isInitialized) return;
-            
+
             NativeRenderer.SetViewTransform(zoom, panX, panY);
-            
+
             // Always use Invalidate to trigger Paint event (for text overlay)
             renderPanel.Invalidate();
         }
@@ -1244,7 +1298,7 @@ namespace RealtimeITagControl
         private void RenderPanel_Resize(object sender, EventArgs e)
         {
             if (!isInitialized) return;
-            
+
             NativeRenderer.ResizeViewport(renderPanel.Width, renderPanel.Height);
             renderPanel.Invalidate();
         }
@@ -1252,14 +1306,14 @@ namespace RealtimeITagControl
         private void RenderPanel_Paint(object sender, PaintEventArgs e)
         {
             if (!isInitialized) return;
-            
+
             // Prevent concurrent rendering
             if (isRedrawing) return;
-            
+
             try
             {
                 isRedrawing = true;
-                
+
                 // If MPF program is loaded, render it
                 if (currentProgram != null)
                 {
@@ -1274,12 +1328,12 @@ namespace RealtimeITagControl
                         // Normal rendering (initial load, before simulation starts)
                         RenderMPFScene();
                     }
-                    
+
                     // Draw text overlays BEFORE swapping buffers
                     // EndMPFRender now calls glFinish() but NOT SwapBuffers
                     // We draw text using Paint event Graphics, then call SwapBuffersNow()
                     DrawTextOverlays(e.Graphics);
-                    
+
                     // Now swap buffers to present both OpenGL and GDI+ content
                     NativeRenderer.SwapBuffersNow();
                 }
@@ -1294,9 +1348,9 @@ namespace RealtimeITagControl
                 isRedrawing = false;
             }
         }
-        
 
-        
+
+
         /// <summary>
         /// Render frame with simulation progress
         /// </summary>
@@ -1308,6 +1362,9 @@ namespace RealtimeITagControl
 
             // Phase 5.5: Set canvas orientation before rendering
             NativeRenderer.SetCanvasOrientation((int)settings.Orientation);
+
+            // Phase 13: Set view direction before rendering
+            NativeRenderer.SetViewDirection((int)settings.ViewDirection);
 
             // Begin MPF rendering with exterior background color
             float[] bgColor = settings.GetColorAsFloat(settings.WorkpieceExteriorColor);
@@ -1340,7 +1397,7 @@ namespace RealtimeITagControl
                     {
                         float partWidth = (float)(part.Width * workpieceScale);
                         float partHeight = (float)(part.Height * workpieceScale);
-                        
+
                         float[] boundaryColor = settings.GetColorAsFloat(settings.PartBoundaryColor);
                         NativeRenderer.DrawDashedRectangle(
                             originX, originY,
@@ -1379,11 +1436,11 @@ namespace RealtimeITagControl
                     for (int ei = 0; ei < contour.AllSegments.Count; ei++)
                     {
                         PathSegment segment = contour.AllSegments[ei];
-                        
+
                         // Determine if this segment is completed, in progress, or future
                         bool isCompleted = false;
                         bool isCurrent = false;
-                        
+
                         if (pi < currentSimPartIndex ||
                             (pi == currentSimPartIndex && ci < currentSimContourIndex))
                         {
@@ -1404,7 +1461,7 @@ namespace RealtimeITagControl
                             // else: future segment (draw as gray preview)
                         }
                         // else: future part/contour (draw as gray preview)
-                        
+
                         // Phase 5: Check selection state
                         bool isContourSelected = selectionManager != null &&
                                                 selectionManager.IsContourSelected(pi, ci);
@@ -1413,7 +1470,7 @@ namespace RealtimeITagControl
 
                         // Choose color based on state (selection overrides simulation state)
                         float r, g, b, lineWidth;
-                        
+
                         if (isElementSelected)
                         {
                             // Element selection (highest priority)
@@ -1433,7 +1490,7 @@ namespace RealtimeITagControl
                             // Completed segments (both lead-in and cutting)
                             float[] color = settings.GetColorAsFloat(settings.CuttingCompletedColor);
                             r = color[0]; g = color[1]; b = color[2];
-                            
+
                             if (contour.LeadIn != null && contour.LeadIn.Path.Contains(segment))
                             {
                                 lineWidth = settings.LeadInWidth;
@@ -1448,7 +1505,7 @@ namespace RealtimeITagControl
                             // Current segment (both lead-in and cutting): use in-progress color (red)
                             float[] color = settings.GetColorAsFloat(settings.CuttingInProgressColor);
                             r = color[0]; g = color[1]; b = color[2];
-                            
+
                             if (contour.LeadIn != null && contour.LeadIn.Path.Contains(segment))
                             {
                                 lineWidth = settings.LeadInWidth;
@@ -1477,7 +1534,7 @@ namespace RealtimeITagControl
                                 lineWidth = settings.CuttingPendingWidth;
                             }
                         }
-                        
+
                         DrawPathSegment(segment, originX, originY, r, g, b, lineWidth);
                     }
                 }
@@ -1494,38 +1551,38 @@ namespace RealtimeITagControl
                 DrawContourSelectionBoxes();
             }
         }
-        
+
         /// <summary>
         /// Draw text overlays for part and contour numbers
         /// </summary>
         private void DrawTextOverlays(Graphics g)
         {
             if (currentProgram == null) return;
-            
+
             RenderSettings settings = RenderSettings.Instance;
-            
+
             // Calculate world-to-screen transformation
             float aspect = (float)renderPanel.Width / (float)renderPanel.Height;
             float viewWidth = 2.0f / zoom;
             float viewHeight = viewWidth / aspect;
-            
+
             float worldLeft = -viewWidth / 2 + panX;
             float worldRight = viewWidth / 2 + panX;
             float worldBottom = -viewHeight / 2 + panY;
             float worldTop = viewHeight / 2 + panY;
-            
+
             int partIndex = 0;
             foreach (Part part in currentProgram.Parts)
             {
                 float originX = (float)(part.Origin.X * workpieceScale);
                 float originY = (float)(part.Origin.Y * workpieceScale);
-                
+
                 // Draw part number
                 if (settings.ShowPartNumbers)
                 {
                     // Phase 5.4: Check for custom position
                     GeometryUtils.Point2D? customPos = numberPositionManager?.GetPartPosition(partIndex);
-                    
+
                     float worldX, worldY;
                     if (customPos.HasValue)
                     {
@@ -1539,11 +1596,11 @@ namespace RealtimeITagControl
                         worldX = originX;
                         worldY = originY;
                     }
-                    
+
                     // Convert world coordinates to screen coordinates
                     float screenX = (worldX - worldLeft) / (worldRight - worldLeft) * renderPanel.Width;
                     float screenY = (worldTop - worldY) / (worldTop - worldBottom) * renderPanel.Height;
-                    
+
                     using (Font font = new Font("Arial", settings.PartNumberSize, FontStyle.Bold))
                     using (SolidBrush brush = new SolidBrush(settings.PartNumberColor))
                     {
@@ -1552,7 +1609,7 @@ namespace RealtimeITagControl
                         g.DrawString(text, font, brush, screenX - textSize.Width / 2, screenY - textSize.Height / 2);
                     }
                 }
-                
+
                 // Draw contour numbers
                 if (settings.ShowContourNumbers)
                 {
@@ -1561,7 +1618,7 @@ namespace RealtimeITagControl
                     {
                         // Phase 5.4: Check for custom position
                         GeometryUtils.Point2D? customPos = numberPositionManager?.GetContourPosition(partIndex, contourIndex);
-                        
+
                         float worldX, worldY;
                         if (customPos.HasValue)
                         {
@@ -1575,11 +1632,11 @@ namespace RealtimeITagControl
                             worldX = (float)(contour.PiercingPosition.X * workpieceScale) + originX;
                             worldY = (float)(contour.PiercingPosition.Y * workpieceScale) + originY;
                         }
-                        
+
                         // Convert world coordinates to screen coordinates
                         float screenX = (worldX - worldLeft) / (worldRight - worldLeft) * renderPanel.Width;
                         float screenY = (worldTop - worldY) / (worldTop - worldBottom) * renderPanel.Height;
-                        
+
                         using (Font font = new Font("Arial", settings.ContourNumberSize, FontStyle.Regular))
                         using (SolidBrush brush = new SolidBrush(settings.ContourNumberColor))
                         {
@@ -1596,15 +1653,15 @@ namespace RealtimeITagControl
                                 g.DrawString(text, font, brush, screenX + 5, screenY - textSize.Height / 2);
                             }
                         }
-                        
+
                         contourIndex++;
                     }
                 }
-                
+
                 partIndex++;
             }
         }
-        
+
         /// <summary>
         /// Override Invalidate to update render panel
         /// </summary>
@@ -1642,15 +1699,35 @@ namespace RealtimeITagControl
 
         private void RenderPanel_MouseMove(object sender, MouseEventArgs e)
         {
+            // Phase 13: Update mouse coordinates (throttled)
+            UpdateMouseCoordinates(e.Location);
+
             if (isPanning)
             {
+                // Calculate mouse delta
+                float deltaX = e.X - lastMousePos.X;
+                float deltaY = e.Y - lastMousePos.Y;
+
+                // Phase 13: Pan direction depends on ViewDirection
+                Rendering.ViewDirectionType viewDir = Rendering.RenderSettings.Instance.ViewDirection;
+
                 // Phase4: Inverted pan direction for intuitive mouse control
-                float dx = -(e.X - lastMousePos.X) / (float)renderPanel.Width * 2.0f / zoom;
-                float dy = (e.Y - lastMousePos.Y) / (float)renderPanel.Height * 2.0f / zoom;
-                
-                panX += dx;
-                panY += dy;
-                
+                float dx = -deltaX / (float)renderPanel.Width * 2.0f / zoom;
+                float dy = deltaY / (float)renderPanel.Height * 2.0f / zoom;
+
+                if (viewDir == Rendering.ViewDirectionType.RightBottom)
+                {
+                    // Type 1: RightBottom origin
+                    panX -= dx;
+                    panY += dy;
+                }
+                else
+                {
+                    // Type 2: LeftBottom (기본 OpenGL)
+                    panX += dx;
+                    panY += dy;
+                }
+
                 lastMousePos = e.Location;
                 UpdateViewTransform();
             }
@@ -1669,45 +1746,54 @@ namespace RealtimeITagControl
         private void RenderPanel_MouseWheel(object sender, MouseEventArgs e)
         {
             // Phase 12 FIX: Zoom at mouse pointer position instead of center
-            
+
             // Get mouse position in object space BEFORE zoom
             GeometryUtils.Point2D mouseObjectPos = ScreenToObject(e.Location);
-            
+
             // Store old zoom
             float oldZoom = zoom;
-            
+
             // Reversed zoom direction: scroll up = zoom in, scroll down = zoom out
             float zoomFactor = e.Delta > 0 ? 1.1f : 0.9f;
             zoom *= zoomFactor;
-            
+
             // Phase 7: Increased max zoom limit to 30000.0 for extreme detail
             if (zoom < 0.1f) zoom = 0.1f;
             if (zoom > 30000.0f) zoom = 30000.0f;
-            
-            // Adjust pan so that the mouse position stays at the same object space coordinate
-            // After zoom, we want: ScreenToObject(mouseScreenPos) == mouseObjectPos
-            // 
-            // ScreenToObject formula:
-            //   objectX = ndcX / zoom + panX
-            //   objectY = ndcY / zoom / aspect + panY
-            //
-            // We want the same objectX, objectY after zoom change:
-            //   mouseObjectPos.X = ndcX / oldZoom + oldPanX  (before)
-            //   mouseObjectPos.X = ndcX / newZoom + newPanX  (after)
-            //
-            // Solving for newPanX:
-            //   ndcX / newZoom + newPanX = ndcX / oldZoom + oldPanX
-            //   newPanX = oldPanX + ndcX * (1/oldZoom - 1/newZoom)
-            //   newPanX = oldPanX + ndcX * (newZoom - oldZoom) / (oldZoom * newZoom)
-            //
-            // But simpler approach: calculate delta in object space
-            //   deltaPanX = (mouseObjectPos.X - panX) * (1 - oldZoom/zoom)
-            //   newPanX = panX + deltaPanX
-            
+
+            // Phase 13: Adjust pan based on ViewDirection
+            // The formula keeps the mouse position at the same object space coordinate after zoom
             float zoomRatio = oldZoom / zoom;
-            panX = (float)(mouseObjectPos.X + (panX - mouseObjectPos.X) * zoomRatio);
-            panY = (float)(mouseObjectPos.Y + (panY - mouseObjectPos.Y) * zoomRatio);
             
+            Rendering.ViewDirectionType viewDir = Rendering.RenderSettings.Instance.ViewDirection;
+            
+            if (viewDir == Rendering.ViewDirectionType.RightBottom)
+            {
+                // Type 1: Coordinates are swapped
+                // mouseObjectPos is in MPF coordinates (X, Y)
+                // But panX/panY are in OpenGL coordinates
+                //
+                // Mapping:
+                //   MPF X → OpenGL Y → panY
+                //   MPF Y → OpenGL X → panX
+                //
+                // So we need to swap the pan adjustment:
+                panX = (float)(mouseObjectPos.Y + (panX - mouseObjectPos.Y) * zoomRatio);  // MPF Y → panX
+                panY = (float)(mouseObjectPos.X + (panY - mouseObjectPos.X) * zoomRatio);  // MPF X → panY
+            }
+            else
+            {
+                // Type 2: Normal mapping
+                // mouseObjectPos is in MPF coordinates (X, Y)
+                // panX/panY are also in OpenGL coordinates
+                //
+                // Mapping:
+                //   MPF X → OpenGL X → panX
+                //   MPF Y → OpenGL Y → panY
+                panX = (float)(mouseObjectPos.X + (panX - mouseObjectPos.X) * zoomRatio);
+                panY = (float)(mouseObjectPos.Y + (panY - mouseObjectPos.Y) * zoomRatio);
+            }
+
             UpdateViewTransform();
         }
 
@@ -1715,6 +1801,7 @@ namespace RealtimeITagControl
 
         /// <summary>
         /// Convert screen coordinates to object space coordinates (matches glOrtho projection)
+        /// Phase 13: Support ViewDirectionType for coordinate transformation
         /// </summary>
         private GeometryUtils.Point2D ScreenToObject(Point screenPos)
         {
@@ -1733,22 +1820,73 @@ namespace RealtimeITagControl
             System.Diagnostics.Debug.WriteLine($"[ScreenToObject] NDC: ndcX={ndcX:F6}, ndcY={ndcY:F6}");
 
             // Apply inverse projection (NDC → Object Space)
-            // glOrtho: left=-viewWidth/2+panX, right=viewWidth/2+panX, bottom=-viewHeight/2+panY, top=viewHeight/2+panY
-            // viewWidth = 2.0/zoom, viewHeight = viewWidth/aspect
-            // 역변환: objectX = ndcX * (viewWidth/2) + panX = ndcX/zoom + panX
-            //        objectY = ndcY * (viewHeight/2) + panY = ndcY/zoom/aspect + panY
-            float objectX = (float)(ndcX / zoom + panX);
+            // Phase 13: glOrtho changes based on ViewDirection
             float aspect = (float)renderPanel.Width / (float)renderPanel.Height;
-            float objectY = (float)(ndcY / zoom / aspect + panY);
+            Rendering.ViewDirectionType viewDir = Rendering.RenderSettings.Instance.ViewDirection;
 
-            System.Diagnostics.Debug.WriteLine($"[ScreenToObject] Object space: X={objectX:F6}, Y={objectY:F6}");
-            
-            System.Diagnostics.Debug.WriteLine($"[ScreenToObject] Object space (final): X={objectX:F6}, Y={objectY:F6}");
+            float finalX, finalY;
 
-            return new GeometryUtils.Point2D(objectX, objectY);
+            if (viewDir == Rendering.ViewDirectionType.RightBottom)
+            {
+                // Type 1: Coordinates are swapped in NativeRenderer
+                // glOrtho: X axis flipped, Y axis normal
+                //   left = viewWidth/2 + panX, right = -viewWidth/2 + panX
+                //   bottom = -viewHeight/2 + panY, top = viewHeight/2 + panY
+                //
+                // Inverse projection:
+                //   OpenGL X = panX - ndcX / zoom
+                //   OpenGL Y = panY + ndcY / zoom / aspect
+                //
+                // But coordinates are swapped (MPF X↔Y):
+                //   MPF X = OpenGL Y = panY + ndcY / zoom / aspect
+                //   MPF Y = OpenGL X = panX - ndcX / zoom
+
+                finalX = (float)(ndcY / zoom / aspect + panY);  // Screen Y → OpenGL Y → MPF X
+                finalY = (float)(-ndcX / zoom + panX);          // Screen X → OpenGL X → MPF Y
+            }
+            else // LeftBottom
+            {
+                // Type 2: Normal glOrtho
+                // MPF X → OpenGL X, MPF Y → OpenGL Y
+
+                finalX = (float)(ndcX / zoom + panX);
+                finalY = (float)(ndcY / zoom / aspect + panY);
+            }
+
+            System.Diagnostics.Debug.WriteLine($"[ScreenToObject] ViewDirection={viewDir}, Object space: X={finalX:F6}, Y={finalY:F6}");
+
+            return new GeometryUtils.Point2D(finalX, finalY);
         }
 
+        /// <summary>
+        /// Phase 13: Update mouse coordinates display
+        /// </summary>
+        private void UpdateMouseCoordinates(Point screenPos)
+        {
+            try
+            {
+                // Convert screen coordinates to object space
+                GeometryUtils.Point2D objectPos = ScreenToObject(screenPos);
 
+                // Convert to mm (object space is in meters * 0.001 scale)
+                // workpieceScale = 0.001 means 1mm in MPF = 0.001 in object space
+                // So to get mm: objectPos / workpieceScale
+                double xMm = objectPos.X / workpieceScale;
+                double yMm = objectPos.Y / workpieceScale;
+
+                // Fire event to update UI (if handler exists)
+                MouseCoordinatesChanged?.Invoke(this, new MouseCoordinatesEventArgs(xMm, yMm));
+            }
+            catch (Exception ex)
+            {
+                LogHelper.Log("CamViewerCore", $"[Phase13] UpdateMouseCoordinates error: {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// Phase 13: Mouse coordinates changed event
+        /// </summary>
+        public event EventHandler<MouseCoordinatesEventArgs> MouseCoordinatesChanged;
 
         /// <summary>
         /// Handle contour selection at screen position
@@ -1778,11 +1916,11 @@ namespace RealtimeITagControl
             {
                 int selectedPartIndex = result.Value.Item1;
                 int selectedContourIndex = result.Value.Item2;
-                
+
                 System.Diagnostics.Debug.WriteLine($"[HandleContourSelection] Selected Part {selectedPartIndex}, Contour {selectedContourIndex}");
-                
+
                 selectionManager.SelectContour(selectedPartIndex, selectedContourIndex);
-                
+
                 // 선택 이벤트 발생 (ITag Write를 위해)
                 ContourSelected?.Invoke(this, new ContourSelectedEventArgs
                 {
@@ -1791,7 +1929,7 @@ namespace RealtimeITagControl
                     PartNumber = selectedPartIndex + 1,     // 1-based
                     ContourNumber = selectedContourIndex + 1  // 1-based
                 });
-                
+
                 // 명시적으로 다시 그리기 (색상 변경 적용)
                 Invalidate();
             }
@@ -1812,19 +1950,19 @@ namespace RealtimeITagControl
                 var contour = contours[i];
                 int displayPartIndex = contour.partIndex + 1;  // 1-based
                 int displayContourIndex = contour.contourIndex + 1;  // 1-based
-                
+
                 string itemText = $"Part {displayPartIndex}, Contour {displayContourIndex} (면적: {contour.area:F2})";
                 ToolStripMenuItem item = new ToolStripMenuItem(itemText);
-                
+
                 // Capture variables for closure
                 int capturedPartIndex = contour.partIndex;
                 int capturedContourIndex = contour.contourIndex;
-                
+
                 item.Click += (sender, e) =>
                 {
                     selectionManager.SelectContour(capturedPartIndex, capturedContourIndex);
                 };
-                
+
                 menu.Items.Add(item);
             }
 
@@ -1859,9 +1997,9 @@ namespace RealtimeITagControl
             {
                 int partIndex = result.Value.Item1;
                 int contourIndex = result.Value.Item2;
-                
+
                 selectionManager.SelectElement(partIndex, contourIndex, result.Value.Item3, addToSelection);
-                
+
                 // 선택 이벤트 발생 (Element 선택 시에도 Part/Contour 정보 전달)
                 ContourSelected?.Invoke(this, new ContourSelectedEventArgs
                 {
@@ -2175,16 +2313,43 @@ namespace RealtimeITagControl
             if (currentProgram == null) return;
 
             var settings = RenderSettings.Instance;
-            
+
             // Phase 8.1: Sync with RenderSettings Show flags
             bool showPartNumbers = settings.ShowPartNumbers;
             bool showContourNumbers = settings.ShowContourNumbers;
-            
+
             if (!showPartNumbers && !showContourNumbers)
                 return;
 
+            // Calculate visible world bounds for frustum culling (performance optimization)
+            // Phase 13: Support both Type 1 and Type 2 coordinate systems
+            float aspect = (float)renderPanel.Width / (float)renderPanel.Height;
+            float viewWidth = 2.0f / zoom;
+            float viewHeight = viewWidth / aspect;
+            
+            float worldLeft, worldRight, worldBottom, worldTop;
+            Rendering.ViewDirectionType viewDir = Rendering.RenderSettings.Instance.ViewDirection;
+            
+            if (viewDir == Rendering.ViewDirectionType.RightBottom)
+            {
+                // Type 1: X and Y are swapped, X axis is flipped
+                // panX affects MPF Y (OpenGL X), panY affects MPF X (OpenGL Y)
+                worldLeft = -viewHeight / 2 + panY;   // MPF X min (uses panY)
+                worldRight = viewHeight / 2 + panY;    // MPF X max (uses panY)
+                worldBottom = -viewWidth / 2 + panX;   // MPF Y min (uses panX, flipped)
+                worldTop = viewWidth / 2 + panX;       // MPF Y max (uses panX, flipped)
+            }
+            else
+            {
+                // Type 2: Normal mapping
+                worldLeft = -viewWidth / 2 + panX;
+                worldRight = viewWidth / 2 + panX;
+                worldBottom = -viewHeight / 2 + panY;
+                worldTop = viewHeight / 2 + panY;
+            }
+
             int displayCount = 0;
-            int maxNumbersToDisplay = 100;  // Fixed limit for performance
+            int maxNumbersToDisplay = 5000;  // Increased limit for small contours (was 500)
 
             // Draw part numbers
             if (showPartNumbers)
@@ -2205,6 +2370,10 @@ namespace RealtimeITagControl
                         // Apply part origin offset and workpiece scale
                         double worldX = (pos.X * workpieceScale) + (part.Origin.X * workpieceScale);
                         double worldY = (pos.Y * workpieceScale) + (part.Origin.Y * workpieceScale);
+
+                        // Frustum culling: Skip if outside visible area
+                        if (worldX < worldLeft || worldX > worldRight || worldY < worldBottom || worldY > worldTop)
+                            continue;
 
                         NativeRenderer.DrawPartNumber(
                             worldX, worldY, (uint)(partIndex + 1),  // 1-based part number
@@ -2238,7 +2407,7 @@ namespace RealtimeITagControl
                         {
                             // 마지막 컨투어 여부 판정
                             bool isLastContour = (contourIndex == part.Contours.Count - 1);
-                            
+
                             var pos = LabelPositionCalculator.CalculateContourLabelPosition(contour, part, isLastContour);
                             double scale = LabelPositionCalculator.CalculateLabelScale(
                                 zoom, (int)settings.ContourNumberSize);
@@ -2246,6 +2415,10 @@ namespace RealtimeITagControl
                             // Apply part origin offset and workpiece scale
                             double worldX = (pos.X * workpieceScale) + offsetX;
                             double worldY = (pos.Y * workpieceScale) + offsetY;
+
+                            // Frustum culling: Skip if outside visible area
+                            if (worldX < worldLeft || worldX > worldRight || worldY < worldBottom || worldY > worldTop)
+                                continue;
 
                             NativeRenderer.DrawContourNumber(
                                 worldX, worldY, (uint)(contourIndex + 1),  // 1-based contour number
@@ -2466,7 +2639,7 @@ namespace RealtimeITagControl
                 }
                 else
                 {
-                    
+
                     // Create default settings file
                     if (!Directory.Exists(appDataPath))
                     {
@@ -2496,7 +2669,7 @@ namespace RealtimeITagControl
                     }
                     isDisposed = true;
                 }
-                
+
                 try
                 {
                     LogHelper.Log("CamViewerCore", "=== Dispose 시작 ===");
@@ -2589,12 +2762,27 @@ namespace RealtimeITagControl
                     LogHelper.Log("CamViewerCore", $"Dispose critical error: {ex.Message}\n{ex.StackTrace}");
                 }
             }
-            
+
             // WinCC 환경: this.Controls 및 base.Dispose()는 WinCC가 자동 관리
             // 중요 리소스(OpenGL, ITag, SimulationEngine 등)는 이미 위에서 정리 완료
             // WinCC Container가 Controls 및 UserControl Dispose를 처리하므로 직접 호출 불필요
             // 직접 호출 시 null 참조 발생 (WinCC가 이미 정리한 후)
             LogHelper.Log("CamViewerCore", "CamViewerControl disposed (WinCC manages Controls and base.Dispose)");
+        }
+    }
+
+    /// <summary>
+    /// Phase 13: Mouse coordinates event args
+    /// </summary>
+    public class MouseCoordinatesEventArgs : EventArgs
+    {
+        public double X { get; }
+        public double Y { get; }
+
+        public MouseCoordinatesEventArgs(double x, double y)
+        {
+            X = x;
+            Y = y;
         }
     }
 }

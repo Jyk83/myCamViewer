@@ -22,6 +22,8 @@ namespace RealtimeITagControl.UI
         private Label lblCurrentContour;
         private TextBox txtCurrentPart;
         private TextBox txtCurrentContour;
+        private Label lblITagCoordinates;  // Phase 13: ITag 실시간 좌표
+        private TextBox txtITagCoordinates;
 
         private GroupBox grpWorkInfo;
         private Label lblWorkDir;
@@ -88,8 +90,8 @@ namespace RealtimeITagControl.UI
             int y = 10;
             int padding = 10;
 
-            // ITag 서버 상태 (최상단)
-            grpITagStatus = CreateGroup("ITag 서버 상태", 10, y, 280, 80);
+            // ITag 서버 상태 (최상단) - Phase 13: 주기 읽기 제거로 높이 감소
+            grpITagStatus = CreateGroup("ITag 서버 상태", 10, y, 280, 55);
             CreateITagStatusInputs(grpITagStatus);
             this.Controls.Add(grpITagStatus);
             y += grpITagStatus.Height + padding;
@@ -102,14 +104,14 @@ namespace RealtimeITagControl.UI
             this.Controls.Add(grpCoordinates);
             y += grpCoordinates.Height + padding;
 
-            // 진행 정보 (높이 줄임: 105 → 80)
-            grpProgress = CreateGroup("진행 정보", 10, y, 280, 80);
+            // 진행 정보 (Phase 13: ITag 실시간 좌표 추가로 높이 증가)
+            grpProgress = CreateGroup("진행 정보", 10, y, 280, 105);
             CreateProgressInputs(grpProgress);
             this.Controls.Add(grpProgress);
             y += grpProgress.Height + padding;
 
-            // 작업 정보
-            grpWorkInfo = CreateGroup("작업 정보", 10, y, 280, 105);
+            // 작업 정보 (Phase 13: 작업 폴더 제거로 높이 감소)
+            grpWorkInfo = CreateGroup("작업 정보", 10, y, 280, 80);
             CreateWorkInfoInputs(grpWorkInfo);
             this.Controls.Add(grpWorkInfo);
             y += grpWorkInfo.Height + padding;
@@ -248,29 +250,32 @@ namespace RealtimeITagControl.UI
             
             txtCurrentContour = new TextBox { Location = new Point(185, 48), Size = new Size(75, 20), ReadOnly = true };
 
+            // Phase 13: ITag 실시간 좌표 (X_WCS, Y_WCS)
+            lblITagCoordinates = new Label { Text = "실시간 좌표:", Location = new Point(10, 75), Size = new Size(80, 20) };
+            txtITagCoordinates = new TextBox { Location = new Point(95, 73), Size = new Size(165, 20), ReadOnly = true };
+
             // 라벨 변수는 유지하되 사용 안함
             lblCurrentContour = new Label { Visible = false };
 
             parent.Controls.AddRange(new Control[] {
                 lblProgressDistance, txtProgressDistance,
                 lblCurrentPart, txtCurrentPart,
-                lblSlash, txtCurrentContour
+                lblSlash, txtCurrentContour,
+                lblITagCoordinates, txtITagCoordinates  // Phase 13
             });
         }
 
         private void CreateWorkInfoInputs(GroupBox parent)
         {
-            lblWorkDir = new Label { Text = "작업 폴더:", Location = new Point(10, 25), Size = new Size(80, 20) };
-            txtWorkDir = new TextBox { Location = new Point(95, 23), Size = new Size(165, 20), ReadOnly = true };
+            // Phase 13: 작업 폴더 항목 제거
 
-            lblWorkMpfName = new Label { Text = "MPF 파일:", Location = new Point(10, 50), Size = new Size(80, 20) };
-            txtWorkMpfName = new TextBox { Location = new Point(95, 48), Size = new Size(165, 20), ReadOnly = true };
+            lblWorkMpfName = new Label { Text = "MPF 파일:", Location = new Point(10, 25), Size = new Size(80, 20) };
+            txtWorkMpfName = new TextBox { Location = new Point(95, 23), Size = new Size(165, 20), ReadOnly = true };
 
-            lblWorkStatus = new Label { Text = "작업 상태:", Location = new Point(10, 75), Size = new Size(80, 20) };
-            txtWorkStatus = new TextBox { Location = new Point(95, 73), Size = new Size(165, 20), ReadOnly = true };
+            lblWorkStatus = new Label { Text = "작업 상태:", Location = new Point(10, 50), Size = new Size(80, 20) };
+            txtWorkStatus = new TextBox { Location = new Point(95, 48), Size = new Size(165, 20), ReadOnly = true };
 
             parent.Controls.AddRange(new Control[] {
-                lblWorkDir, txtWorkDir,
                 lblWorkMpfName, txtWorkMpfName,
                 lblWorkStatus, txtWorkStatus
             });
@@ -302,19 +307,10 @@ namespace RealtimeITagControl.UI
                 Text = "연결 안됨"
             };
 
-            lblCyclicStatus = new Label { Text = "주기 읽기:", Location = new Point(10, 50), Size = new Size(80, 20) };
-            txtCyclicStatus = new TextBox 
-            { 
-                Location = new Point(95, 48), 
-                Size = new Size(165, 20), 
-                ReadOnly = true,
-                BackColor = Color.LightGray,
-                Text = "중지됨"
-            };
+            // Phase 13: 주기 읽기 항목 제거
 
             parent.Controls.AddRange(new Control[] {
-                lblConnectionStatus, txtConnectionStatus,
-                lblCyclicStatus, txtCyclicStatus
+                lblConnectionStatus, txtConnectionStatus
             });
         }
 
@@ -333,16 +329,18 @@ namespace RealtimeITagControl.UI
                 return;
             }
 
-            // 좌표 정보 (X, Y 같은 행에 표시)
-            txtCoordinates.Text = $"X: {data.X_WCS:F3}, Y: {data.Y_WCS:F3}";
+            // Phase 13: 좌표 정보는 마우스 좌표만 표시 (ITag 좌표는 진행 정보로 이동)
+            // txtCoordinates는 UpdateMouseCoordinates에서만 업데이트됨
 
             // 진행 정보
             txtProgressDistance.Text = data.ProgressDistance.ToString("F3");
             txtCurrentPart.Text = data.CurrentPart.ToString();
             txtCurrentContour.Text = data.CurrentContour.ToString();
+            
+            // Phase 13: ITag 실시간 좌표 (X_WCS, Y_WCS)
+            txtITagCoordinates.Text = $"X: {data.X_WCS:F3}, Y: {data.Y_WCS:F3}";
 
-            // 작업 정보
-            txtWorkDir.Text = data.WorkDir;
+            // 작업 정보 (Phase 13: 작업 폴더 제거)
             txtWorkMpfName.Text = data.WorkMpfName;
             txtWorkStatus.Text = GetWorkStatusText(data.WorkStatus);
 
@@ -398,17 +396,7 @@ namespace RealtimeITagControl.UI
                 txtConnectionStatus.BackColor = Color.LightCoral;
             }
 
-            // 주기 읽기 상태
-            if (cyclicReading)
-            {
-                txtCyclicStatus.Text = "🔄 실행 중";
-                txtCyclicStatus.BackColor = Color.LightGreen;
-            }
-            else
-            {
-                txtCyclicStatus.Text = "⏸️ 중지됨";
-                txtCyclicStatus.BackColor = Color.LightGray;
-            }
+            // Phase 13: 주기 읽기 상태 표시 제거
         }
 
         /// <summary>
@@ -440,6 +428,37 @@ namespace RealtimeITagControl.UI
                 btnSimulation.BackColor = Color.LightBlue;
                 btnStopSimulation.Enabled = false;
             }
+        }
+
+        /// <summary>
+        /// Phase 13: 마우스 실시간 좌표 업데이트
+        /// </summary>
+        /// <param name="x">X 좌표 (mm 단위)</param>
+        /// <param name="y">Y 좌표 (mm 단위)</param>
+        public void UpdateMouseCoordinates(double x, double y)
+        {
+            if (txtCoordinates.InvokeRequired)
+            {
+                txtCoordinates.Invoke(new Action(() => UpdateMouseCoordinates(x, y)));
+                return;
+            }
+
+            // mm 단위로 표시 (소수점 3자리)
+            txtCoordinates.Text = $"X: {x:F3} mm, Y: {y:F3} mm";
+        }
+
+        /// <summary>
+        /// Phase 13: 좌표 표시 초기화
+        /// </summary>
+        public void ClearMouseCoordinates()
+        {
+            if (txtCoordinates.InvokeRequired)
+            {
+                txtCoordinates.Invoke(new Action(() => ClearMouseCoordinates()));
+                return;
+            }
+
+            txtCoordinates.Text = "---";
         }
 
         #endregion

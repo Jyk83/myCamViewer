@@ -235,7 +235,7 @@ namespace RealtimeITagControl
         /// <summary>
         /// 14개 Tag 주기적 읽기 시작 (ReadTagCyclic)
         /// </summary>
-        public bool StartCyclicRead(int cycleMs = 500)
+        public bool StartCyclicRead(int cycleMs)
         {
             lock (_lock)
             {

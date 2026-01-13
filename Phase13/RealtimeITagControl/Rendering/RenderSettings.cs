@@ -28,6 +28,29 @@ namespace RealtimeITagControl.Rendering
     }
 
     /// <summary>
+    /// Phase 13: View direction type (coordinate system origin and axis direction)
+    /// Based on HMI_VIEW_DIR_TYPE tag value
+    /// </summary>
+    public enum ViewDirectionType
+    {
+        /// <summary>
+        /// Type 1: 우하단 원점 (Right-Bottom origin)
+        /// Origin: Canvas 오른쪽 하단
+        /// X축: 위로 가면 X+, 아래로 가면 X-
+        /// Y축: 좌측으로 가면 Y+, 우측으로 가면 Y-
+        /// </summary>
+        RightBottom = 1,
+
+        /// <summary>
+        /// Type 2: 좌하단 원점 (Left-Bottom origin) - OpenGL 기본
+        /// Origin: Canvas 왼쪽 하단
+        /// X축: 우측으로 가면 X+, 좌측으로 가면 X-
+        /// Y축: 위로 가면 Y+, 아래로 가면 Y-
+        /// </summary>
+        LeftBottom = 2
+    }
+
+    /// <summary>
     /// Global rendering settings for colors and sizes
     /// </summary>
     public class RenderSettings
@@ -176,6 +199,10 @@ namespace RealtimeITagControl.Rendering
         /// <summary>Canvas orientation (rotation)</summary>
         public CanvasOrientation Orientation { get; set; }
 
+        // Phase 13: View direction type
+        /// <summary>View direction type (coordinate system origin and axis direction)</summary>
+        public ViewDirectionType ViewDirection { get; set; }
+
         // ========================================
         // View Settings
         // ========================================
@@ -227,7 +254,7 @@ namespace RealtimeITagControl.Rendering
             // Phase 5.3: Part boundary defaults
             ShowPartBoundaries = false; // Hide by default (shown when part numbers are visible)
             PartBoundaryColor = Color.FromArgb(100, 200, 255); // Light Blue
-            PartBoundaryWidth = 1.5f;
+            PartBoundaryWidth = 1.0f;
             PartBoundaryDashPattern = DashPattern.Dash3; // Short dash (fixed)
 
             // Contour selection box defaults
@@ -236,6 +263,9 @@ namespace RealtimeITagControl.Rendering
 
             // Phase 5.5: Canvas orientation default
             Orientation = CanvasOrientation.Normal; // No rotation by default
+
+            // Phase 13: View direction type default (Type 1 = RightBottom)
+            ViewDirection = ViewDirectionType.RightBottom; // HMI_VIEW_DIR_TYPE default = 1
 
             // Default view settings
             InitialZoomMultiplier = 0.005f; // Moderate initial zoom (adjustable: 0.001 ~ 0.1)

@@ -51,6 +51,10 @@ RENDERER_API void SetViewTransform(float zoom, float panX, float panY);
 // orientation: 0=0°, 1=90°CW, 2=180°, 3=270°CW
 RENDERER_API void SetCanvasOrientation(int orientation);
 
+// Phase 13: View direction (origin position)
+// direction: 1=RightBottom, 2=LeftBottom(default)
+RENDERER_API void SetViewDirection(int direction);
+
 // Phase 8.1: Text rendering for part/contour numbers
 RENDERER_API int InitializeTextRenderer(const wchar_t* fontName, int height, int bold, int italic);
 RENDERER_API void DrawPartNumber(double posX, double posY, unsigned int number, double scale, float r, float g, float b);

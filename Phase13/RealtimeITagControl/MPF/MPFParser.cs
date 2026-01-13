@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Linq;
+using System.Text;
 using System.Text.RegularExpressions;
 
 namespace RealtimeITagControl.MPF
@@ -522,12 +523,16 @@ namespace RealtimeITagControl.MPF
                     GCodeCommand gcode = (GCodeCommand)cmd;
                     if (gcode.X.HasValue && gcode.Y.HasValue)
                     {
+                        // Phase 13: 원본 G-code 재구성
+                        string originalGCode = ReconstructGCode(gcode);
+
                         PathSegment segment = CreateSegment(
                             GetGCodeNumber(gcode.CommandCode),
                             currentPosition,
                             new Point2D(gcode.X.Value, gcode.Y.Value),
                             gcode.I ?? 0,
-                            gcode.J ?? 0
+                            gcode.J ?? 0,
+                            originalGCode  // Phase 13: 원본 G-code 전달
                         );
                         if (segment != null)
                         {
@@ -625,12 +630,17 @@ namespace RealtimeITagControl.MPF
         /// <summary>
         /// 경로 세그먼트 생성
         /// </summary>
-        private PathSegment CreateSegment(int gCode, Point2D start, Point2D end, double i, double j)
+        /// <summary>
+        /// Phase 13: PathSegment 생성 (원본 G-code 포함)
+        /// </summary>
+        private PathSegment CreateSegment(int gCode, Point2D start, Point2D end, double i, double j, string originalGCode = null)
         {
+            PathSegment segment = null;
+
             if (gCode == 1 || gCode == 0)
             {
                 // G0, G1: 직선
-                return new LineSegment(start, end);
+                segment = new LineSegment(start, end);
             }
             else if (gCode == 2 || gCode == 3)
             {
@@ -641,10 +651,16 @@ namespace RealtimeITagControl.MPF
                 double startAngle = Math.Atan2(start.Y - center.Y, start.X - center.X) * 180.0 / Math.PI;
                 double endAngle = Math.Atan2(end.Y - center.Y, end.X - center.X) * 180.0 / Math.PI;
 
-                return new ArcSegment(start, end, center, radius, gCode == 2, startAngle, endAngle, i, j);
+                segment = new ArcSegment(start, end, center, radius, gCode == 2, startAngle, endAngle, i, j);
             }
 
-            return null;
+            // Phase 13: 원본 G-code 저장
+            if (segment != null && !string.IsNullOrEmpty(originalGCode))
+            {
+                segment.OriginalGCode = originalGCode;
+            }
+
+            return segment;
         }
 
         /// <summary>
@@ -677,6 +693,44 @@ namespace RealtimeITagControl.MPF
         private string GetArg(string[] args, int index)
         {
             return index < args.Length ? args[index] : string.Empty;
+        }
+
+        /// <summary>
+        /// Phase 13: G-code 재구성 (원본 포맷)
+        /// </summary>
+        private string ReconstructGCode(GCodeCommand gcode)
+        {
+            StringBuilder sb = new StringBuilder();
+            
+            // G-code 번호
+            int gcodeNum = GetGCodeNumber(gcode.CommandCode);
+            sb.Append($"G{gcodeNum}");
+
+            // X 좌표
+            if (gcode.X.HasValue)
+            {
+                sb.Append($" X{gcode.X.Value}");
+            }
+
+            // Y 좌표
+            if (gcode.Y.HasValue)
+            {
+                sb.Append($" Y{gcode.Y.Value}");
+            }
+
+            // I (원호 중심 X offset)
+            if (gcode.I.HasValue && gcode.I.Value != 0)
+            {
+                sb.Append($" I{gcode.I.Value}");
+            }
+
+            // J (원호 중심 Y offset)
+            if (gcode.J.HasValue && gcode.J.Value != 0)
+            {
+                sb.Append($" J{gcode.J.Value}");
+            }
+
+            return sb.ToString();
         }
     }
 

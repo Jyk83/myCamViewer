@@ -1,142 +1,166 @@
-# Phase 13: Canvas Orientation & Mouse Coordinate Display
+# Phase 13: Canvas Origin and Mouse Coordinates
 
-## 📋 Overview
+## 목표
 
-Phase 13에서는 CAM Viewer의 사용자 경험을 개선하기 위해 다음 기능을 추가합니다:
+1. **캔버스 방향 기준점 변경 (HMI_VIEW_DIR_TYPE)**
+   - Type 1: 우하단 원점 (RightBottom) - Type 2를 **-90도 회전**
+   - Type 2: 좌하단 원점 (LeftBottom, 기본)
 
-1. **캔버스 방향 기준점 변경**
 2. **마우스 실시간 좌표 반환**
+   - Object Space 좌표를 mm 단위로 표시
+   - MPF 원점 기준 좌표
 
----
+## Type 1 (RightBottom) 좌표계
 
-## 🎯 Phase 13 Goals
+### 원점 및 축 방향
+- **원점**: 캔버스 오른쪽 하단
+- **X축**: 위↑(+), 아래↓(-) → Type 2의 Y축
+- **Y축**: 좌←(+), 우→(-) → Type 2의 -X축
+- **회전**: Type 2 기준 **-90도 회전** (반시계방향)
 
-### 1. 캔버스 방향 기준점 변경
-- **목적**: 사용자가 원하는 방향으로 캔버스 기준점 설정
-- **기능**:
-  - 좌하단 원점 (기본 OpenGL 좌표계)
-  - 좌상단 원점 (Windows 좌표계)
-  - 우하단 원점
-  - 우상단 원점
-- **사용 사례**: 다양한 CAM 시스템의 좌표 기준에 맞춤
+### 화면-객체 매핑
+- **Screen X (좌→우)**: Object Y (좌+, 우+) - NORMAL
+- **Screen Y (아래→위)**: Object X (아래+, 위-) - INVERTED
 
-### 2. 마우스 실시간 좌표 반환
-- **목적**: 사용자가 마우스 위치의 정확한 좌표를 실시간으로 확인
-- **기능**:
-  - 마우스 커서 위치의 Object Space 좌표 표시
-  - mm 단위로 좌표 표시
-  - UI에 실시간 업데이트
-- **사용 사례**: 정밀한 위치 확인, 측정, 검증
-
----
-
-## 🔧 Implementation Plan
-
-### Task 1: Canvas Orientation Settings
-- [ ] RenderSettings에 CanvasOrientation 설정 추가
-- [ ] 4가지 방향 옵션 구현:
-  - BottomLeft (0,0 = 좌하단)
-  - TopLeft (0,0 = 좌상단)
-  - BottomRight (0,0 = 우하단)
-  - TopRight (0,0 = 우상단)
-- [ ] 좌표 변환 로직 수정
-- [ ] UI에서 방향 선택 옵션 추가
-
-### Task 2: Real-time Mouse Coordinate Display
-- [ ] MouseMove 이벤트 핸들러 추가
-- [ ] ScreenToObject 좌표 변환 적용
-- [ ] 좌표 표시 UI 컴포넌트 추가
-- [ ] mm 단위로 포맷팅
-- [ ] 성능 최적화 (throttling)
-
----
-
-## 📁 Project Structure
-
-```
-Phase13/
-├── RealtimeITagControl/
-│   ├── CamViewerCore.cs              # 마우스 좌표 이벤트 처리
-│   ├── RealtimeITagControl.cs        # UI 통합
-│   ├── Rendering/
-│   │   └── RenderSettings.cs         # Canvas orientation 설정
-│   ├── UI/
-│   │   ├── ProgramInfoPanel.cs       # 좌표 표시 UI
-│   │   └── ContourColorLegendForm.cs
-│   ├── NativeRenderer.dll            # 업데이트된 렌더러 (Phase13)
-│   └── ...
-├── NativeRenderer/
-│   ├── renderer.cpp                  # Canvas orientation 지원
-│   └── renderer.h
-└── PHASE13.md                        # 이 파일
+### glOrtho 설정 (width/height swap + Y 반전)
+```cpp
+// Type 1: RightBottom
+left = -viewHeight / 2 + g_panY;    // Screen left (-1.0) → Object Y-
+right = viewHeight / 2 + g_panY;    // Screen right (+1.0) → Object Y+
+bottom = viewWidth / 2 + g_panX;    // Screen bottom (-1.0) → Object X+
+top = -viewWidth / 2 + g_panX;      // Screen top (+1.0) → Object X-
 ```
 
----
+### ScreenToObject 역변환
+```csharp
+// Screen X → Object Y (normal)
+finalY = ndcX / zoom / aspect + panY;
 
-## 🚀 Getting Started
-
-### Prerequisites
-- Phase 12 완료 상태
-- Visual Studio 2019 이상
-- .NET Framework 4.7.2 이상
-- OpenGL 지원 그래픽 카드
-
-### Build & Run
-```bash
-cd /home/user/CamViewer/Phase13
-# Visual Studio에서 솔루션 열기
-# 빌드 및 실행
+// Screen Y → Object X (inverted)
+finalX = -ndcY / zoom + panX;
 ```
 
----
+### Pan 방향
+```csharp
+// Screen X → Object Y (negative for intuitive control)
+panY += -deltaX / width * 2.0f / zoom / aspect;
 
-## 📝 Changes from Phase 12
+// Screen Y → Object X (positive for intuitive control)
+panX += deltaY / height * 2.0f / zoom;
+```
 
-### Updated Files
-- `RealtimeITagControl/NativeRenderer.dll` - Phase13 버전으로 업데이트
+## Type 2 (LeftBottom) 좌표계
 
-### New Features
-- Canvas orientation configuration
-- Real-time mouse coordinate display
+### 원점 및 축 방향
+- **원점**: 캔버스 왼쪽 하단 (OpenGL 기본)
+- **X축**: 우→(+), 좌←(-)
+- **Y축**: 위↑(+), 아래↓(-)
 
----
+### glOrtho 설정
+```cpp
+// Type 2: LeftBottom (기본)
+left = -viewWidth / 2 + g_panX;
+right = viewWidth / 2 + g_panX;
+bottom = -viewHeight / 2 + g_panY;
+top = viewHeight / 2 + g_panY;
+```
 
-## ✅ Testing Checklist
+### ScreenToObject 역변환
+```csharp
+// Normal OpenGL mapping
+finalX = ndcX / zoom + panX;
+finalY = ndcY / zoom / aspect + panY;
+```
 
-### Canvas Orientation
-- [ ] 좌하단 원점 (기본) 정상 동작
-- [ ] 좌상단 원점 전환 정상 동작
-- [ ] 우하단 원점 전환 정상 동작
-- [ ] 우상단 원점 전환 정상 동작
-- [ ] 컨투어 렌더링이 방향에 맞게 표시
-- [ ] 컨투어 선택이 방향에 맞게 동작
+## 구현 상세
 
-### Mouse Coordinate Display
-- [ ] 마우스 이동 시 좌표 실시간 업데이트
-- [ ] 좌표 정확도 검증
-- [ ] mm 단위 포맷팅 정상 동작
-- [ ] 성능 이슈 없음 (부드러운 업데이트)
-- [ ] Zoom/Pan 시 좌표 정확도 유지
+### 1. C++ NativeRenderer
 
----
+**renderer.cpp**
+- `g_viewDirection` 변수 추가 (1=RightBottom, 2=LeftBottom)
+- `SetViewDirection(int direction)` 함수 추가
+- `BeginMPFRenderWithBackground()`에서 ViewDirection에 따라 glOrtho 설정
 
-## 🐛 Known Issues
-- TBD
+**renderer.h**
+- `SetViewDirection(int direction)` 함수 선언
 
----
+### 2. C# CamViewerCore
 
-## 📚 References
-- Phase 12: Contour Selection & Zoom Enhancement
-- OpenGL Coordinate Systems
-- Windows Forms MouseMove Events
+**CamViewerCore.cs**
+- `SetViewDirection()` extern 선언
+- `RenderMPFScene()`에서 SetViewDirection 호출
+- `ScreenToObject()`: ViewDirection에 맞게 좌표 역변환
+- `RenderPanel_MouseMove()`: ViewDirection에 맞게 Pan 처리
+- `UpdateMouseCoordinates()`: 마우스 좌표 실시간 업데이트
 
----
+### 3. C# RealtimeITagControl
 
-## 👥 Contributors
-- Jyk83
-- GenSpark AI
+**RealtimeITagControl.cs**
+- `UpdateViewDirection()`: HMI_VIEW_DIR_TYPE 태그 읽기
+- `ITagManager_DataChanged`에서 UpdateViewDirection 호출
+- `MouseCoordinatesChanged` 이벤트 핸들러
 
----
+### 4. C# RenderSettings
 
-**Last Updated**: 2026-01-12
-**Version**: Phase 13 Initial Setup
+**RenderSettings.cs**
+- `ViewDirectionType` enum 추가
+- `ViewDirection` 속성 추가
+
+### 5. C# ProgramInfoPanel
+
+**ProgramInfoPanel.cs**
+- 마우스 좌표 표시 Label 추가 (txtCoordinates)
+- MouseCoordinatesChanged 이벤트 핸들러
+
+## 테스트 시나리오
+
+### Type 1 (HMI_VIEW_DIR_TYPE=1) 테스트
+1. ITTag에서 HMI_VIEW_DIR_TYPE=1 설정
+2. MPF 로드
+3. 확인 사항:
+   - 원점이 우하단에 위치
+   - 마우스 위로 이동 → X 좌표 증가
+   - 마우스 아래로 이동 → X 좌표 감소
+   - 마우스 좌로 이동 → Y 좌표 증가
+   - 마우스 우로 이동 → Y 좌표 감소
+   - 파트/컨투어가 정상적으로 그려짐
+   - Pan: 마우스 방향과 캔버스 이동 방향 일치
+   - Zoom: 마우스 포인터 위치 고정
+
+### Type 2 (HMI_VIEW_DIR_TYPE=2) 테스트
+1. ITTag에서 HMI_VIEW_DIR_TYPE=2 설정
+2. MPF 로드
+3. 확인 사항:
+   - 원점이 좌하단에 위치 (기존과 동일)
+   - 마우스 우로 이동 → X 좌표 증가
+   - 마우스 위로 이동 → Y 좌표 증가
+   - 모든 기능 정상 작동
+
+## 주요 수정 사항
+
+1. **glOrtho 좌표계 변환**
+   - Type 1: left/right 반전으로 X축 반전 효과
+   - Type 2: 기존 OpenGL 좌표계 유지
+
+2. **ScreenToObject 정확한 역변환**
+   - glOrtho 설정에 정확히 매칭되는 역변환 공식
+
+3. **Pan 방향 수정**
+   - Type 1: Screen X→Object Y, Screen Y→Object X
+   - aspect ratio 고려
+
+4. **마우스 좌표 0,0 초기화 문제 해결**
+   - Throttling 제거
+   - 항상 최신 좌표 유지
+
+## 빌드 방법
+
+### 1. C++ DLL 빌드
+```batch
+cd Phase13/NativeRenderer
+build_x86.bat
+copy build_x86\Release\NativeRenderer.dll ..\RealtimeITagControl\NativeRenderer.dll
+```
+
+### 2. C# 프로젝트 빌드
+Visual Studio에서 RealtimeITagControl.sln 빌드 (F6)

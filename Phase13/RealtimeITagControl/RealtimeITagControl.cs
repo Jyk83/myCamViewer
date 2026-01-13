@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Drawing;
 using System.Windows.Forms;
 using System.IO;
@@ -13,7 +14,7 @@ using RealtimeITagControl.Rendering;
 namespace RealtimeITagControl
 {
     // NativeRenderer는 CamViewerCore.cs에 정의되어 있음 (중복 방지)
-    
+
     /// <summary>
     /// Realtime ITag Viewer UserControl
     /// Phase8 (Realtime Viewer) + Phase9 (ITag Communication) 통합
@@ -35,24 +36,25 @@ namespace RealtimeITagControl
         private string currentMpfPath;      // 현재 로드된 MPF 파일 경로
         private MPFProgram mpfProgram;      // MPF 프로그램 데이터 (파싱 결과)
         private TagData? lastTagData = null;  // Nullable struct
-        
+        private int cycleMs = 25;  // Phase 13: ITag cycle time (auto-adjusted based on MPF complexity)
+
         // 로그 파일 경로
-        
+
         // Trace 상태 관리
         private TraceState currentTraceState = TraceState.Idle;
         private bool isTracing = false;
         private System.Collections.Generic.Dictionary<string, ContourTraceInfo> contourStatusMap;
-        
+
         // Dispose 중복 호출 방지
         private bool isDisposed = false;
         private readonly object disposeLock = new object();
-        
+
         // OpenGL 렌더링, Pan/Zoom은 CamViewerControl에서 처리
 
         #endregion
-        
+
         #region Trace 상태 Enum 및 데이터 클래스
-        
+
         /// <summary>
         /// Trace 상태
         /// </summary>
@@ -64,7 +66,7 @@ namespace RealtimeITagControl
             Paused,         // 일시정지 (WorkStatus = 2,3)
             Completed       // 완료 (WorkStatus = 0)
         }
-        
+
         /// <summary>
         /// 절단 상태 (렌더링용)
         /// </summary>
@@ -74,7 +76,7 @@ namespace RealtimeITagControl
             InProgress,     // 진행 중 (노란색)
             Completed       // 완료 (초록색)
         }
-        
+
         /// <summary>
         /// 컨투어별 추적 정보
         /// </summary>
@@ -84,7 +86,7 @@ namespace RealtimeITagControl
             public int ContourNumber { get; set; }
             public CutStatus Status { get; set; }
             public double CompletedDistance { get; set; }  // 완료된 거리
-            
+
             public ContourTraceInfo(int partNum, int contNum)
             {
                 PartNumber = partNum;
@@ -109,7 +111,7 @@ namespace RealtimeITagControl
             add { tagManager.DataChanged += value; }
             remove { tagManager.DataChanged -= value; }
         }
-        
+
         public event EventHandler<bool> ConnectionChanged
         {
             add { tagManager.ConnectionChanged += value; }
@@ -126,13 +128,13 @@ namespace RealtimeITagControl
         }
 
         #endregion
-        
+
         #region 로그 메서드
-        
+
         /// <summary>
         /// 파일 로그 기록 (WinCC 디버깅용)
         /// </summary>
-        
+
         #endregion
 
         #region 초기화
@@ -159,7 +161,7 @@ namespace RealtimeITagControl
             programInfoPanel.EnableContourSelectionChanged += ProgramInfoPanel_EnableContourSelectionChanged;  // Phase 12
             programInfoPanel.ShowContourSelectionBoxesClicked += ProgramInfoPanel_ShowContourSelectionBoxesClicked;  // Phase 12
             this.Controls.Add(programInfoPanel);
-            
+
             // 초기 연결 상태 표시
             programInfoPanel.UpdateConnectionStatus(false, false, null);
 
@@ -171,6 +173,8 @@ namespace RealtimeITagControl
                 Dock = DockStyle.None
             };
             camViewerControl.ContourSelected += CamViewerControl_ContourSelected;
+            camViewerControl.MouseCoordinatesChanged += CamViewerControl_MouseCoordinatesChanged; // Phase 13
+            camViewerControl.MPFLoaded += CamViewerControl_MPFLoaded; // Phase 13
             this.Controls.Add(camViewerControl);
 
             // Load 시 ITag 연결
@@ -189,14 +193,14 @@ namespace RealtimeITagControl
             {
                 // ITagManager 싱글톤 초기화 (Site 전달)
                 ITagManager.Initialize(this.Site);
-                
+
                 // ITagManager 이벤트 구독
                 tagManager.DataChanged += ITagManager_DataChanged;
                 tagManager.ConnectionChanged += ITagManager_ConnectionChanged;
-                
+
                 // 연결 및 주기적 읽기 시작
                 Connect();
-                StartCyclicRead(500);
+                StartCyclicRead(this.cycleMs);
             }
         }
 
@@ -235,7 +239,7 @@ namespace RealtimeITagControl
                 }
                 isDisposed = true;
             }
-            
+
             try
             {
                 LogHelper.Log("RealtimeITagControl", "=== CleanupResources 시작 ===");
@@ -315,7 +319,7 @@ namespace RealtimeITagControl
                 {
                     LogHelper.Log("RealtimeITagControl", $"ProgramInfoPanel event unsubscribe error: {ex.Message}");
                 }
-                
+
                 // 5. CamViewerControl 이벤트 구독 해제 및 Dispose
                 try
                 {
@@ -324,16 +328,17 @@ namespace RealtimeITagControl
                         try
                         {
                             camViewerControl.ContourSelected -= CamViewerControl_ContourSelected;
+                            camViewerControl.MouseCoordinatesChanged -= CamViewerControl_MouseCoordinatesChanged; // Phase 13
                             LogHelper.Log("RealtimeITagControl", "CamViewerControl events unsubscribed");
                         }
                         catch (Exception unsubEx)
                         {
                             LogHelper.Log("RealtimeITagControl", $"CamViewerControl event unsubscribe error: {unsubEx.Message}");
                         }
-                        
+
                         // WinCC 환경에서 Controls.Clear() 시도 시 null 참조 발생
                         // OpenGL 및 ITag 리소스는 이미 정리되었으므로 생략
-                        
+
                         try
                         {
                             // CamViewerControl 자체 Dispose 호출 (OpenGL 리소스 정리)
@@ -352,7 +357,7 @@ namespace RealtimeITagControl
                                 LogHelper.Log("RealtimeITagControl", $"CamViewerControl dispose error: {disposeEx.Message}\n{disposeEx.StackTrace}");
                             }
                         }
-                        
+
                         camViewerControl = null;
                     }
                 }
@@ -369,7 +374,7 @@ namespace RealtimeITagControl
                         // WinCC 환경에서 ProgramInfoPanel Dispose 시 오류 발생
                         // 이벤트 구독 해제만으로 충분하므로 Dispose 생략
                         LogHelper.Log("RealtimeITagControl", "ProgramInfoPanel cleanup skipped (WinCC managed)");
-                        
+
                         programInfoPanel = null;
                     }
                 }
@@ -415,10 +420,10 @@ namespace RealtimeITagControl
             {
             }
             catch { }
-            
+
             // ITagManager 싱글톤에 위임
             bool result = tagManager.Connect();
-            
+
             if (result)
             {
                 UpdateConnectionStatusUI();
@@ -427,7 +432,7 @@ namespace RealtimeITagControl
             {
                 UpdateConnectionStatusUI();
             }
-            
+
             return result;
         }
 
@@ -442,12 +447,18 @@ namespace RealtimeITagControl
         }
 
         /// <summary>
+        /// <summary>
         /// 14개 Tag 주기적 읽기 시작
         /// </summary>
-        public bool StartCyclicRead(int cycleMs = 500)
+        public bool StartCyclicRead(int CycleMs)
         {
+            if (CycleMs <= 0)
+            {
+                CycleMs = 25;
+            }
+
             // ITagManager 싱글톤에 위임
-            bool result = tagManager.StartCyclicRead(cycleMs);
+            bool result = tagManager.StartCyclicRead(CycleMs);
             UpdateConnectionStatusUI();
             return result;
         }
@@ -461,13 +472,12 @@ namespace RealtimeITagControl
             tagManager.StopCyclicRead();
             UpdateConnectionStatusUI();
         }
-        
         #endregion
-        
+
         // OpenGL 초기화 및 정리는 CamViewerControl에서 처리
 
         #region ITag 기본 읽기/쓰기
-        
+
         /// <summary>
         /// 단일 Tag 읽기
         /// </summary>
@@ -511,6 +521,9 @@ namespace RealtimeITagControl
                 // 내부 처리
                 lastTagData = tagData;
 
+                // Phase 13: Update ViewDirection based on HMI_VIEW_DIR_TYPE tag
+                UpdateViewDirection(tagData);
+
                 // Program Info 패널 업데이트
                 if (programInfoPanel != null)
                 {
@@ -519,12 +532,12 @@ namespace RealtimeITagControl
 
                 // MPF 파일 변경 감지 및 로드
                 string newMpfPath = tagData.FullMpfPath;
-                
+
                 // 디버깅 로그 (최초 1회만)
                 if (currentMpfPath == null && !string.IsNullOrEmpty(newMpfPath))
                 {
                 }
-                
+
                 if (!string.IsNullOrEmpty(newMpfPath) && newMpfPath != currentMpfPath)
                 {
                     bool loaded = LoadMpfFile(newMpfPath);
@@ -587,7 +600,7 @@ namespace RealtimeITagControl
         {
             try
             {
-                
+
                 // 1. 파일 경로 유효성 검사
                 if (string.IsNullOrEmpty(mpfPath))
                 {
@@ -596,7 +609,7 @@ namespace RealtimeITagControl
 
                 // 2. 파일 존재 확인
                 bool fileExists = File.Exists(mpfPath);
-                
+
                 if (!fileExists)
                 {
                     return false;
@@ -635,7 +648,7 @@ namespace RealtimeITagControl
 
                 // 7. 현재 로드된 파일 경로 저장
                 currentMpfPath = mpfPath;
-                
+
                 // 8. CamViewerControl에 MPF 파일 로드 (Phase8 방식)
                 if (camViewerControl != null && !camViewerControl.IsDisposed)
                 {
@@ -653,7 +666,7 @@ namespace RealtimeITagControl
         #endregion
 
         #region Trace 로직 처리
-        
+
         /// <summary>
         /// Trace 로직 처리 (WorkStatus에 따라)
         /// </summary>
@@ -683,10 +696,16 @@ namespace RealtimeITagControl
                         {
                             StartTracing();
                         }
-                        
+
                         // 실시간 컨투어 상태 업데이트
                         UpdateContourStatus(tagData);
-                        
+
+                        // Phase 13: 화면 다시 그리기 (엘리먼트 진행률 반영)
+                        if (camViewerControl != null && !camViewerControl.IsDisposed)
+                        {
+                            camViewerControl.Invalidate();
+                        }
+
                         currentTraceState = TraceState.Tracing;
                         isTracing = true;
                         break;
@@ -697,7 +716,7 @@ namespace RealtimeITagControl
                         {
                             // 마지막 파트/컨투어 확인
                             bool isLastPartContour = IsLastPartAndContour(tagData.CurrentPart, tagData.CurrentContour);
-                            
+
                             if (isLastPartContour)
                             {
                                 // 마지막까지 완료된 경우 모든 컨투어를 Completed 처리
@@ -732,7 +751,7 @@ namespace RealtimeITagControl
             {
             }
         }
-        
+
         /// <summary>
         /// 마지막 파트와 컨투어인지 확인
         /// </summary>
@@ -756,7 +775,7 @@ namespace RealtimeITagControl
         }
 
         /// <summary>
-        /// 실시간 컨투어 상태 업데이트 (CurrentPart, CurrentContour, ProgressDistance 기반)
+        /// Phase 13: 실시간 엘리먼트 단위 트레이스 (ActLineCode + ProgressDistance 기반)
         /// </summary>
         private void UpdateContourStatus(TagData tagData)
         {
@@ -764,30 +783,36 @@ namespace RealtimeITagControl
             {
                 if (contourStatusMap == null || mpfProgram?.Parts == null)
                     return;
-                
+
                 int currentPart = tagData.CurrentPart;
                 int currentContour = tagData.CurrentContour;
-                double progressDistance = tagData.ProgressDistance;
-                
+                double progressDistance = tagData.ProgressDistance;  // 실제 거리 (mm)
+                string actLineCode = tagData.ActLineCode;  // 현재 실행 중인 G-code
+
+                // Phase 13 디버깅: 입력 데이터 확인
+                LogHelper.Log("RealtimeITagControl", 
+                    $"[Phase13] UpdateContourStatus: Part={currentPart}, Contour={currentContour}, " +
+                    $"ProgressDistance={progressDistance:F2}mm, ActLineCode=\"{actLineCode}\"");
+
                 // 1. 현재 파트/컨투어 이전 것들은 모두 Completed 처리
                 for (int partIdx = 0; partIdx < mpfProgram.Parts.Count; partIdx++)
                 {
                     var part = mpfProgram.Parts[partIdx];
                     int partNum = partIdx + 1;  // 1-based 인덱스
-                    
+
                     if (part.Contours == null)
                         continue;
-                    
+
                     for (int contIdx = 0; contIdx < part.Contours.Count; contIdx++)
                     {
                         var contour = part.Contours[contIdx];
                         int contNum = contIdx + 1;  // 1-based 인덱스
-                        
+
                         string key = $"{partNum}_{contNum}";
-                        
+
                         if (!contourStatusMap.ContainsKey(key))
                             continue;
-                        
+
                         // 이전 파트들은 모두 완료
                         if (partNum < currentPart)
                         {
@@ -798,35 +823,14 @@ namespace RealtimeITagControl
                         {
                             contourStatusMap[key].Status = CutStatus.Completed;
                         }
-                        // 현재 파트의 현재 컨투어는 진행 중
+                        // 현재 파트의 현재 컨투어는 진행 중 → Phase 13: 엘리먼트 단위 트레이스
                         else if (partNum == currentPart && contNum == currentContour)
                         {
                             contourStatusMap[key].Status = CutStatus.InProgress;
                             contourStatusMap[key].CompletedDistance = progressDistance;
-                            
-                            // Phase 11: progressManager에도 업데이트 전달
-                            if (camViewerControl?.progressManager != null)
-                            {
-                                // Contour의 총 길이 계산 (AllSegments의 GetLength() 합산)
-                                double totalDistance = 0.0;
-                                if (contour.AllSegments != null)
-                                {
-                                    foreach (var segment in contour.AllSegments)
-                                    {
-                                        if (segment != null)
-                                        {
-                                            totalDistance += segment.GetLength();
-                                        }
-                                    }
-                                }
-                                
-                                // progressDistance를 progress 비율로 변환 (0.0~1.0)
-                                double progressRatio = totalDistance > 0 ? progressDistance / totalDistance : 0.0;
-                                progressRatio = Math.Max(0.0, Math.Min(1.0, progressRatio));  // Clamp to [0, 1]
-                                
-                                // Element index는 현재로서는 0으로 설정 (향후 확장 가능)
-                                camViewerControl.progressManager.UpdateProgress(partIdx, contIdx, 0, progressRatio);
-                            }
+
+                            // Phase 13: 엘리먼트 단위 진행률 계산 (ActLineCode + ProgressDistance)
+                            UpdateElementProgress(partIdx, contIdx, contour, tagData.ActLineCode, progressDistance);
                         }
                         // 그 외는 미시작
                         else
@@ -848,7 +852,7 @@ namespace RealtimeITagControl
         {
             try
             {
-                
+
                 // 1. 컨투어 상태 맵 초기화
                 if (contourStatusMap == null)
                 {
@@ -858,7 +862,7 @@ namespace RealtimeITagControl
                 {
                     contourStatusMap.Clear();
                 }
-                
+
                 // 2. mpfProgram의 모든 컨투어를 NotStarted 상태로 초기화
                 if (mpfProgram?.Parts != null)
                 {
@@ -866,10 +870,10 @@ namespace RealtimeITagControl
                     {
                         var part = mpfProgram.Parts[partIdx];
                         int partNum = partIdx + 1;  // 1-based 인덱스
-                        
+
                         if (part.Contours == null)
                             continue;
-                            
+
                         for (int contIdx = 0; contIdx < part.Contours.Count; contIdx++)
                         {
                             int contNum = contIdx + 1;  // 1-based 인덱스
@@ -878,8 +882,8 @@ namespace RealtimeITagControl
                         }
                     }
                 }
-                
-                
+
+
                 // 3. progressManager 시작 (최초 Part/Contour는 ITag 데이터에서 받음)
                 if (camViewerControl?.progressManager != null && lastTagData.HasValue)
                 {
@@ -891,7 +895,7 @@ namespace RealtimeITagControl
                         LogHelper.Log("RealtimeITagControl", $"CuttingProgress Started: Part {lastTagData.Value.CurrentPart}, Contour {lastTagData.Value.CurrentContour}");
                     }
                 }
-                
+
                 // 4. CamViewerControl Trace 시작
                 if (camViewerControl != null && !camViewerControl.IsDisposed)
                 {
@@ -910,7 +914,7 @@ namespace RealtimeITagControl
         {
             try
             {
-                
+
                 // 모든 컨투어를 Completed 상태로 변경
                 if (contourStatusMap != null)
                 {
@@ -919,7 +923,7 @@ namespace RealtimeITagControl
                         kvp.Value.Status = CutStatus.Completed;
                     }
                 }
-                
+
                 // CamViewerControl 다시 그리기
                 if (camViewerControl != null && !camViewerControl.IsDisposed)
                 {
@@ -938,12 +942,64 @@ namespace RealtimeITagControl
         {
             try
             {
-                
+
                 // 현재 상태 유지 (아무 동작 안함)
                 // Viewer는 자동으로 현재 상태 유지
             }
             catch (Exception ex)
             {
+            }
+        }
+
+        #endregion
+
+        #region Phase 13: View Direction Update
+
+        /// <summary>
+        /// Phase 13: Update ViewDirection based on HMI_VIEW_DIR_TYPE tag
+        /// </summary>
+        private void UpdateViewDirection(TagData tagData)
+        {
+            try
+            {
+                // HMI_VIEW_DIR_TYPE 값에 따라 RenderSettings.ViewDirection 업데이트
+                // Type 1 = RightBottom (우하단 원점)
+                // Type 2 = LeftBottom (좌하단 원점, OpenGL 기본)
+
+                int dirTypeValue = (int)tagData.DirType;
+
+                Rendering.ViewDirectionType newDirection;
+                if (dirTypeValue == 1)
+                {
+                    newDirection = Rendering.ViewDirectionType.RightBottom;
+                }
+                else if (dirTypeValue == 2)
+                {
+                    newDirection = Rendering.ViewDirectionType.LeftBottom;
+                }
+                else
+                {
+                    // 기본값: Type 1 (RightBottom)
+                    newDirection = Rendering.ViewDirectionType.RightBottom;
+                }
+
+                // RenderSettings 업데이트
+                if (Rendering.RenderSettings.Instance.ViewDirection != newDirection)
+                {
+                    Rendering.RenderSettings.Instance.ViewDirection = newDirection;
+
+                    LogHelper.Log("RealtimeITagControl", $"[Phase13] ViewDirection changed to: {newDirection} (HMI_VIEW_DIR_TYPE={dirTypeValue})");
+
+                    // ViewDirection 변경 시 화면 다시 그리기
+                    if (camViewerControl != null && !camViewerControl.IsDisposed)
+                    {
+                        camViewerControl.Invalidate();
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                LogHelper.Log("RealtimeITagControl", $"[Phase13] UpdateViewDirection error: {ex.Message}");
             }
         }
 
@@ -974,12 +1030,12 @@ namespace RealtimeITagControl
 
         private void ProgramInfoPanel_SimulationClicked(object sender, EventArgs e)
         {
-            
+
             // 시뮬레이션 상태에 따라 토글 (시작/일시정지/재개)
             if (camViewerControl != null)
             {
                 var state = camViewerControl.GetSimulationState();
-                
+
                 switch (state)
                 {
                     case Simulation.SimulationState.Idle:
@@ -989,13 +1045,13 @@ namespace RealtimeITagControl
                         camViewerControl.StartSimulation();
                         UpdateSimulationButtonUI();
                         break;
-                        
+
                     case Simulation.SimulationState.Running:
                         // 일시정지
                         camViewerControl.PauseSimulation();
                         UpdateSimulationButtonUI();
                         break;
-                        
+
                     case Simulation.SimulationState.Paused:
                         // 재개
                         camViewerControl.ResumeSimulation();
@@ -1007,7 +1063,7 @@ namespace RealtimeITagControl
 
         private void ProgramInfoPanel_StopSimulationClicked(object sender, EventArgs e)
         {
-            
+
             // 시뮬레이션 중단
             if (camViewerControl != null)
             {
@@ -1027,7 +1083,7 @@ namespace RealtimeITagControl
             var state = camViewerControl.GetSimulationState();
             bool isRunning = (state == Simulation.SimulationState.Running);
             bool isPaused = (state == Simulation.SimulationState.Paused);
-            
+
             programInfoPanel.UpdateSimulationButtonState(isRunning, isPaused);
         }
 
@@ -1078,7 +1134,7 @@ namespace RealtimeITagControl
                 {
                     int partIdx = (int)numPart.Value - 1;
                     int contourIdx = (int)numContour.Value - 1;
-                    if (partIdx >= 0 && partIdx < mpfProgram.Parts.Count && 
+                    if (partIdx >= 0 && partIdx < mpfProgram.Parts.Count &&
                         contourIdx >= 0 && contourIdx < mpfProgram.Parts[partIdx].Contours.Count)
                     {
                         var contour = mpfProgram.Parts[partIdx].Contours[contourIdx];
@@ -1153,7 +1209,7 @@ namespace RealtimeITagControl
                     MessageBox.Show("CuttingProgressManager가 초기화되지 않았습니다.", "오류", MessageBoxButtons.OK, MessageBoxIcon.Error);
                     return;
                 }
-                
+
                 traceTestForm = new Trace.TraceTestForm(camViewerControl.progressManager, mpfProgram, camViewerControl);
                 traceTestForm.TopMost = true;  // 항상 최상위 표시
                 traceTestForm.FormClosed += (s, args) => { traceTestForm = null; };  // 종료 시 참조 해제
@@ -1172,15 +1228,15 @@ namespace RealtimeITagControl
         /// </summary>
         private void ProgramInfoPanel_ShowPartNumberChanged(object sender, bool isChecked)
         {
-            
+
             if (camViewerControl != null)
             {
                 // RenderSettings 업데이트
                 Rendering.RenderSettings.Instance.ShowPartNumbers = isChecked;
-                
+
                 // 파트 외곽선도 함께 표시/숨김
                 Rendering.RenderSettings.Instance.ShowPartBoundaries = isChecked;
-                
+
                 // 화면 갱신
                 camViewerControl.Invalidate();
             }
@@ -1191,12 +1247,12 @@ namespace RealtimeITagControl
         /// </summary>
         private void ProgramInfoPanel_ShowContourNumberChanged(object sender, bool isChecked)
         {
-            
+
             if (camViewerControl != null)
             {
                 // RenderSettings 업데이트
                 Rendering.RenderSettings.Instance.ShowContourNumbers = isChecked;
-                
+
                 // 화면 갱신
                 camViewerControl.Invalidate();
             }
@@ -1231,17 +1287,17 @@ namespace RealtimeITagControl
                 if (totalContours > 0)
                 {
                     contourLegendForm = new ContourColorLegendForm(totalContours);
-                    
+
                     // CamViewerControl에 VisibleContours 참조 전달
                     camViewerControl.VisibleContours = contourLegendForm.VisibleContours;
-                    
+
                     // 컨투어 표시 변경 이벤트 처리
                     contourLegendForm.ContourVisibilityChanged += (s, args) =>
                     {
                         // 화면 갱신
                         camViewerControl.Invalidate();
                     };
-                    
+
                     // 폼이 닫힐 때 참조 제거
                     contourLegendForm.FormClosed += (s, args) =>
                     {
@@ -1249,7 +1305,7 @@ namespace RealtimeITagControl
                         camViewerControl.VisibleContours = null;
                         camViewerControl.Invalidate();
                     };
-                    
+
                     // 모달리스로 표시
                     contourLegendForm.Show(this);
                 }
@@ -1278,18 +1334,247 @@ namespace RealtimeITagControl
             {
                 return;
             }
-            
+
             try
             {
                 // HMI_VIEW_SEARCH_PART에 Part 번호 Write (1-based)
                 tagManager.WriteTag(TagDefinitions.SEARCH_PART, e.PartNumber);
-                
+
                 // HMI_VIEW_SEARCH_CONT에 Contour 번호 Write (1-based)
                 tagManager.WriteTag(TagDefinitions.SEARCH_CONT, e.ContourNumber);
-                
+
             }
             catch (Exception ex)
             {
+            }
+        }
+
+        /// <summary>
+        /// Phase 13: CamViewerControl MouseCoordinatesChanged 이벤트 핸들러
+        /// </summary>
+        private void CamViewerControl_MouseCoordinatesChanged(object sender, MouseCoordinatesEventArgs e)
+        {
+            try
+            {
+                // ProgramInfoPanel에 마우스 좌표 업데이트
+                if (programInfoPanel != null && !programInfoPanel.IsDisposed)
+                {
+                    programInfoPanel.UpdateMouseCoordinates(e.X, e.Y);
+                }
+            }
+            catch (Exception ex)
+            {
+                LogHelper.Log("RealtimeITagControl", $"[Phase13] MouseCoordinatesChanged handler error: {ex.Message}");
+            }
+        }
+
+
+        /// <summary>
+        /// Phase 13: MPF loaded - Store contour count for ITag cycle calculation
+        /// <summary>
+        /// Phase 13: MPF loaded - Calculate and set global cycleMs based on contour count
+        /// </summary>
+        private void CamViewerControl_MPFLoaded(object sender, CamViewerControl.MPFLoadedEventArgs e)
+        {
+            try
+            {
+                // 전체 컨투어 수 저장
+                this.cycleMs = CalculateITagCycleMs(e.ContourCount);
+                StartCyclicRead(this.cycleMs);
+                LogHelper.Log("RealtimeITagControl", $"[Phase13] MPF loaded with {e.ContourCount} contours, calculated cycleMs: {cycleMs}ms");
+            }
+            catch (Exception ex)
+            {
+                LogHelper.Log("RealtimeITagControl", $"[Phase13] MPFLoaded handler error: {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// Phase 13: 전체 컨투어 수에 따라 ITag 주기 계산
+        /// </summary>
+        private int CalculateITagCycleMs(int contourCount)
+        {
+            if (contourCount > 800) return 100;  // 10 Hz (안정성 우선)
+            if (contourCount > 400) return 50;   // 20 Hz (균형)
+            return 25;  // 40 Hz (빠른 응답)
+        }
+        #endregion
+        #region Phase 13: Element-level Realtime Tracing
+
+        /// <summary>
+        /// Phase 13: 엘리먼트 단위 진행률 업데이트
+        /// ActLineCode와 ProgressDistance를 이용해 현재 엘리먼트를 찾고 진행률 계산
+        /// </summary>
+        private void UpdateElementProgress(int partIdx, int contIdx, MPF.Contour contour, string actLineCode, double progressDistance)
+        {
+            try
+            {
+                if (camViewerControl?.progressManager == null || contour?.AllSegments == null)
+                    return;
+
+                // 1. ActLineCode로 현재 엘리먼트 찾기
+                int currentElementIndex = FindElementIndexByGCode(contour, actLineCode);
+
+                // 2. 찾지 못한 경우: 전체 진행률만 표시 (기존 방식)
+                if (currentElementIndex < 0)
+                {
+                    UpdateContourTotalProgress(partIdx, contIdx, contour, progressDistance);
+                    return;
+                }
+
+                // 3. ProgressDistance 의미 판단
+                double cumulativeDistance = CalculateCumulativeDistance(contour.AllSegments, currentElementIndex);
+                double currentElementLength = contour.AllSegments[currentElementIndex].GetLength();
+                
+                double elementProgressDistance;
+                
+                // ProgressDistance가 누적 거리보다 작으면, 현재 엘리먼트의 진행 거리
+                if (progressDistance < cumulativeDistance)
+                {
+                    // Case A: ProgressDistance = 현재 엘리먼트의 진행 거리
+                    elementProgressDistance = progressDistance;
+                    LogHelper.Log("RealtimeITagControl", 
+                        $"[Phase13] ProgressDistance ({progressDistance:F2}mm) < CumulativeDist ({cumulativeDistance:F2}mm) → Using as element progress");
+                }
+                else
+                {
+                    // Case B: ProgressDistance = 컨투어 시작부터의 절대 거리
+                    elementProgressDistance = progressDistance - cumulativeDistance;
+                    LogHelper.Log("RealtimeITagControl", 
+                        $"[Phase13] ProgressDistance ({progressDistance:F2}mm) >= CumulativeDist ({cumulativeDistance:F2}mm) → Subtracting cumulative");
+                }
+
+                // 4. 현재 엘리먼트의 진행률 계산
+                double elementProgress = currentElementLength > 0 ? elementProgressDistance / currentElementLength : 0.0;
+                elementProgress = Math.Max(0.0, Math.Min(1.0, elementProgress));  // Clamp [0, 1]
+
+                // 5. ProgressManager에 업데이트
+                camViewerControl.progressManager.UpdateProgress(partIdx, contIdx, currentElementIndex, elementProgress);
+
+                // 6. 로그 (디버깅용)
+                LogHelper.Log("RealtimeITagControl", 
+                    $"[Phase13] Element Trace: Part={partIdx+1}, Contour={contIdx+1}, Element={currentElementIndex}, " +
+                    $"CumulativeDist={cumulativeDistance:F2}mm, ProgressDist={progressDistance:F2}mm, " +
+                    $"ElementProgress={elementProgress:F3} ({elementProgressDistance:F2}mm / {currentElementLength:F2}mm)");
+            }
+            catch (Exception ex)
+            {
+                LogHelper.Log("RealtimeITagControl", $"[Phase13] UpdateElementProgress error: {ex.Message}");
+                // 에러 발생 시 전체 진행률로 대체
+                UpdateContourTotalProgress(partIdx, contIdx, contour, progressDistance);
+            }
+        }
+
+        /// <summary>
+        /// Phase 13: ActLineCode로 엘리먼트 인덱스 찾기 (OriginalGCode 매칭)
+        /// </summary>
+        private int FindElementIndexByGCode(MPF.Contour contour, string actLineCode)
+        {
+            if (contour?.AllSegments == null || string.IsNullOrEmpty(actLineCode))
+            {
+                LogHelper.Log("RealtimeITagControl", "[Phase13] FindElementIndexByGCode: Null or empty input");
+                return -1;
+            }
+
+            // G-code 정규화 (공백 제거, 대소문자 통일)
+            string normalizedActCode = NormalizeGCode(actLineCode);
+            LogHelper.Log("RealtimeITagControl", 
+                $"[Phase13] FindElementIndexByGCode: Searching for \"{actLineCode}\" → normalized: \"{normalizedActCode}\"");
+
+            for (int i = 0; i < contour.AllSegments.Count; i++)
+            {
+                var segment = contour.AllSegments[i];
+                if (segment == null || string.IsNullOrEmpty(segment.OriginalGCode))
+                    continue;
+
+                string normalizedSegmentCode = NormalizeGCode(segment.OriginalGCode);
+
+                // 디버깅: 첫 3개 엘리먼트만 출력
+                if (i < 3)
+                {
+                    LogHelper.Log("RealtimeITagControl", 
+                        $"[Phase13]   Element[{i}]: \"{segment.OriginalGCode}\" → \"{normalizedSegmentCode}\"");
+                }
+
+                // 정규화된 G-code 비교
+                if (normalizedSegmentCode == normalizedActCode)
+                {
+                    LogHelper.Log("RealtimeITagControl", $"[Phase13] ✅ Match found at Element[{i}]");
+                    return i;  // 엘리먼트 인덱스 반환
+                }
+            }
+
+            // HKSTO 서브루틴 처리 (GC11, GC12, GC13 → HKSTO)
+            // "G1 X=68.171 Y=8.25" → "HKSTO(...)" 매칭은 향후 확장
+            // 현재는 직접 매칭만 지원
+
+            LogHelper.Log("RealtimeITagControl", $"[Phase13] ❌ No match found for \"{actLineCode}\"");
+            return -1;  // 찾지 못함
+        }
+
+        /// <summary>
+        /// Phase 13: G-code 정규화 (공백 제거, 대소문자 통일)
+        /// </summary>
+        private string NormalizeGCode(string gcode)
+        {
+            if (string.IsNullOrEmpty(gcode))
+                return string.Empty;
+
+            // 공백 제거, 대문자 변환
+            return gcode.Replace(" ", "").Replace("\t", "").ToUpperInvariant();
+        }
+
+        /// <summary>
+        /// Phase 13: 이전 엘리먼트들의 누적 거리 계산
+        /// </summary>
+        private double CalculateCumulativeDistance(List<MPF.PathSegment> segments, int currentIndex)
+        {
+            double cumulative = 0.0;
+
+            for (int i = 0; i < currentIndex && i < segments.Count; i++)
+            {
+                if (segments[i] != null)
+                {
+                    cumulative += segments[i].GetLength();
+                }
+            }
+
+            return cumulative;
+        }
+
+        /// <summary>
+        /// Phase 13: 컨투어 전체 진행률 업데이트 (엘리먼트 구분 없음, 기존 방식)
+        /// </summary>
+        private void UpdateContourTotalProgress(int partIdx, int contIdx, MPF.Contour contour, double progressDistance)
+        {
+            try
+            {
+                if (camViewerControl?.progressManager == null)
+                    return;
+
+                // Contour의 총 길이 계산
+                double totalDistance = 0.0;
+                if (contour.AllSegments != null)
+                {
+                    foreach (var segment in contour.AllSegments)
+                    {
+                        if (segment != null)
+                        {
+                            totalDistance += segment.GetLength();
+                        }
+                    }
+                }
+
+                // 전체 진행률 계산
+                double progressRatio = totalDistance > 0 ? progressDistance / totalDistance : 0.0;
+                progressRatio = Math.Max(0.0, Math.Min(1.0, progressRatio));
+
+                // Element index = 0 (전체 진행률)
+                camViewerControl.progressManager.UpdateProgress(partIdx, contIdx, 0, progressRatio);
+            }
+            catch (Exception ex)
+            {
+                LogHelper.Log("RealtimeITagControl", $"[Phase13] UpdateContourTotalProgress error: {ex.Message}");
             }
         }
 
