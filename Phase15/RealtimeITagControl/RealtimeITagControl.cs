@@ -1561,32 +1561,5 @@ namespace RealtimeITagControl
         }
 
         #endregion
-
-        #region Phase 15.3: Performance Testing Methods
-
-        #region Phase 15.3: Performance Methods - Removed
-        // CSV logging and performance testing removed per user request
-        // Basic performance monitoring still available via PerformanceMonitor
-        
-        #endregion
-
-        /// <summary>
-        /// Phase 15.3: Get snapshot count
-        /// </summary>
-        public int GetSnapshotCount()
-        {
-            return camViewerControl?.GetSnapshotCount() ?? 0;
-        }
-
-        /// <summary>
-        /// Phase 15.3: Reset performance monitor
-        /// </summary>
-        public void ResetPerformanceStats()
-        {
-            camViewerControl?.ResetPerformanceMonitor();
-            LogHelper.Log("RealtimeITagControl", "🔄 Performance stats reset");
-        }
-
-        #endregion
     }
 }

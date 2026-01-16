@@ -74,6 +74,7 @@
     <Compile Include="ITagManager.cs" />
     <Compile Include="LogHelper.cs" />
     <Compile Include="TagDefinitions.cs" />
+    <Compile Include="MemoryOptimizer.cs" />
     <Compile Include="RealtimeITagControl.cs">
       <SubType>UserControl</SubType>
     </Compile>
@@ -90,12 +91,16 @@
     <Compile Include="MPF\Part.cs" />
     <Compile Include="MPF\PathSegment.cs" />
     <Compile Include="MPF\Point2D.cs" />
+    <Compile Include="MPF\AsyncMPFLoader.cs" />
+    <Compile Include="MPF\MPFObjectPool.cs" />
     <Compile Include="Rendering\LabelPositionCalculator.cs" />
     <Compile Include="Rendering\NativeTextRenderer.cs" />
     <Compile Include="Rendering\RenderSettings.cs" />
     <Compile Include="Rendering\OpenGLRenderMode.cs" />
     <Compile Include="Rendering\DirtyRegionCalculator.cs" />
     <Compile Include="Rendering\PerformanceMonitor.cs" />
+    <Compile Include="Rendering\RenderThreadManager.cs" />
+    <Compile Include="Rendering\RenderDataCache.cs" />
     <Compile Include="CamViewerCore.cs">
       <SubType>UserControl</SubType>
     </Compile>
@@ -105,6 +110,7 @@
     <Compile Include="Simulation\SimulationEngine.cs" />
     <Compile Include="Trace\CuttingProgressData.cs" />
     <Compile Include="Trace\CuttingProgressManager.cs" />
+    <Compile Include="Trace\ThreadSafeTagQueue.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
