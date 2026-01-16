@@ -24,18 +24,8 @@ namespace RealtimeITagControl.UI
         private TextBox txtCurrentContour;
         private Label lblITagCoordinates;  // Phase 13: ITag 실시간 좌표
         private TextBox txtITagCoordinates;
-
-        private GroupBox grpWorkInfo;
-        private Label lblWorkMpfName;
-        private Label lblWorkStatus;
-        private TextBox txtWorkMpfName;
+        private Label lblWorkStatus;       // 작업 상태 (작업 정보에서 이동)
         private TextBox txtWorkStatus;
-
-        private GroupBox grpLineInfo;
-        private Label lblActLineCode;
-        private Label lblActLineNum;
-        private TextBox txtActLineCode;
-        private TextBox txtActLineNum;
 
         private CheckBox chkShowPartNumber;
         private CheckBox chkShowContourNumber;
@@ -46,10 +36,9 @@ namespace RealtimeITagControl.UI
         private Button btnStopSimulation;
         private Button btnElementSelect;
 
-        // ITag 서버 상태 표시
+        // ITag 서버 상태 표시 (간소화)
         private GroupBox grpITagStatus;
-        private Label lblConnectionStatus;
-        private TextBox txtConnectionStatus;
+        private Panel pnlConnectionIndicator;  // 연결 상태 원형 표시
 
         // Phase 15.3: 성능 정보 표시
         private GroupBox grpPerformance;
@@ -82,19 +71,32 @@ namespace RealtimeITagControl.UI
 
         private void InitializeComponent()
         {
-            this.Size = new Size(300, 730);  // Phase 15.3: 성능 정보 추가로 높이 증가
+            this.Size = new Size(300, 540);  // 최적화로 높이 감소
             this.BackColor = Color.FromArgb(240, 240, 240);
 
             int y = 10;
             int padding = 10;
 
-            // ITag 서버 상태 (최상단) - Phase 13: 주기 읽기 제거로 높이 감소
-            grpITagStatus = CreateGroup("ITag 서버 상태", 10, y, 280, 55);
-            CreateITagStatusInputs(grpITagStatus);
+            // 1) ITag 서버 상태 - 간소화 (원형 표시만)
+            grpITagStatus = CreateGroup("ITag 서버", 10, y, 280, 50);
+            pnlConnectionIndicator = new Panel
+            {
+                Location = new Point(120, 20),
+                Size = new Size(20, 20),
+                BackColor = Color.Red,  // 초기: 빨강 (연결 안됨)
+                BorderStyle = BorderStyle.FixedSingle
+            };
+            // 원형으로 만들기
+            System.Drawing.Drawing2D.GraphicsPath path = new System.Drawing.Drawing2D.GraphicsPath();
+            path.AddEllipse(0, 0, pnlConnectionIndicator.Width, pnlConnectionIndicator.Height);
+            pnlConnectionIndicator.Region = new Region(path);
+            
+            Label lblStatus = new Label { Text = "연결 상태:", Location = new Point(50, 22), Size = new Size(60, 20) };
+            grpITagStatus.Controls.AddRange(new Control[] { lblStatus, pnlConnectionIndicator });
             this.Controls.Add(grpITagStatus);
             y += grpITagStatus.Height + padding;
 
-            // Phase 15.3: 성능 정보
+            // 2) 성능 정보
             grpPerformance = CreateGroup("성능 정보", 10, y, 280, 90);
             txtPerformance = new TextBox
             {
@@ -111,7 +113,7 @@ namespace RealtimeITagControl.UI
             this.Controls.Add(grpPerformance);
             y += grpPerformance.Height + padding;
 
-            // 좌표 정보 (X, Y 같은 행에 표시)
+            // 3) 좌표 정보
             grpCoordinates = CreateGroup("좌표 정보", 10, y, 280, 50);
             lblCoordinates = new Label { Text = "X, Y:", Location = new Point(10, 23), Size = new Size(40, 20) };
             txtCoordinates = new TextBox { Location = new Point(55, 21), Size = new Size(205, 20), ReadOnly = true };
@@ -119,23 +121,11 @@ namespace RealtimeITagControl.UI
             this.Controls.Add(grpCoordinates);
             y += grpCoordinates.Height + padding;
 
-            // 진행 정보 (Phase 13: ITag 실시간 좌표 추가로 높이 증가)
-            grpProgress = CreateGroup("진행 정보", 10, y, 280, 105);
+            // 4) 진행 정보 (작업 상태 포함)
+            grpProgress = CreateGroup("진행 정보", 10, y, 280, 130);  // 높이 증가
             CreateProgressInputs(grpProgress);
             this.Controls.Add(grpProgress);
             y += grpProgress.Height + padding;
-
-            // 작업 정보 (Phase 13: 작업 폴더 제거로 높이 감소)
-            grpWorkInfo = CreateGroup("작업 정보", 10, y, 280, 80);
-            CreateWorkInfoInputs(grpWorkInfo);
-            this.Controls.Add(grpWorkInfo);
-            y += grpWorkInfo.Height + padding;
-
-            // 현재 실행 정보
-            grpLineInfo = CreateGroup("실행 정보", 10, y, 280, 80);
-            CreateLineInfoInputs(grpLineInfo);
-            this.Controls.Add(grpLineInfo);
-            y += grpLineInfo.Height + padding;
 
             // 체크박스 (2열 배치)
             int chkWidth = 130;
@@ -143,6 +133,54 @@ namespace RealtimeITagControl.UI
             int chkGap = 10;
             int chkX1 = 15;
             int chkX2 = chkX1 + chkWidth + chkGap;
+
+            // 1행: 파트 번호, 컨투어 번호
+            chkShowPartNumber = new CheckBox
+            {
+                Text = "파트번호",
+                Location = new Point(chkX1, y),
+                Size = new Size(chkWidth, chkHeight),
+                Checked = true
+            };
+            chkShowPartNumber.CheckedChanged += (s, e) => ShowPartNumberChanged?.Invoke(this, chkShowPartNumber.Checked);
+            this.Controls.Add(chkShowPartNumber);
+
+            chkShowContourNumber = new CheckBox
+            {
+                Text = "컨투어번호",
+                Location = new Point(chkX2, y),
+                Size = new Size(chkWidth, chkHeight),
+                Checked = true
+            };
+            chkShowContourNumber.CheckedChanged += (s, e) => ShowContourNumberChanged?.Invoke(this, chkShowContourNumber.Checked);
+            this.Controls.Add(chkShowContourNumber);
+            y += 25;
+
+            // 2행: 컨투어 선택, 선택 영역 보기
+            chkEnableContourSelection = new CheckBox
+            {
+                Text = "컨투어선택",
+                Location = new Point(chkX1, y),
+                Size = new Size(chkWidth, chkHeight),
+                Checked = false
+            };
+            chkEnableContourSelection.CheckedChanged += (s, e) => EnableContourSelectionChanged?.Invoke(this, chkEnableContourSelection.Checked);
+            this.Controls.Add(chkEnableContourSelection);
+
+            btnShowContourSelectionBoxes = new Button
+            {
+                Text = "선택영역",
+                Location = new Point(chkX2, y),
+                Size = new Size(chkWidth, chkHeight),
+                BackColor = Color.FromArgb(255, 200, 100)
+            };
+            btnShowContourSelectionBoxes.Click += (s, e) => ShowContourSelectionBoxesClicked?.Invoke(this, EventArgs.Empty);
+            this.Controls.Add(btnShowContourSelectionBoxes);
+            y += 30;
+
+            // 버튼 (2열 배치)
+            int btnWidth = 125;
+            int btnHeight = 30;
 
             // 1행: 파트 번호, 컨투어 번호
             chkShowPartNumber = new CheckBox
@@ -259,6 +297,10 @@ namespace RealtimeITagControl.UI
             lblITagCoordinates = new Label { Text = "실시간 좌표:", Location = new Point(10, 75), Size = new Size(80, 20) };
             txtITagCoordinates = new TextBox { Location = new Point(95, 73), Size = new Size(165, 20), ReadOnly = true };
 
+            // 작업 상태 (작업 정보에서 이동)
+            lblWorkStatus = new Label { Text = "작업 상태:", Location = new Point(10, 100), Size = new Size(80, 20) };
+            txtWorkStatus = new TextBox { Location = new Point(95, 98), Size = new Size(165, 20), ReadOnly = true };
+
             // 라벨 변수는 유지하되 사용 안함
             lblCurrentContour = new Label { Visible = false };
 
@@ -266,56 +308,8 @@ namespace RealtimeITagControl.UI
                 lblProgressDistance, txtProgressDistance,
                 lblCurrentPart, txtCurrentPart,
                 lblSlash, txtCurrentContour,
-                lblITagCoordinates, txtITagCoordinates  // Phase 13
-            });
-        }
-
-        private void CreateWorkInfoInputs(GroupBox parent)
-        {
-            // Phase 13: 작업 폴더 항목 제거
-
-            lblWorkMpfName = new Label { Text = "MPF 파일:", Location = new Point(10, 25), Size = new Size(80, 20) };
-            txtWorkMpfName = new TextBox { Location = new Point(95, 23), Size = new Size(165, 20), ReadOnly = true };
-
-            lblWorkStatus = new Label { Text = "작업 상태:", Location = new Point(10, 50), Size = new Size(80, 20) };
-            txtWorkStatus = new TextBox { Location = new Point(95, 48), Size = new Size(165, 20), ReadOnly = true };
-
-            parent.Controls.AddRange(new Control[] {
-                lblWorkMpfName, txtWorkMpfName,
-                lblWorkStatus, txtWorkStatus
-            });
-        }
-
-        private void CreateLineInfoInputs(GroupBox parent)
-        {
-            lblActLineCode = new Label { Text = "실행 코드:", Location = new Point(10, 25), Size = new Size(80, 20) };
-            txtActLineCode = new TextBox { Location = new Point(95, 23), Size = new Size(165, 20), ReadOnly = true };
-
-            lblActLineNum = new Label { Text = "실행 라인:", Location = new Point(10, 50), Size = new Size(80, 20) };
-            txtActLineNum = new TextBox { Location = new Point(95, 48), Size = new Size(165, 20), ReadOnly = true };
-
-            parent.Controls.AddRange(new Control[] {
-                lblActLineCode, txtActLineCode,
-                lblActLineNum, txtActLineNum
-            });
-        }
-
-        private void CreateITagStatusInputs(GroupBox parent)
-        {
-            lblConnectionStatus = new Label { Text = "서버 연결:", Location = new Point(10, 25), Size = new Size(80, 20) };
-            txtConnectionStatus = new TextBox 
-            { 
-                Location = new Point(95, 23), 
-                Size = new Size(165, 20), 
-                ReadOnly = true,
-                BackColor = Color.LightGray,
-                Text = "연결 안됨"
-            };
-
-            // Phase 13: 주기 읽기 항목 제거
-
-            parent.Controls.AddRange(new Control[] {
-                lblConnectionStatus, txtConnectionStatus
+                lblITagCoordinates, txtITagCoordinates,  // Phase 13
+                lblWorkStatus, txtWorkStatus             // 작업 상태 추가
             });
         }
 
@@ -345,13 +339,8 @@ namespace RealtimeITagControl.UI
             // Phase 13: ITag 실시간 좌표 (X_WCS, Y_WCS)
             txtITagCoordinates.Text = $"X: {data.X_WCS:F3}, Y: {data.Y_WCS:F3}";
 
-            // 작업 정보 (Phase 13: 작업 폴더 제거)
-            txtWorkMpfName.Text = data.WorkMpfName;
+            // 작업 상태 (진행 정보로 이동)
             txtWorkStatus.Text = GetWorkStatusText(data.WorkStatus);
-
-            // 실행 정보
-            txtActLineCode.Text = data.ActLineCode;
-            txtActLineNum.Text = data.ActLineNum.ToString();
         }
 
         private string GetWorkStatusText(TagDefinitions.WorkStatus status)
@@ -382,26 +371,15 @@ namespace RealtimeITagControl.UI
                 return;
             }
 
-            // 서버 연결 상태
+            // 연결 상태 원형 표시
             if (connected)
             {
-                txtConnectionStatus.Text = "✅ 연결됨";
-                txtConnectionStatus.BackColor = Color.LightGreen;
+                pnlConnectionIndicator.BackColor = Color.Lime;  // 초록색 원
             }
             else
             {
-                if (!string.IsNullOrEmpty(errorMessage))
-                {
-                    txtConnectionStatus.Text = $"❌ 연결 안됨: {errorMessage}";
-                }
-                else
-                {
-                    txtConnectionStatus.Text = "❌ 연결 안됨";
-                }
-                txtConnectionStatus.BackColor = Color.LightCoral;
+                pnlConnectionIndicator.BackColor = Color.Red;   // 빨강색 원
             }
-
-            // Phase 13: 주기 읽기 상태 표시 제거
         }
 
         /// <summary>
