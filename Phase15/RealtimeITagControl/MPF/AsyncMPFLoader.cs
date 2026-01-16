@@ -101,37 +101,21 @@ namespace RealtimeITagControl.MPF
             long bytesRead = 0;
             int lastReportedProgress = 0;
 
-            // MPFParser 사용
-            var parser = new MPFParser();
-            var program = new MPFProgram();
+            // 전체 파일 읽기
+            string content = File.ReadAllText(filePath);
+            bytesRead = content.Length;
 
-            using (StreamReader reader = new StreamReader(filePath))
-            {
-                string line;
-                int lineNumber = 0;
+            // 진행률 업데이트
+            ReportProgress(50, bytesRead, totalBytes, "파일 읽기 완료, 파싱 시작...");
 
-                while ((line = reader.ReadLine()) != null)
-                {
-                    // 취소 확인
-                    cancellationToken.ThrowIfCancellationRequested();
+            // 취소 확인
+            cancellationToken.ThrowIfCancellationRequested();
 
-                    lineNumber++;
-                    bytesRead += line.Length + Environment.NewLine.Length;
+            // MPFParser 사용하여 파싱
+            var parser = new MPFParser(true);
+            var program = parser.Parse(content);
 
-                    // 진행률 계산 (10% 단위로 보고)
-                    int progress = (int)((bytesRead * 100) / totalBytes);
-                    if (progress >= lastReportedProgress + 10)
-                    {
-                        lastReportedProgress = progress;
-                        ReportProgress(progress, bytesRead, totalBytes, $"라인 {lineNumber} 처리 중...");
-                    }
-
-                    // 라인 파싱 (기존 MPFParser 로직 활용)
-                    parser.ParseLine(line, program);
-                }
-            }
-
-            // 파싱 완료 후 추가 처리
+            // 파싱 완료
             ReportProgress(100, totalBytes, totalBytes, "로딩 완료");
 
             return program;
