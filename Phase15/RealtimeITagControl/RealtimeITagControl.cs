@@ -1437,6 +1437,17 @@ namespace RealtimeITagControl
                 // 1. ActLineCode로 현재 엘리먼트 찾기
                 int currentElementIndex = FindElementIndexByGCode(contour, actLineCode);
 
+                // Phase 15.7: GC11/GC12/GC13 감지 로그
+                string normalizedCode = NormalizeGCode(actLineCode);
+                if (normalizedCode.Contains("GC11") || 
+                    normalizedCode.Contains("GC12") || 
+                    normalizedCode.Contains("GC13"))
+                {
+                    LogHelper.Log("RealtimeITagControl", 
+                        $"Phase 15.7: HKSTO subroutine detected - ActLineCode={actLineCode}, " +
+                        $"ElementIndex={currentElementIndex}, EndGCode={contour.EndGCode}");
+                }
+
                 // 2. 찾지 못한 경우: 전체 진행률만 표시 (기존 방식)
                 if (currentElementIndex < 0)
                 {
@@ -1494,9 +1505,17 @@ namespace RealtimeITagControl
                 }
             }
 
-            // HKSTO 서브루틴 처리 (GC11, GC12, GC13 → HKSTO)
-            // "G1 X=68.171 Y=8.25" → "HKSTO(...)" 매칭은 향후 확장
-            // 현재는 직접 매칭만 지원
+            // Phase 15.7: HKSTO 서브루틴 처리 (GC11, GC12, GC13)
+            if (normalizedActCode.Contains("GC11") || 
+                normalizedActCode.Contains("GC12") || 
+                normalizedActCode.Contains("GC13"))
+            {
+                // HKSTO는 항상 마지막 세그먼트
+                if (contour.AllSegments.Count > 0)
+                {
+                    return contour.AllSegments.Count - 1;
+                }
+            }
 
             return -1;  // 찾지 못함
         }
