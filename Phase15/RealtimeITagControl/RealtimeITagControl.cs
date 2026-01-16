@@ -690,6 +690,9 @@ namespace RealtimeITagControl
 
                         currentTraceState = TraceState.Tracing;
                         isTracing = true;
+                        
+                        // Phase 15.3: Start performance recording automatically
+                        camViewerControl?.StartPerformanceRecording();
                         break;
 
                     case TagDefinitions.WorkStatus.End:  // WorkStatus = 0
@@ -712,6 +715,14 @@ namespace RealtimeITagControl
                         }
                         currentTraceState = TraceState.Completed;
                         isTracing = false;
+                        
+                        // Phase 15.3: Stop and export performance
+                        camViewerControl?.StopPerformanceRecording();
+                        string csvPath = camViewerControl?.ExportPerformanceCSV();
+                        if (!string.IsNullOrEmpty(csvPath))
+                        {
+                            LogHelper.Log("RealtimeITagControl", $"Performance CSV saved: {csvPath}");
+                        }
                         break;
 
                     case TagDefinitions.WorkStatus.Reset:      // WorkStatus = 2

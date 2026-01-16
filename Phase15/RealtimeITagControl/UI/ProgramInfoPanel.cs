@@ -36,9 +36,9 @@ namespace RealtimeITagControl.UI
         private Button btnStopSimulation;
         private Button btnElementSelect;
 
-        // ITag 서버 상태 표시 (간소화)
-        private GroupBox grpITagStatus;
-        private Panel pnlConnectionIndicator;  // 연결 상태 원형 표시
+        // ITag 서버 상태 표시 (한 줄)
+        private Label lblITagServer;
+        private Panel pnlConnectionIndicator;
 
         // Phase 15.3: 성능 정보 표시
         private GroupBox grpPerformance;
@@ -182,49 +182,6 @@ namespace RealtimeITagControl.UI
             int btnWidth = 125;
             int btnHeight = 30;
 
-            // 1행: 파트 번호, 컨투어 번호
-            chkShowPartNumber = new CheckBox
-            {
-                Text = "파트번호",
-                Location = new Point(chkX1, y),
-                Size = new Size(chkWidth, chkHeight),
-                Checked = true
-            };
-            chkShowPartNumber.CheckedChanged += (s, e) => ShowPartNumberChanged?.Invoke(this, chkShowPartNumber.Checked);
-            this.Controls.Add(chkShowPartNumber);
-
-            chkShowContourNumber = new CheckBox
-            {
-                Text = "컨투어번호",
-                Location = new Point(chkX2, y),
-                Size = new Size(chkWidth, chkHeight),
-                Checked = true
-            };
-            chkShowContourNumber.CheckedChanged += (s, e) => ShowContourNumberChanged?.Invoke(this, chkShowContourNumber.Checked);
-            this.Controls.Add(chkShowContourNumber);
-            y += 25;
-
-            // 2행: 컨투어 선택, 선택 영역 보기
-            chkEnableContourSelection = new CheckBox
-            {
-                Text = "컨투어선택",
-                Location = new Point(chkX1, y),
-                Size = new Size(chkWidth, chkHeight),
-                Checked = false
-            };
-            chkEnableContourSelection.CheckedChanged += (s, e) => EnableContourSelectionChanged?.Invoke(this, chkEnableContourSelection.Checked);
-            this.Controls.Add(chkEnableContourSelection);
-
-            btnShowContourSelectionBoxes = new Button
-            {
-                Text = "선택영역",
-                Location = new Point(chkX2, y),
-                Size = new Size(chkWidth, chkHeight),
-                BackColor = Color.FromArgb(255, 200, 100)
-            };
-            btnShowContourSelectionBoxes.Click += (s, e) => ShowContourSelectionBoxesClicked?.Invoke(this, EventArgs.Empty);
-            this.Controls.Add(btnShowContourSelectionBoxes);
-            y += 30;
 
             // 버튼 (2열 배치, 크기 절반)
             int btnWidth = 125;  // 절반 크기
