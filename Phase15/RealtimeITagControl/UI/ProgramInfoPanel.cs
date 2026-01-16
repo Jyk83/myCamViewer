@@ -71,17 +71,25 @@ namespace RealtimeITagControl.UI
 
         private void InitializeComponent()
         {
-            this.Size = new Size(300, 540);  // 최적화로 높이 감소
+            this.Size = new Size(300, 500);  // 최적화로 높이 감소
             this.BackColor = Color.FromArgb(240, 240, 240);
 
             int y = 10;
             int padding = 10;
 
-            // 1) ITag 서버 상태 - 간소화 (원형 표시만)
-            grpITagStatus = CreateGroup("ITag 서버", 10, y, 280, 50);
+            // 1) ITag 서버 - 한 줄 표시 (GroupBox 없이)
+            lblITagServer = new Label 
+            { 
+                Text = "ITag 서버", 
+                Location = new Point(15, y), 
+                Size = new Size(80, 20),
+                Font = new Font("Arial", 9, FontStyle.Bold)
+            };
+            this.Controls.Add(lblITagServer);
+
             pnlConnectionIndicator = new Panel
             {
-                Location = new Point(120, 20),
+                Location = new Point(100, y),
                 Size = new Size(20, 20),
                 BackColor = Color.Red,  // 초기: 빨강 (연결 안됨)
                 BorderStyle = BorderStyle.FixedSingle
@@ -90,11 +98,8 @@ namespace RealtimeITagControl.UI
             System.Drawing.Drawing2D.GraphicsPath path = new System.Drawing.Drawing2D.GraphicsPath();
             path.AddEllipse(0, 0, pnlConnectionIndicator.Width, pnlConnectionIndicator.Height);
             pnlConnectionIndicator.Region = new Region(path);
-            
-            Label lblStatus = new Label { Text = "연결 상태:", Location = new Point(50, 22), Size = new Size(60, 20) };
-            grpITagStatus.Controls.AddRange(new Control[] { lblStatus, pnlConnectionIndicator });
-            this.Controls.Add(grpITagStatus);
-            y += grpITagStatus.Height + padding;
+            this.Controls.Add(pnlConnectionIndicator);
+            y += 30;
 
             // 2) 성능 정보
             grpPerformance = CreateGroup("성능 정보", 10, y, 280, 90);
