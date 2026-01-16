@@ -183,11 +183,6 @@ namespace RealtimeITagControl.UI
             this.Controls.Add(btnShowContourSelectionBoxes);
             y += 30;
 
-            // 버튼 (2열 배치)
-            int btnWidth = 125;
-            int btnHeight = 30;
-
-
             // 버튼 (2열 배치, 크기 절반)
             int btnWidth = 125;  // 절반 크기
             int btnHeight = 30;

@@ -168,6 +168,7 @@ namespace RealtimeITagControl
 
         // Phase 15.3: Performance Comparer
         private PerformanceComparer performanceComparer = null;
+        private int currentProgressForSnapshot = 0; // Phase 15.3: 스냅샷용 PROGRESS 값
 
         // Phase 5 Debug: Show selection areas
         private bool showSelectionAreas = false;
@@ -1782,11 +1783,22 @@ namespace RealtimeITagControl
         #region Phase 15.3: Performance Comparison Methods
 
         /// <summary>
-        /// Phase 15.3: Start performance recording
+        /// Phase 15.3: Start performance recording (주기적 스냅샷 활성화)
         /// </summary>
-        public void StartPerformanceRecording()
+        /// <param name="intervalMs">스냅샷 간격 (ms), 기본 500ms (100~1000ms 권장)</param>
+        public void StartPerformanceRecording(int intervalMs = 500)
         {
-            performanceComparer?.StartRecording();
+            if (performanceComparer != null && performanceMonitor != null)
+            {
+                performanceComparer.StartRecording(intervalMs);
+                
+                // 주기적 스냅샷 시작
+                performanceComparer.StartPeriodicSnapshot(
+                    performanceMonitor,
+                    () => OpenGLSettings.CurrentMode,
+                    () => currentProgressForSnapshot
+                );
+            }
         }
 
         /// <summary>
@@ -1798,18 +1810,11 @@ namespace RealtimeITagControl
         }
 
         /// <summary>
-        /// Phase 15.3: Record current performance snapshot
+        /// Phase 15.3: Update current progress value for snapshot
         /// </summary>
-        public void RecordPerformanceSnapshot(int progressValue)
+        public void UpdateProgressForSnapshot(int progress)
         {
-            if (performanceComparer != null && performanceMonitor != null)
-            {
-                performanceComparer.RecordSnapshot(
-                    performanceMonitor,
-                    OpenGLSettings.CurrentMode,
-                    progressValue
-                );
-            }
+            currentProgressForSnapshot = progress;
         }
 
         /// <summary>

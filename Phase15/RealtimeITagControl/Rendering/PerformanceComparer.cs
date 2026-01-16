@@ -15,6 +15,8 @@ namespace RealtimeITagControl.Rendering
         private List<PerformanceSnapshot> snapshots = new List<PerformanceSnapshot>();
         private DateTime testStartTime;
         private bool isRecording = false;
+        private System.Windows.Forms.Timer snapshotTimer;
+        private int snapshotIntervalMs = 500; // 기본 500ms 간격
 
         /// <summary>
         /// 성능 스냅샷 데이터
@@ -42,14 +44,17 @@ namespace RealtimeITagControl.Rendering
         }
 
         /// <summary>
-        /// 성능 기록 시작
+        /// 성능 기록 시작 (주기적 스냅샷 활성화)
         /// </summary>
-        public void StartRecording()
+        /// <param name="intervalMs">스냅샷 간격 (ms), 기본 500ms</param>
+        public void StartRecording(int intervalMs = 500)
         {
             snapshots.Clear();
             testStartTime = DateTime.Now;
             isRecording = true;
-            LogHelper.Log("PerformanceComparer", "📊 Performance recording started");
+            snapshotIntervalMs = intervalMs;
+            
+            LogHelper.Log("PerformanceComparer", $"📊 Performance recording started (interval: {intervalMs}ms)");
         }
 
         /// <summary>
@@ -58,15 +63,23 @@ namespace RealtimeITagControl.Rendering
         public void StopRecording()
         {
             isRecording = false;
+            
+            if (snapshotTimer != null)
+            {
+                snapshotTimer.Stop();
+                snapshotTimer.Dispose();
+                snapshotTimer = null;
+            }
+            
             LogHelper.Log("PerformanceComparer", $"📊 Performance recording stopped. Total snapshots: {snapshots.Count}");
         }
 
         /// <summary>
-        /// 현재 성능 스냅샷 기록
+        /// 현재 성능 스냅샷 기록 (내부용)
         /// </summary>
-        public void RecordSnapshot(PerformanceMonitor monitor, OpenGLRenderMode mode, int progressValue)
+        private void RecordSnapshotInternal(PerformanceMonitor monitor, OpenGLRenderMode mode, int progressValue)
         {
-            if (!isRecording) return;
+            if (!isRecording || monitor == null) return;
 
             var snapshot = new PerformanceSnapshot
             {
@@ -87,9 +100,32 @@ namespace RealtimeITagControl.Rendering
 
             snapshots.Add(snapshot);
         }
+        
+        /// <summary>
+        /// 주기적 스냅샷 기록 시작 (타이머 기반)
+        /// </summary>
+        public void StartPeriodicSnapshot(PerformanceMonitor monitor, Func<OpenGLRenderMode> getModeFunc, Func<int> getProgressFunc)
+        {
+            if (snapshotTimer != null)
+            {
+                snapshotTimer.Stop();
+                snapshotTimer.Dispose();
+            }
+
+            snapshotTimer = new System.Windows.Forms.Timer();
+            snapshotTimer.Interval = snapshotIntervalMs;
+            snapshotTimer.Tick += (sender, e) =>
+            {
+                if (isRecording && monitor != null)
+                {
+                    RecordSnapshotInternal(monitor, getModeFunc(), getProgressFunc());
+                }
+            };
+            snapshotTimer.Start();
+        }
 
         /// <summary>
-        /// CSV 리포트 생성
+        /// CSV 리포트 생성 (날짜별 파일, append 모드)
         /// </summary>
         public string GenerateCSVReport(string filePath = null)
         {
@@ -108,37 +144,43 @@ namespace RealtimeITagControl.Rendering
                 if (!Directory.Exists(logDir))
                     Directory.CreateDirectory(logDir);
 
-                string timestamp = DateTime.Now.ToString("yyyyMMdd_HHmmss");
-                filePath = Path.Combine(logDir, $"PerformanceComparison_{timestamp}.csv");
+                // 날짜만 포함 (시간 제외)
+                string dateString = DateTime.Now.ToString("yyyyMMdd");
+                filePath = Path.Combine(logDir, $"Performance_{dateString}.csv");
             }
 
             try
             {
-                var csv = new StringBuilder();
+                bool fileExists = File.Exists(filePath);
                 
-                // CSV 헤더
-                csv.AppendLine("Timestamp,Mode,FPS,RenderTimeMs,MinRenderTimeMs,MaxRenderTimeMs,PixelsPerFrame,PixelPercentage,CPUUsage,InvalidateCount,DirtyRegionCount,EfficiencyIndex,ProgressValue");
-
-                // 데이터 행
-                foreach (var snapshot in snapshots)
+                using (StreamWriter sw = new StreamWriter(filePath, append: true, Encoding.UTF8))
                 {
-                    csv.AppendLine($"{snapshot.Timestamp:yyyy-MM-dd HH:mm:ss.fff}," +
-                                 $"{snapshot.Mode}," +
-                                 $"{snapshot.FPS:F2}," +
-                                 $"{snapshot.RenderTimeMs:F2}," +
-                                 $"{snapshot.MinRenderTimeMs:F2}," +
-                                 $"{snapshot.MaxRenderTimeMs:F2}," +
-                                 $"{snapshot.PixelsPerFrame}," +
-                                 $"{snapshot.PixelPercentage:F2}," +
-                                 $"{snapshot.CPUUsage:F2}," +
-                                 $"{snapshot.InvalidateCount}," +
-                                 $"{snapshot.DirtyRegionCount}," +
-                                 $"{snapshot.EfficiencyIndex:F2}," +
-                                 $"{snapshot.ProgressValue}");
+                    // 파일이 새로 생성되는 경우에만 헤더 작성
+                    if (!fileExists)
+                    {
+                        sw.WriteLine("Timestamp,Mode,FPS,RenderTimeMs,MinRenderTimeMs,MaxRenderTimeMs,PixelsPerFrame,PixelPercentage,CPUUsage,InvalidateCount,DirtyRegionCount,EfficiencyIndex,ProgressValue");
+                    }
+
+                    // 데이터 행 추가
+                    foreach (var snapshot in snapshots)
+                    {
+                        sw.WriteLine($"{snapshot.Timestamp:yyyy-MM-dd HH:mm:ss.fff}," +
+                                     $"{snapshot.Mode}," +
+                                     $"{snapshot.FPS:F2}," +
+                                     $"{snapshot.RenderTimeMs:F2}," +
+                                     $"{snapshot.MinRenderTimeMs:F2}," +
+                                     $"{snapshot.MaxRenderTimeMs:F2}," +
+                                     $"{snapshot.PixelsPerFrame}," +
+                                     $"{snapshot.PixelPercentage:F2}," +
+                                     $"{snapshot.CPUUsage:F2}," +
+                                     $"{snapshot.InvalidateCount}," +
+                                     $"{snapshot.DirtyRegionCount}," +
+                                     $"{snapshot.EfficiencyIndex:F2}," +
+                                     $"{snapshot.ProgressValue}");
+                    }
                 }
 
-                File.WriteAllText(filePath, csv.ToString(), Encoding.UTF8);
-                LogHelper.Log("PerformanceComparer", $"✅ CSV report saved: {filePath}");
+                LogHelper.Log("PerformanceComparer", $"✅ CSV appended: {filePath} ({snapshots.Count} records)");
                 return filePath;
             }
             catch (Exception ex)

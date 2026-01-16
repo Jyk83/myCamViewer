@@ -691,8 +691,8 @@ namespace RealtimeITagControl
                         currentTraceState = TraceState.Tracing;
                         isTracing = true;
                         
-                        // Phase 15.3: Start performance recording automatically
-                        camViewerControl?.StartPerformanceRecording();
+                        // Phase 15.3: Start performance recording automatically (500ms interval)
+                        camViewerControl?.StartPerformanceRecording(500);
                         break;
 
                     case TagDefinitions.WorkStatus.End:  // WorkStatus = 0
@@ -1074,10 +1074,10 @@ namespace RealtimeITagControl
                         camViewerControl.Invalidate();
                     }
 
-                    // Phase 15.3: Record performance snapshot if recording
+                    // Phase 15.3: Update progress for periodic snapshot
                     if (camViewerControl.IsPerformanceRecording())
                     {
-                        camViewerControl.RecordPerformanceSnapshot((int)data.ProgressDistance);
+                        camViewerControl.UpdateProgressForSnapshot((int)data.ProgressDistance);
                     }
 
                     // Phase 15.3: Update performance info in ProgramInfoPanel
@@ -1578,10 +1578,11 @@ namespace RealtimeITagControl
         /// <summary>
         /// Phase 15.3: Start automated performance comparison test
         /// </summary>
-        public void StartPerformanceTest()
+        /// <param name="intervalMs">스냅샷 간격 (ms), 기본 500ms (100~1000ms 권장)</param>
+        public void StartPerformanceTest(int intervalMs = 500)
         {
-            camViewerControl?.StartPerformanceRecording();
-            LogHelper.Log("RealtimeITagControl", "📊 Performance test started");
+            camViewerControl?.StartPerformanceRecording(intervalMs);
+            LogHelper.Log("RealtimeITagControl", $"📊 Performance test started (interval: {intervalMs}ms)");
         }
 
         /// <summary>
