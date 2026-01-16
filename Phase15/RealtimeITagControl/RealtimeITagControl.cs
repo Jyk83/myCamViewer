@@ -1067,7 +1067,7 @@ namespace RealtimeITagControl
                     // Phase 15.3: Record performance snapshot if recording
                     if (camViewerControl.IsPerformanceRecording())
                     {
-                        camViewerControl.RecordPerformanceSnapshot((int)data.Progress);
+                        camViewerControl.RecordPerformanceSnapshot((int)data.ProgressDistance);
                     }
                 }
             }
