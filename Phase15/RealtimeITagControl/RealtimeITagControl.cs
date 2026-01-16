@@ -233,7 +233,6 @@ namespace RealtimeITagControl
             {
                 if (isDisposed)
                 {
-                    LogHelper.Log("RealtimeITagControl", "CleanupResources already called - skipping");
                     return;
                 }
                 isDisposed = true;
@@ -1068,6 +1067,13 @@ namespace RealtimeITagControl
                     if (camViewerControl.IsPerformanceRecording())
                     {
                         camViewerControl.RecordPerformanceSnapshot((int)data.ProgressDistance);
+                    }
+
+                    // Phase 15.3: Update performance info in ProgramInfoPanel
+                    if (programInfoPanel != null)
+                    {
+                        string perfText = $"[{Rendering.OpenGLSettings.GetModeDescription(Rendering.OpenGLSettings.CurrentMode)}]\n{camViewerControl.GetPerformanceSummary()}";
+                        programInfoPanel.UpdatePerformanceInfo(perfText);
                     }
                 }
             }

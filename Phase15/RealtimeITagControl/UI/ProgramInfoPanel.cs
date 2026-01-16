@@ -51,6 +51,10 @@ namespace RealtimeITagControl.UI
         private Label lblConnectionStatus;
         private TextBox txtConnectionStatus;
 
+        // Phase 15.3: 성능 정보 표시
+        private GroupBox grpPerformance;
+        private TextBox txtPerformance;
+
         #endregion
 
         #region 이벤트
@@ -78,7 +82,7 @@ namespace RealtimeITagControl.UI
 
         private void InitializeComponent()
         {
-            this.Size = new Size(300, 630);
+            this.Size = new Size(300, 730);  // Phase 15.3: 성능 정보 추가로 높이 증가
             this.BackColor = Color.FromArgb(240, 240, 240);
 
             int y = 10;
@@ -89,6 +93,23 @@ namespace RealtimeITagControl.UI
             CreateITagStatusInputs(grpITagStatus);
             this.Controls.Add(grpITagStatus);
             y += grpITagStatus.Height + padding;
+
+            // Phase 15.3: 성능 정보
+            grpPerformance = CreateGroup("성능 정보", 10, y, 280, 90);
+            txtPerformance = new TextBox
+            {
+                Location = new Point(10, 20),
+                Size = new Size(260, 60),
+                Multiline = true,
+                ReadOnly = true,
+                Font = new Font("Consolas", 8.5f, FontStyle.Regular),
+                BackColor = Color.Black,
+                ForeColor = Color.Yellow,
+                BorderStyle = BorderStyle.Fixed3D
+            };
+            grpPerformance.Controls.Add(txtPerformance);
+            this.Controls.Add(grpPerformance);
+            y += grpPerformance.Height + padding;
 
             // 좌표 정보 (X, Y 같은 행에 표시)
             grpCoordinates = CreateGroup("좌표 정보", 10, y, 280, 50);
@@ -443,6 +464,20 @@ namespace RealtimeITagControl.UI
             }
 
             txtCoordinates.Text = "---";
+        }
+
+        /// <summary>
+        /// Phase 15.3: 성능 정보 업데이트
+        /// </summary>
+        public void UpdatePerformanceInfo(string performanceSummary)
+        {
+            if (txtPerformance.InvokeRequired)
+            {
+                txtPerformance.Invoke(new Action(() => UpdatePerformanceInfo(performanceSummary)));
+                return;
+            }
+
+            txtPerformance.Text = performanceSummary;
         }
 
         #endregion

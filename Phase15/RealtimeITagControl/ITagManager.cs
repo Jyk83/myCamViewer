@@ -213,7 +213,6 @@ namespace RealtimeITagControl
 
                     if (m_ITag != null && isConnected)
                     {
-                        LogHelper.Log("ITagManager", "m_RegisterCookie");
                         m_ITag.Unregister((int)m_RegisterCookie);
                     }
 

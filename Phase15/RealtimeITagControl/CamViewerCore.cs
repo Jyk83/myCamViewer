@@ -1351,9 +1351,8 @@ namespace RealtimeITagControl
                         RenderMPFScene();
                     }
 
-                    // Draw text overlays BEFORE swapping buffers
-                    // EndMPFRender now calls glFinish() but NOT SwapBuffers
-                    // We draw text using Paint event Graphics, then call SwapBuffersNow()
+                    // Phase 15.3: Draw text overlays (Part/Contour numbers only)
+                    // Performance info moved to ProgramInfoPanel
                     DrawTextOverlays(e.Graphics);
 
                     // Now swap buffers to present both OpenGL and GDI+ content
@@ -1687,27 +1686,6 @@ namespace RealtimeITagControl
                 }
 
                 partIndex++;
-            }
-
-            // Phase 14.2: Draw performance info (bottom-right corner)
-            if (performanceMonitor != null)
-            {
-                string perfText = $"[{OpenGLSettings.GetModeDescription(OpenGLSettings.CurrentMode)}]\n{performanceMonitor.GetPerformanceSummary()}";
-                
-                using (Font font = new Font("Arial", 10, FontStyle.Regular))
-                using (SolidBrush brush = new SolidBrush(Color.FromArgb(200, Color.Yellow)))
-                using (SolidBrush bgBrush = new SolidBrush(Color.FromArgb(150, Color.Black)))
-                {
-                    SizeF textSize = g.MeasureString(perfText, font);
-                    float x = renderPanel.Width - textSize.Width - 10;
-                    float y = renderPanel.Height - textSize.Height - 10;
-                    
-                    // Background
-                    g.FillRectangle(bgBrush, x - 5, y - 5, textSize.Width + 10, textSize.Height + 10);
-                    
-                    // Text
-                    g.DrawString(perfText, font, brush, x, y);
-                }
             }
         }
 
