@@ -2895,6 +2895,3 @@ namespace RealtimeITagControl
         }
     }
 }
- }
-    }
-}
