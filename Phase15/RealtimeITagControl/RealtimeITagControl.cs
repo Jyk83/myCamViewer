@@ -691,8 +691,7 @@ namespace RealtimeITagControl
                         currentTraceState = TraceState.Tracing;
                         isTracing = true;
                         
-                        // Phase 15.3: Start performance recording automatically (500ms interval)
-                        camViewerControl?.StartPerformanceRecording(500);
+                        // Phase 15.3: Performance recording removed
                         break;
 
                     case TagDefinitions.WorkStatus.End:  // WorkStatus = 0
@@ -716,13 +715,7 @@ namespace RealtimeITagControl
                         currentTraceState = TraceState.Completed;
                         isTracing = false;
                         
-                        // Phase 15.3: Stop and export performance
-                        camViewerControl?.StopPerformanceRecording();
-                        string csvPath = camViewerControl?.ExportPerformanceCSV();
-                        if (!string.IsNullOrEmpty(csvPath))
-                        {
-                            LogHelper.Log("RealtimeITagControl", $"Performance CSV saved: {csvPath}");
-                        }
+                        // Phase 15.3: Performance recording removed
                         break;
 
                     case TagDefinitions.WorkStatus.Reset:      // WorkStatus = 2
@@ -1074,11 +1067,7 @@ namespace RealtimeITagControl
                         camViewerControl.Invalidate();
                     }
 
-                    // Phase 15.3: Update progress for periodic snapshot
-                    if (camViewerControl.IsPerformanceRecording())
-                    {
-                        camViewerControl.UpdateProgressForSnapshot((int)data.ProgressDistance);
-                    }
+                    // Phase 15.3: Performance snapshot removed
 
                     // Phase 15.3: Update performance info in ProgramInfoPanel
                     if (programInfoPanel != null)
@@ -1575,45 +1564,11 @@ namespace RealtimeITagControl
 
         #region Phase 15.3: Performance Testing Methods
 
-        /// <summary>
-        /// Phase 15.3: Start automated performance comparison test
-        /// </summary>
-        /// <param name="intervalMs">스냅샷 간격 (ms), 기본 500ms (100~1000ms 권장)</param>
-        public void StartPerformanceTest(int intervalMs = 500)
-        {
-            camViewerControl?.StartPerformanceRecording(intervalMs);
-            LogHelper.Log("RealtimeITagControl", $"📊 Performance test started (interval: {intervalMs}ms)");
-        }
-
-        /// <summary>
-        /// Phase 15.3: Stop automated performance comparison test
-        /// </summary>
-        public void StopPerformanceTest()
-        {
-            camViewerControl?.StopPerformanceRecording();
-            LogHelper.Log("RealtimeITagControl", "📊 Performance test stopped");
-        }
-
-        /// <summary>
-        /// Phase 15.3: Export performance comparison CSV
-        /// </summary>
-        public string ExportPerformanceCSV()
-        {
-            string csvPath = camViewerControl?.ExportPerformanceCSV();
-            if (!string.IsNullOrEmpty(csvPath))
-            {
-                LogHelper.Log("RealtimeITagControl", $"✅ CSV exported: {csvPath}");
-            }
-            return csvPath;
-        }
-
-        /// <summary>
-        /// Phase 15.3: Get performance statistics report
-        /// </summary>
-        public string GetPerformanceStatistics()
-        {
-            return camViewerControl?.GetPerformanceStatistics() ?? "Not available";
-        }
+        #region Phase 15.3: Performance Methods - Removed
+        // CSV logging and performance testing removed per user request
+        // Basic performance monitoring still available via PerformanceMonitor
+        
+        #endregion
 
         /// <summary>
         /// Phase 15.3: Get snapshot count

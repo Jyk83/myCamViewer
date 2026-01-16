@@ -96,7 +96,6 @@
     <Compile Include="Rendering\OpenGLRenderMode.cs" />
     <Compile Include="Rendering\DirtyRegionCalculator.cs" />
     <Compile Include="Rendering\PerformanceMonitor.cs" />
-    <Compile Include="Rendering\PerformanceComparer.cs" />
     <Compile Include="CamViewerCore.cs">
       <SubType>UserControl</SubType>
     </Compile>

@@ -166,9 +166,7 @@ namespace RealtimeITagControl
         // Phase 14.2: Performance Monitor
         private PerformanceMonitor performanceMonitor = null;
 
-        // Phase 15.3: Performance Comparer
-        private PerformanceComparer performanceComparer = null;
-        private int currentProgressForSnapshot = 0; // Phase 15.3: 스냅샷용 PROGRESS 값
+        // Phase 15.3: Performance Comparer - Removed (CSV logging disabled)
 
         // Phase 5 Debug: Show selection areas
         private bool showSelectionAreas = false;
@@ -294,8 +292,7 @@ namespace RealtimeITagControl
                 performanceMonitor.SetScreenResolution(renderPanel.Width, renderPanel.Height);
                 performanceMonitor.StartCPUMeasurement();
 
-                // Phase 15.3: Initialize Performance Comparer
-                performanceComparer = new PerformanceComparer();
+                // Phase 15.3: Performance Comparer initialization removed
 
                 // Load RenderSettings from AppData (Phase8 compatibility)
                 LoadRenderSettings();
@@ -1780,80 +1777,13 @@ namespace RealtimeITagControl
             return performanceMonitor.GetAverageFPS();
         }
 
-        #region Phase 15.3: Performance Comparison Methods
+        #region Phase 15.3: Performance Comparison Methods - Removed
+        // CSV logging feature removed per user request
+        // Performance monitoring still available via PerformanceMonitor
+        
+        #endregion
 
-        /// <summary>
-        /// Phase 15.3: Start performance recording (주기적 스냅샷 활성화)
-        /// </summary>
-        /// <param name="intervalMs">스냅샷 간격 (ms), 기본 500ms (100~1000ms 권장)</param>
-        public void StartPerformanceRecording(int intervalMs = 500)
-        {
-            if (performanceComparer != null && performanceMonitor != null)
-            {
-                performanceComparer.StartRecording(intervalMs);
-                
-                // 주기적 스냅샷 시작
-                performanceComparer.StartPeriodicSnapshot(
-                    performanceMonitor,
-                    () => OpenGLSettings.CurrentMode,
-                    () => currentProgressForSnapshot
-                );
-            }
-        }
-
-        /// <summary>
-        /// Phase 15.3: Stop performance recording
-        /// </summary>
-        public void StopPerformanceRecording()
-        {
-            performanceComparer?.StopRecording();
-        }
-
-        /// <summary>
-        /// Phase 15.3: Update current progress value for snapshot
-        /// </summary>
-        public void UpdateProgressForSnapshot(int progress)
-        {
-            currentProgressForSnapshot = progress;
-        }
-
-        /// <summary>
-        /// Phase 15.3: Export CSV report
-        /// </summary>
-        public string ExportPerformanceCSV(string filePath = null)
-        {
-            if (performanceComparer == null)
-                return null;
-            
-            return performanceComparer.GenerateCSVReport(filePath);
-        }
-
-        /// <summary>
-        /// Phase 15.3: Get statistics report
-        /// </summary>
-        public string GetPerformanceStatistics()
-        {
-            if (performanceComparer == null)
-                return "Performance comparison not available";
-            
-            return performanceComparer.GenerateStatisticsReport();
-        }
-
-        /// <summary>
-        /// Phase 15.3: Get snapshot count
-        /// </summary>
-        public int GetSnapshotCount()
-        {
-            return performanceComparer?.SnapshotCount ?? 0;
-        }
-
-        /// <summary>
-        /// Phase 15.3: Check if recording
-        /// </summary>
-        public bool IsPerformanceRecording()
-        {
-            return performanceComparer?.IsRecording ?? false;
-        }
+        #region Phase 14.2: Basic Performance Methods
 
         /// <summary>
         /// Phase 15.3: Reset performance monitor
