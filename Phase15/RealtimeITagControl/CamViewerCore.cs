@@ -168,6 +168,13 @@ namespace RealtimeITagControl
 
         // Phase 15.3: Performance Comparer - Removed (CSV logging disabled)
 
+        // Phase 15.4: Multi-Threading
+        private Rendering.RenderThreadManager renderThreadManager = null;
+
+        // Phase 15.5: Memory Optimization
+        private MemoryOptimizer memoryOptimizer = null;
+        private Rendering.RenderDataCache renderDataCache = null;
+
         // Phase 5 Debug: Show selection areas
         private bool showSelectionAreas = false;
 
@@ -294,6 +301,16 @@ namespace RealtimeITagControl
 
                 // Phase 15.3: Performance Comparer initialization removed
 
+                // Phase 15.4: Initialize Render Thread Manager
+                renderThreadManager = new Rendering.RenderThreadManager(renderPanel, 60);
+                renderThreadManager.RenderRequested += OnRenderThreadRequested;
+                renderThreadManager.RenderError += OnRenderThreadError;
+                renderThreadManager.Start();
+
+                // Phase 15.5: Initialize Memory Optimizer
+                memoryOptimizer = new MemoryOptimizer();
+                renderDataCache = new Rendering.RenderDataCache();
+
                 // Load RenderSettings from AppData (Phase8 compatibility)
                 LoadRenderSettings();
 
@@ -359,9 +376,25 @@ namespace RealtimeITagControl
                     return;
                 }
 
-                // Read file content
-                string content = File.ReadAllText(filePath);
+                // Phase 15.4: Use async loader for large files
+                LoadMPFFileAsync(filePath);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show("Error loading MPF file: " + ex.Message,
+                                "Load Error",
+                                MessageBoxButtons.OK,
+                                MessageBoxIcon.Error);
+            }
+        }
 
+        /// <summary>
+        /// Phase 15.4: Asynchronous MPF file loading
+        /// </summary>
+        private async void LoadMPFFileAsync(string filePath)
+        {
+            try
+            {
                 // Reset simulation state when loading new file
                 if (simulationEngine != null)
                 {
@@ -373,9 +406,26 @@ namespace RealtimeITagControl
                 currentSimContourIndex = -1;
                 currentSimElementIndex = -1;
 
-                // Parse MPF file
-                MPFParser parser = new MPFParser(true);
-                currentProgram = parser.Parse(content);
+                // Phase 15.4: Async loading with progress
+                var asyncLoader = new MPF.AsyncMPFLoader();
+                
+                asyncLoader.ProgressChanged += (s, e) =>
+                {
+                    // Progress reporting (optional: show in UI)
+                    LogHelper.Log("CamViewerCore", $"Loading: {e.ProgressPercentage}% - {e.CurrentStatus}");
+                };
+
+                // Load asynchronously
+                currentProgram = await asyncLoader.LoadAsync(filePath);
+
+                if (currentProgram == null)
+                {
+                    MessageBox.Show("Failed to load MPF file: " + filePath,
+                                    "Load Error",
+                                    MessageBoxButtons.OK,
+                                    MessageBoxIcon.Error);
+                    return;
+                }
 
                 // Phase 8.2: Store file path
                 currentProgram.FilePath = filePath;
@@ -2713,6 +2763,35 @@ namespace RealtimeITagControl
                         LogHelper.Log("CamViewerCore", $"RedrawTimer dispose error: {ex.Message}");
                     }
 
+                    // Phase 15.4: Dispose render thread manager
+                    try
+                    {
+                        if (renderThreadManager != null)
+                        {
+                            renderThreadManager.Stop();
+                            renderThreadManager.Dispose();
+                            renderThreadManager = null;
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        LogHelper.Log("CamViewerCore", $"RenderThreadManager dispose error: {ex.Message}");
+                    }
+
+                    // Phase 15.5: Clear caches
+                    try
+                    {
+                        if (renderDataCache != null)
+                        {
+                            renderDataCache.Clear();
+                            renderDataCache = null;
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        LogHelper.Log("CamViewerCore", $"RenderDataCache dispose error: {ex.Message}");
+                    }
+
                     // 3. 이벤트 구독 해제
                     try
                     {
@@ -2791,6 +2870,97 @@ namespace RealtimeITagControl
             // WinCC Container가 Controls 및 UserControl Dispose를 처리하므로 직접 호출 불필요
             // 직접 호출 시 null 참조 발생 (WinCC가 이미 정리한 후)
         }
+
+        #region Phase 15.4 & 15.5: Multi-Threading & Memory Optimization
+
+        /// <summary>
+        /// Phase 15.4: Render thread event handler
+        /// </summary>
+        private void OnRenderThreadRequested(object sender, Rendering.RenderThreadManager.RenderEventArgs e)
+        {
+            if (renderPanel == null || renderPanel.IsDisposed)
+                return;
+
+            try
+            {
+                // Process render command
+                switch (e.Command.Type)
+                {
+                    case Rendering.RenderThreadManager.RenderCommandType.FullRefresh:
+                        renderPanel.Invalidate();
+                        break;
+
+                    case Rendering.RenderThreadManager.RenderCommandType.PartialUpdate:
+                    case Rendering.RenderThreadManager.RenderCommandType.DirtyRegion:
+                        if (e.Command.Data is System.Drawing.Rectangle rect)
+                        {
+                            renderPanel.Invalidate(rect);
+                        }
+                        else
+                        {
+                            renderPanel.Invalidate();
+                        }
+                        break;
+
+                    case Rendering.RenderThreadManager.RenderCommandType.ElementUpdate:
+                        renderPanel.Invalidate();
+                        break;
+                }
+            }
+            catch (Exception ex)
+            {
+                LogHelper.Log("CamViewerCore", $"RenderThread error: {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// Phase 15.4: Render thread error handler
+        /// </summary>
+        private void OnRenderThreadError(object sender, Exception ex)
+        {
+            LogHelper.Log("CamViewerCore", $"RenderThread error: {ex.Message}");
+        }
+
+        /// <summary>
+        /// Phase 15.5: Get memory statistics
+        /// </summary>
+        public string GetMemoryStatistics()
+        {
+            if (memoryOptimizer == null)
+                return "Memory optimizer not initialized";
+
+            return memoryOptimizer.GetMemoryStatistics();
+        }
+
+        /// <summary>
+        /// Phase 15.5: Optimize memory
+        /// </summary>
+        public void OptimizeMemory()
+        {
+            if (memoryOptimizer != null)
+            {
+                memoryOptimizer.OptimizeMemory();
+            }
+
+            if (renderDataCache != null)
+            {
+                // Clear old cache entries
+                renderDataCache.Clear();
+            }
+        }
+
+        /// <summary>
+        /// Phase 15.5: Get cache statistics
+        /// </summary>
+        public string GetCacheStatistics()
+        {
+            if (renderDataCache == null)
+                return "Cache not initialized";
+
+            return renderDataCache.GetCacheStatistics();
+        }
+
+        #endregion
     }
 
     /// <summary>

@@ -45,6 +45,9 @@ namespace RealtimeITagControl
         private bool isTracing = false;
         private System.Collections.Generic.Dictionary<string, ContourTraceInfo> contourStatusMap;
 
+        // Phase 15.4: Thread-safe tag queue
+        private Trace.ThreadSafeTagQueue tagQueue = null;
+
         // Dispose 중복 호출 방지
         private bool isDisposed = false;
         private readonly object disposeLock = new object();
@@ -125,6 +128,10 @@ namespace RealtimeITagControl
         public RealtimeITagControl()
         {
             InitializeComponent();
+
+            // Phase 15.4: Initialize thread-safe tag queue
+            tagQueue = new Trace.ThreadSafeTagQueue();
+            tagQueue.MaxQueueSize = 1000;
         }
 
         #endregion
