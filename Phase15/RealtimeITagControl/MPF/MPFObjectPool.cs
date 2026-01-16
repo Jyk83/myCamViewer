@@ -114,45 +114,50 @@ namespace RealtimeITagControl.MPF
     }
 
     /// <summary>
-    /// Phase 15.5: PathSegment object pool
-    /// PathSegment 전용 객체 풀
+    /// Phase 15.5: LineSegment object pool
+    /// LineSegment 전용 객체 풀
     /// </summary>
-    public static class PathSegmentPool
+    public static class LineSegmentPool
     {
-        private static MPFObjectPool<PathSegment> pool = new MPFObjectPool<PathSegment>(5000, segment =>
+        private static MPFObjectPool<LineSegment> pool = new MPFObjectPool<LineSegment>(5000, segment =>
         {
             // Reset segment
-            segment.Type = SegmentType.Line;
-            segment.StartPoint = null;
-            segment.EndPoint = null;
-            segment.CenterPoint = null;
-            segment.Radius = 0;
-            segment.IsClockwise = false;
+            segment.Start = new Point2D(0, 0);
+            segment.End = new Point2D(0, 0);
+            segment.OriginalGCode = null;
         });
 
-        public static PathSegment Rent() => pool.Rent();
-        public static void Return(PathSegment segment) => pool.Return(segment);
-        public static void ReturnRange(IEnumerable<PathSegment> segments) => pool.ReturnRange(segments);
+        public static LineSegment Rent() => pool.Rent();
+        public static void Return(LineSegment segment) => pool.Return(segment);
+        public static void ReturnRange(IEnumerable<LineSegment> segments) => pool.ReturnRange(segments);
         public static int AvailableCount => pool.AvailableCount;
         public static double ReuseRate => pool.ReuseRate;
     }
 
     /// <summary>
-    /// Phase 15.5: Point2D object pool
-    /// Point2D 전용 객체 풀
+    /// Phase 15.5: ArcSegment object pool
+    /// ArcSegment 전용 객체 풀
     /// </summary>
-    public static class Point2DPool
+    public static class ArcSegmentPool
     {
-        private static MPFObjectPool<Point2D> pool = new MPFObjectPool<Point2D>(10000, point =>
+        private static MPFObjectPool<ArcSegment> pool = new MPFObjectPool<ArcSegment>(5000, segment =>
         {
-            // Reset point
-            point.X = 0;
-            point.Y = 0;
+            // Reset segment
+            segment.Start = new Point2D(0, 0);
+            segment.End = new Point2D(0, 0);
+            segment.Center = new Point2D(0, 0);
+            segment.Radius = 0;
+            segment.Clockwise = false;
+            segment.StartAngle = 0;
+            segment.EndAngle = 0;
+            segment.I = 0;
+            segment.J = 0;
+            segment.OriginalGCode = null;
         });
 
-        public static Point2D Rent() => pool.Rent();
-        public static void Return(Point2D point) => pool.Return(point);
-        public static void ReturnRange(IEnumerable<Point2D> points) => pool.ReturnRange(points);
+        public static ArcSegment Rent() => pool.Rent();
+        public static void Return(ArcSegment segment) => pool.Return(segment);
+        public static void ReturnRange(IEnumerable<ArcSegment> segments) => pool.ReturnRange(segments);
         public static int AvailableCount => pool.AvailableCount;
         public static double ReuseRate => pool.ReuseRate;
     }
