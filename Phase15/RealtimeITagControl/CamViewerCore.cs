@@ -35,22 +35,7 @@ namespace RealtimeITagControl
         public static extern void RenderFrame();
 
         [DllImport(DllName, CallingConvention = CallConv, CharSet = CharSetType)]
-        public static extern void DrawRectangle(float x, float y, float width, float height,
-                                                float r, float g, float b);
-
-        [DllImport(DllName, CallingConvention = CallConv, CharSet = CharSetType)]
-        public static extern void DrawCircle(float x, float y, float radius,
-                                             float r, float g, float b);
-
-        [DllImport(DllName, CallingConvention = CallConv, CharSet = CharSetType)]
-        public static extern void ClearShapes();
-
-        [DllImport(DllName, CallingConvention = CallConv, CharSet = CharSetType)]
         public static extern void SetViewTransform(float zoom, float panX, float panY);
-
-        // MPF drawing functions
-        [DllImport(DllName, CallingConvention = CallConv, CharSet = CharSetType)]
-        public static extern void BeginMPFRender();
 
         [DllImport(DllName, CallingConvention = CallConv, CharSet = CharSetType)]
         public static extern void BeginMPFRenderWithBackground(float bgR, float bgG, float bgB);
@@ -172,11 +157,17 @@ namespace RealtimeITagControl
         private SelectionManager selectionManager = null;
         private NumberPositionManager numberPositionManager = null;
 
-        // Phase 8.2: Real-time trace management
-        private TraceManager traceManager = null;
-
-        // Phase 11: Cutting progress manager (public for TraceTestForm access)
+        // Phase 11: Cutting progress manager (public for real-time trace)
         public Trace.CuttingProgressManager progressManager = null;
+
+        // Phase 14.2: Dirty Region calculator
+        private DirtyRegionCalculator dirtyRegionCalculator = null;
+
+        // Phase 14.2: Performance Monitor
+        private PerformanceMonitor performanceMonitor = null;
+
+        // Phase 15.3: Performance Comparer
+        private PerformanceComparer performanceComparer = null;
 
         // Phase 5 Debug: Show selection areas
         private bool showSelectionAreas = false;
@@ -287,6 +278,24 @@ namespace RealtimeITagControl
                 isInitialized = true;
                 NativeRenderer.ResizeViewport(renderPanel.Width, renderPanel.Height);
 
+                // Phase 14.2: Initialize Dirty Region Calculator
+                dirtyRegionCalculator = new DirtyRegionCalculator();
+                dirtyRegionCalculator.UpdateViewport(
+                    renderPanel.Width, 
+                    renderPanel.Height, 
+                    zoom, 
+                    panX, 
+                    panY
+                );
+
+                // Phase 14.2: Initialize Performance Monitor
+                performanceMonitor = new PerformanceMonitor();
+                performanceMonitor.SetScreenResolution(renderPanel.Width, renderPanel.Height);
+                performanceMonitor.StartCPUMeasurement();
+
+                // Phase 15.3: Initialize Performance Comparer
+                performanceComparer = new PerformanceComparer();
+
                 // Load RenderSettings from AppData (Phase8 compatibility)
                 LoadRenderSettings();
 
@@ -336,22 +345,6 @@ namespace RealtimeITagControl
             }
         }
 
-
-        /// <summary>
-        /// Add a rectangle to the scene
-        /// </summary>
-        /// <summary>
-        /// Clear all shapes from the scene
-        /// </summary>
-        public void ClearScene()
-        {
-            if (!isInitialized) return;
-
-            NativeRenderer.ClearShapes();
-            currentProgram = null;
-            renderPanel.Invalidate();
-        }
-
         /// <summary>
         /// Load and display MPF file
         /// </summary>
@@ -392,26 +385,21 @@ namespace RealtimeITagControl
                 // Clear all selections when loading new file
                 selectionManager.ClearAllSelections();
 
-                // Phase 8.2: Initialize trace manager with new program
-                if (traceManager == null)
-                {
-                    traceManager = new TraceManager(currentProgram);
-                }
-                else
-                {
-                    traceManager.SetMPFProgram(currentProgram);
-                }
-
                 // Phase 11: Initialize progress manager with new program
                 if (progressManager == null)
                 {
                     progressManager = new Trace.CuttingProgressManager();
                     progressManager.SetProgram(currentProgram);
-                    progressManager.ProgressUpdated += CuttingProgressManager_ProgressUpdated;
                 }
                 else
                 {
                     progressManager.SetProgram(currentProgram);
+                }
+
+                // Phase 14.2: Set program for Dirty Region Calculator
+                if (dirtyRegionCalculator != null)
+                {
+                    dirtyRegionCalculator.SetProgram(currentProgram);
                 }
 
                 // Display the program (fresh initial state, no simulation history)
@@ -497,9 +485,6 @@ namespace RealtimeITagControl
             {
                 DrawSelectionAreas();
             }
-
-            // Phase 8.2: Draw laser head marker (realtime trace)
-            DrawLaserHeadMarker();
 
             // End MPF rendering (finish OpenGL commands, but don't swap buffers yet)
             // SwapBuffers will be called after text overlays are drawn
@@ -739,6 +724,7 @@ namespace RealtimeITagControl
             }
 
             // Draw all contours
+            // Phase 14.2: 항상 모든 컨투어 렌더링 (TYPE 무관)
             for (int contourIndex = 0; contourIndex < part.Contours.Count; contourIndex++)
             {
                 DrawContour(part.Contours[contourIndex], originX, originY, partIndex, contourIndex);
@@ -1080,14 +1066,6 @@ namespace RealtimeITagControl
             needsRedraw = true;
         }
 
-        /// <summary>
-        /// Phase 7: Cutting progress updated event handler
-        /// </summary>
-        private void CuttingProgressManager_ProgressUpdated(object sender, CuttingProgressEventArgs e)
-        {
-            // Phase 13: Invalidate는 UpdateViewer에서 처리됨
-            // 이 이벤트는 진행 상태 업데이트만 담당
-        }
 
         /// <summary>
         /// Start simulation
@@ -1278,9 +1256,6 @@ namespace RealtimeITagControl
         // MPF loaded event
         public event EventHandler<MPFLoadedEventArgs> MPFLoaded;
 
-        // General log event (for debug and selection logs)
-        public event EventHandler<string> LogMessage;
-
         // Contour selection event (for ITag write)
         public event EventHandler<ContourSelectedEventArgs> ContourSelected;
 
@@ -1307,6 +1282,18 @@ namespace RealtimeITagControl
 
             NativeRenderer.SetViewTransform(zoom, panX, panY);
 
+            // Phase 14.2: Update Dirty Region Calculator viewport
+            if (dirtyRegionCalculator != null)
+            {
+                dirtyRegionCalculator.UpdateViewport(
+                    renderPanel.Width,
+                    renderPanel.Height,
+                    zoom,
+                    panX,
+                    panY
+                );
+            }
+
             // Always use Invalidate to trigger Paint event (for text overlay)
             renderPanel.Invalidate();
         }
@@ -1316,6 +1303,19 @@ namespace RealtimeITagControl
             if (!isInitialized) return;
 
             NativeRenderer.ResizeViewport(renderPanel.Width, renderPanel.Height);
+
+            // Phase 14.2: Update Dirty Region Calculator viewport
+            if (dirtyRegionCalculator != null)
+            {
+                dirtyRegionCalculator.UpdateViewport(
+                    renderPanel.Width,
+                    renderPanel.Height,
+                    zoom,
+                    panX,
+                    panY
+                );
+            }
+
             renderPanel.Invalidate();
         }
 
@@ -1329,6 +1329,12 @@ namespace RealtimeITagControl
             try
             {
                 isRedrawing = true;
+
+                // Phase 14.2: Start performance measurement
+                if (performanceMonitor != null)
+                {
+                    performanceMonitor.StartFrame();
+                }
 
                 // If MPF program is loaded, render it
                 if (currentProgram != null)
@@ -1357,6 +1363,12 @@ namespace RealtimeITagControl
                 {
                     // Otherwise render old shapes system
                     NativeRenderer.RenderFrame();
+                }
+
+                // Phase 14.2: End performance measurement
+                if (performanceMonitor != null)
+                {
+                    performanceMonitor.EndFrame();
                 }
             }
             finally
@@ -1676,6 +1688,27 @@ namespace RealtimeITagControl
 
                 partIndex++;
             }
+
+            // Phase 14.2: Draw performance info (bottom-right corner)
+            if (performanceMonitor != null)
+            {
+                string perfText = $"[{OpenGLSettings.GetModeDescription(OpenGLSettings.CurrentMode)}]\n{performanceMonitor.GetPerformanceSummary()}";
+                
+                using (Font font = new Font("Arial", 10, FontStyle.Regular))
+                using (SolidBrush brush = new SolidBrush(Color.FromArgb(200, Color.Yellow)))
+                using (SolidBrush bgBrush = new SolidBrush(Color.FromArgb(150, Color.Black)))
+                {
+                    SizeF textSize = g.MeasureString(perfText, font);
+                    float x = renderPanel.Width - textSize.Width - 10;
+                    float y = renderPanel.Height - textSize.Height - 10;
+                    
+                    // Background
+                    g.FillRectangle(bgBrush, x - 5, y - 5, textSize.Width + 10, textSize.Height + 10);
+                    
+                    // Text
+                    g.DrawString(perfText, font, brush, x, y);
+                }
+            }
         }
 
         /// <summary>
@@ -1685,7 +1718,179 @@ namespace RealtimeITagControl
         {
             base.Invalidate();
             if (renderPanel != null)
+            {
+                // Phase 15.1: Record full screen invalidate
+                performanceMonitor?.RecordInvalidate();
+                performanceMonitor?.RecordPixels(renderPanel.Width, renderPanel.Height);
                 renderPanel.Invalidate();
+            }
+        }
+
+        /// <summary>
+        /// Phase 14.2: Invalidate with Dirty Region (HMI_OPENGL_TYPE=1)
+        /// </summary>
+        private void InvalidateDirtyRegion(Rectangle dirtyRect)
+        {
+            if (OpenGLSettings.CurrentMode == OpenGLRenderMode.DirtyRegion)
+            {
+                // Dirty Region 모드: 특정 영역만 갱신
+                if (renderPanel != null && !dirtyRect.IsEmpty)
+                {
+                    // Phase 15.1: Record dirty region invalidate
+                    performanceMonitor?.RecordDirtyRegion();
+                    performanceMonitor?.RecordPixels(dirtyRect.Width, dirtyRect.Height);
+                    renderPanel.Invalidate(dirtyRect);
+                }
+            }
+            else
+            {
+                // 다른 모드: 전체 갱신
+                Invalidate();
+            }
+        }
+
+        /// <summary>
+        /// Phase 14.2: Calculate and invalidate progress region
+        /// </summary>
+        public void InvalidateProgressRegion(int partNo, int contourNo)
+        {
+            if (dirtyRegionCalculator == null || currentProgram == null)
+            {
+                Invalidate();
+                return;
+            }
+
+            Rectangle dirtyRect = dirtyRegionCalculator.CalculateProgressRegion(partNo, contourNo);
+            InvalidateDirtyRegion(dirtyRect);
+        }
+
+        /// <summary>
+        /// Phase 15.2: Calculate and invalidate element region (최소 영역)
+        /// </summary>
+        public void InvalidateElementRegion(int partNo, int contourNo, int elementIndex, double progress)
+        {
+            if (dirtyRegionCalculator == null || currentProgram == null)
+            {
+                Invalidate();
+                return;
+            }
+
+            Rectangle dirtyRect = dirtyRegionCalculator.CalculateElementRegion(partNo, contourNo, elementIndex, progress);
+            InvalidateDirtyRegion(dirtyRect);
+        }
+
+        /// <summary>
+        /// Phase 14.2: Get performance summary
+        /// </summary>
+        public string GetPerformanceSummary()
+        {
+            if (performanceMonitor == null)
+                return "Performance monitoring not available";
+            
+            return performanceMonitor.GetPerformanceSummary();
+        }
+
+        /// <summary>
+        /// Phase 14.2: Get average FPS
+        /// </summary>
+        public double GetAverageFPS()
+        {
+            if (performanceMonitor == null)
+                return 0.0;
+            
+            return performanceMonitor.GetAverageFPS();
+        }
+
+        #region Phase 15.3: Performance Comparison Methods
+
+        /// <summary>
+        /// Phase 15.3: Start performance recording
+        /// </summary>
+        public void StartPerformanceRecording()
+        {
+            performanceComparer?.StartRecording();
+        }
+
+        /// <summary>
+        /// Phase 15.3: Stop performance recording
+        /// </summary>
+        public void StopPerformanceRecording()
+        {
+            performanceComparer?.StopRecording();
+        }
+
+        /// <summary>
+        /// Phase 15.3: Record current performance snapshot
+        /// </summary>
+        public void RecordPerformanceSnapshot(int progressValue)
+        {
+            if (performanceComparer != null && performanceMonitor != null)
+            {
+                performanceComparer.RecordSnapshot(
+                    performanceMonitor,
+                    OpenGLSettings.CurrentMode,
+                    progressValue
+                );
+            }
+        }
+
+        /// <summary>
+        /// Phase 15.3: Export CSV report
+        /// </summary>
+        public string ExportPerformanceCSV(string filePath = null)
+        {
+            if (performanceComparer == null)
+                return null;
+            
+            return performanceComparer.GenerateCSVReport(filePath);
+        }
+
+        /// <summary>
+        /// Phase 15.3: Get statistics report
+        /// </summary>
+        public string GetPerformanceStatistics()
+        {
+            if (performanceComparer == null)
+                return "Performance comparison not available";
+            
+            return performanceComparer.GenerateStatisticsReport();
+        }
+
+        /// <summary>
+        /// Phase 15.3: Get snapshot count
+        /// </summary>
+        public int GetSnapshotCount()
+        {
+            return performanceComparer?.SnapshotCount ?? 0;
+        }
+
+        /// <summary>
+        /// Phase 15.3: Check if recording
+        /// </summary>
+        public bool IsPerformanceRecording()
+        {
+            return performanceComparer?.IsRecording ?? false;
+        }
+
+        /// <summary>
+        /// Phase 15.3: Reset performance monitor
+        /// </summary>
+        public void ResetPerformanceMonitor()
+        {
+            performanceMonitor?.Reset();
+        }
+
+        #endregion
+
+        /// <summary>
+        /// Phase 14.2: Get average render time
+        /// </summary>
+        public double GetAverageRenderTime()
+        {
+            if (performanceMonitor == null)
+                return 0.0;
+            
+            return performanceMonitor.GetAverageRenderTime();
         }
 
         private void RenderPanel_MouseDown(object sender, MouseEventArgs e)
@@ -2124,18 +2329,6 @@ namespace RealtimeITagControl
         }
 
         /// <summary>
-        /// Get cutting progress manager (for external access)
-        /// Phase 7: Real-time trace system integration
-        /// </summary>
-        /// <summary>
-        /// Phase 8.2: Get TraceManager instance
-        /// </summary>
-        public TraceManager GetTraceManager()
-        {
-            return traceManager;
-        }
-
-        /// <summary>
         /// Update cursor based on current mode
         /// </summary>
         private void UpdateCursor()
@@ -2167,30 +2360,6 @@ namespace RealtimeITagControl
         #endregion
 
         #region Phase 5.4: Number Positioning Methods
-
-        /// <summary>
-        /// Enable number positioning mode
-        /// </summary>
-        public void EnableNumberPositioning(NumberPositionManager.NumberType type)
-        {
-            if (numberPositionManager != null)
-            {
-                numberPositionManager.EnablePositioningMode(type);
-                UpdateCursor();
-            }
-        }
-
-        /// <summary>
-        /// Disable number positioning mode
-        /// </summary>
-        public void DisableNumberPositioning()
-        {
-            if (numberPositionManager != null)
-            {
-                numberPositionManager.DisablePositioningMode();
-                UpdateCursor();
-            }
-        }
 
         /// <summary>
         /// Handle number positioning click
@@ -2544,92 +2713,6 @@ namespace RealtimeITagControl
 
         #region Phase 8.2: Realtime Trace Public Methods
 
-        /// <summary>
-        /// 실시간 트레이스 시작
-        /// </summary>
-        /// <param name="startPart">시작 Part 번호 (1-based)</param>
-        /// <param name="startContour">시작 Contour 번호 (1-based)</param>
-        /// <param name="isReverse">역방향 절단 여부</param>
-        /// <returns>성공 여부</returns>
-        public bool StartCuttingTrace(int startPart, int startContour, bool isReverse = false)
-        {
-            if (traceManager == null || currentProgram == null)
-            {
-                return false;
-            }
-
-            bool success = traceManager.StartTrace(startPart, startContour, isReverse);
-            if (success)
-            {
-                Invalidate();  // 화면 갱신
-            }
-            return success;
-        }
-
-        /// <summary>
-        /// 실시간 트레이스 진행 상황 업데이트
-        /// </summary>
-        /// <param name="part">현재 Part 번호 (1-based)</param>
-        /// <param name="contour">현재 Contour 번호 (1-based)</param>
-        /// <param name="progress">진행률 (0.0 ~ 1.0)</param>
-        /// <param name="posX">레이저 헤드 X 위치 (WCS)</param>
-        /// <param name="posY">레이저 헤드 Y 위치 (WCS)</param>
-        /// <param name="currentBlock">현재 실행 중인 G-code 블록</param>
-        /// <returns>성공 여부</returns>
-        public bool UpdateCuttingProgress(int part, int contour, double progress,
-                                           double posX, double posY, string currentBlock = "")
-        {
-            if (traceManager == null || !traceManager.IsActive)
-            {
-                return false;
-            }
-
-            bool success = traceManager.UpdateProgress(part, contour, progress, posX, posY, currentBlock);
-            if (success)
-            {
-                Invalidate();  // 화면 갱신
-            }
-            return success;
-        }
-
-        /// <summary>
-        /// 실시간 트레이스 중지
-        /// </summary>
-        public void StopCuttingTrace()
-        {
-            if (traceManager != null && traceManager.IsActive)
-            {
-                traceManager.StopTrace();
-                Invalidate();  // 화면 갱신
-            }
-        }
-
-        /// <summary>
-        /// 현재 트레이스 진행 상황 가져오기
-        /// </summary>
-        /// <returns>진행 상황 데이터</returns>
-        public CuttingProgressData GetTraceProgress()
-        {
-            return traceManager?.GetCurrentProgress();
-        }
-
-        /// <summary>
-        /// 트레이스 활성화 상태 확인
-        /// </summary>
-        public bool IsTraceActive => traceManager?.IsActive ?? false;
-
-        /// <summary>
-        /// 레이저 헤드 마커 그리기 (렌더링 파이프라인에서 호출)
-        /// </summary>
-        private void DrawLaserHeadMarker()
-        {
-            if (traceManager != null && traceManager.IsActive)
-            {
-                float scale = 1.0f / zoom;  // 줌에 따라 크기 조정
-                traceManager.DrawLaserHeadMarker(scale);
-            }
-        }
-
         #endregion
 
         #region RenderSettings Management
@@ -2725,10 +2808,8 @@ namespace RealtimeITagControl
                             selectionManager.SelectionChanged -= SelectionManager_SelectionChanged;
                         }
                         
-                        if (progressManager != null)
-                        {
-                            progressManager.ProgressUpdated -= CuttingProgressManager_ProgressUpdated;
-                        }
+                        // Phase 14.2: ProgressUpdated 이벤트 제거됨 (UpdateViewer에서 처리)
+                        // progressManager는 Dispose 불필요
                         
                         if (numberPositionManager != null)
                         {
@@ -2780,7 +2861,6 @@ namespace RealtimeITagControl
                         currentProgram = null;
                         selectionManager = null;
                         numberPositionManager = null;
-                        traceManager = null;
                     }
                     catch (Exception ex)
                     {
@@ -2813,5 +2893,8 @@ namespace RealtimeITagControl
             X = x;
             Y = y;
         }
+    }
+}
+ }
     }
 }

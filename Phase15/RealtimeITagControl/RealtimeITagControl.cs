@@ -155,7 +155,6 @@ namespace RealtimeITagControl
             programInfoPanel.SimulationClicked += ProgramInfoPanel_SimulationClicked;
             programInfoPanel.StopSimulationClicked += ProgramInfoPanel_StopSimulationClicked;
             programInfoPanel.ElementSelectClicked += ProgramInfoPanel_ElementSelectClicked;
-            programInfoPanel.TraceTestClicked += ProgramInfoPanel_TraceTestClicked;
             programInfoPanel.ShowPartNumberChanged += ProgramInfoPanel_ShowPartNumberChanged;
             programInfoPanel.ShowContourNumberChanged += ProgramInfoPanel_ShowContourNumberChanged;
             programInfoPanel.EnableContourSelectionChanged += ProgramInfoPanel_EnableContourSelectionChanged;  // Phase 12
@@ -244,22 +243,6 @@ namespace RealtimeITagControl
             {
                 LogHelper.Log("RealtimeITagControl", "=== CleanupResources 시작 ===");
 
-                // 0. TraceTestForm 종료 처리
-                try
-                {
-                    if (traceTestForm != null && !traceTestForm.IsDisposed)
-                    {
-                        traceTestForm.Close();
-                        traceTestForm.Dispose();
-                        traceTestForm = null;
-                        LogHelper.Log("RealtimeITagControl", "TraceTestForm closed and disposed");
-                    }
-                }
-                catch (Exception ex)
-                {
-                    LogHelper.Log("RealtimeITagControl", $"TraceTestForm cleanup error: {ex.Message}");
-                }
-
                 // 1. ITag 연결 해제 (Cyclic Read 먼저 중단)
                 try
                 {
@@ -308,7 +291,6 @@ namespace RealtimeITagControl
                         programInfoPanel.SimulationClicked -= ProgramInfoPanel_SimulationClicked;
                         programInfoPanel.StopSimulationClicked -= ProgramInfoPanel_StopSimulationClicked;
                         programInfoPanel.ElementSelectClicked -= ProgramInfoPanel_ElementSelectClicked;
-                        programInfoPanel.TraceTestClicked -= ProgramInfoPanel_TraceTestClicked;
                         programInfoPanel.ShowPartNumberChanged -= ProgramInfoPanel_ShowPartNumberChanged;
                         programInfoPanel.ShowContourNumberChanged -= ProgramInfoPanel_ShowContourNumberChanged;
                         programInfoPanel.EnableContourSelectionChanged -= ProgramInfoPanel_EnableContourSelectionChanged;  // Phase 12
@@ -523,6 +505,9 @@ namespace RealtimeITagControl
 
                 // Phase 13: Update ViewDirection based on HMI_VIEW_DIR_TYPE tag
                 UpdateViewDirection(tagData);
+
+                // Phase 14.2: Update OpenGL rendering mode based on HMI_OPENGL_TYPE tag
+                UpdateOpenGLMode(tagData);
 
                 // Program Info 패널 업데이트
                 if (programInfoPanel != null)
@@ -1001,6 +986,41 @@ namespace RealtimeITagControl
             }
         }
 
+        /// <summary>
+        /// Phase 14.2: Update OpenGL rendering mode based on HMI_OPENGL_TYPE tag
+        /// </summary>
+        private void UpdateOpenGLMode(TagData tagData)
+        {
+            try
+            {
+                // HMI_OPENGL_TYPE 값에 따라 OpenGL 렌더링 모드 업데이트
+                // Type 1 = Default (전체 화면 갱신)
+                // Type 2 = DirtyRegion (영역만 갱신)
+
+                int openglType = tagData.OpenGLType;
+
+                // 현재 모드와 다를 때만 변경
+                if ((int)Rendering.OpenGLSettings.CurrentMode != openglType)
+                {
+                    Rendering.OpenGLSettings.SetModeFromITag(openglType);
+
+                    LogHelper.Log("RealtimeITagControl", 
+                        $"[Phase14.2] OpenGL Mode changed: {Rendering.OpenGLSettings.CurrentMode} " +
+                        $"(HMI_OPENGL_TYPE={openglType})");
+
+                    // 모드 변경 시 화면 다시 그리기
+                    if (camViewerControl != null && !camViewerControl.IsDisposed)
+                    {
+                        camViewerControl.Invalidate();
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                LogHelper.Log("RealtimeITagControl", $"[Phase14.2] UpdateOpenGLMode error: {ex.Message}");
+            }
+        }
+
         #endregion
 
         #region Viewer 업데이트
@@ -1009,17 +1029,52 @@ namespace RealtimeITagControl
         {
             try
             {
-                // Phase 13: 실시간 트레이스 전용 Invalidate
+                // Phase 14.2: 실시간 트레이스 전용 Invalidate (TYPE에 따라 처리)
                 // 조건: isTracing (Tag 변화 + 트레이스 중)만 확인
                 // 시뮬레이션과 실시간 트레이스는 동시 동작 불가
                 
                 if (isTracing && camViewerControl != null && !camViewerControl.IsDisposed)
                 {
-                    camViewerControl.Invalidate();
+                    // Phase 15.2: OpenGL 렌더링 모드에 따른 Invalidate
+                    if (Rendering.OpenGLSettings.CurrentMode == Rendering.OpenGLRenderMode.DirtyRegion)
+                    {
+                        // TYPE=2: Dirty Region - 엘리먼트 단위 최소 영역 갱신
+                        if (camViewerControl.progressManager != null)
+                        {
+                            int elementIndex = camViewerControl.progressManager.CurrentElementIndex;
+                            double progress = camViewerControl.progressManager.ElementProgress;
+                            
+                            // 엘리먼트 단위 갱신 (픽셀 수 1/10 감소 목표)
+                            camViewerControl.InvalidateElementRegion(
+                                data.CurrentPart - 1,  // 0-based
+                                data.CurrentContour - 1,  // 0-based
+                                elementIndex,
+                                progress
+                            );
+                        }
+                        else
+                        {
+                            // fallback: 컨투어 단위
+                            camViewerControl.InvalidateProgressRegion(data.CurrentPart, data.CurrentContour);
+                        }
+                    }
+                    else
+                    {
+                        // TYPE=1: Default - 전체 화면 갱신
+                        camViewerControl.Invalidate();
+                    }
+
+                    // Phase 15.3: Record performance snapshot if recording
+                    if (camViewerControl.IsPerformanceRecording())
+                    {
+                        camViewerControl.RecordPerformanceSnapshot((int)data.Progress);
+                    }
                 }
             }
             catch (Exception ex)
             {
+                // 예외 로깅만 유지
+                LogHelper.Log("RealtimeITagControl", $"UpdateViewer error: {ex.Message}");
             }
         }
 
@@ -1174,51 +1229,6 @@ namespace RealtimeITagControl
             catch (Exception ex)
             {
                 MessageBox.Show($"Element 선택 오류: {ex.Message}", "오류", MessageBoxButtons.OK, MessageBoxIcon.Error);
-            }
-        }
-
-        // TraceTestForm 싱글톤 인스턴스
-        private Trace.TraceTestForm traceTestForm = null;
-
-        /// <summary>
-        /// TraceTestForm 호출 이벤트
-        /// </summary>
-        private void ProgramInfoPanel_TraceTestClicked(object sender, EventArgs e)
-        {
-            if (mpfProgram == null)
-            {
-                MessageBox.Show("MPF 파일을 먼저 로드하세요.", "Trace Test", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                return;
-            }
-
-            try
-            {
-                // 이미 열려있는 폼이 있으면 활성화만
-                if (traceTestForm != null && !traceTestForm.IsDisposed)
-                {
-                    traceTestForm.BringToFront();
-                    traceTestForm.Focus();
-                    LogHelper.Log("RealtimeITagControl", "TraceTestForm already opened - brought to front");
-                    return;
-                }
-
-                // CuttingProgressManager는 camViewerControl의 것을 사용
-                if (camViewerControl.progressManager == null)
-                {
-                    MessageBox.Show("CuttingProgressManager가 초기화되지 않았습니다.", "오류", MessageBoxButtons.OK, MessageBoxIcon.Error);
-                    return;
-                }
-
-                traceTestForm = new Trace.TraceTestForm(camViewerControl.progressManager, mpfProgram, camViewerControl);
-                traceTestForm.TopMost = true;  // 항상 최상위 표시
-                traceTestForm.FormClosed += (s, args) => { traceTestForm = null; };  // 종료 시 참조 해제
-                traceTestForm.Show();
-                LogHelper.Log("RealtimeITagControl", "TraceTestForm opened");
-            }
-            catch (Exception ex)
-            {
-                MessageBox.Show($"TraceTestForm 오류: {ex.Message}", "오류", MessageBoxButtons.OK, MessageBoxIcon.Error);
-                LogHelper.Log("RealtimeITagControl", $"TraceTestForm error: {ex.Message}");
             }
         }
 
@@ -1421,40 +1431,19 @@ namespace RealtimeITagControl
                     return;
                 }
 
-                // 3. ProgressDistance 의미 판단
+                // 3. Phase 14.2: ProgressDistance는 현재 엘리먼트 내 진행 거리 (ActLineCode 기반)
                 double cumulativeDistance = CalculateCumulativeDistance(contour.AllSegments, currentElementIndex);
                 double currentElementLength = contour.AllSegments[currentElementIndex].GetLength();
                 
-                double elementProgressDistance;
+                // ProgressDistance는 현재 엘리먼트의 진행 거리 (절대 거리 아님)
+                double elementProgressDistance = progressDistance;
                 
-                // ProgressDistance가 누적 거리보다 작으면, 현재 엘리먼트의 진행 거리
-                if (progressDistance < cumulativeDistance)
-                {
-                    // Case A: ProgressDistance = 현재 엘리먼트의 진행 거리
-                    elementProgressDistance = progressDistance;
-                    LogHelper.Log("RealtimeITagControl", 
-                        $"[Phase13] ProgressDistance ({progressDistance:F2}mm) < CumulativeDist ({cumulativeDistance:F2}mm) → Using as element progress");
-                }
-                else
-                {
-                    // Case B: ProgressDistance = 컨투어 시작부터의 절대 거리
-                    elementProgressDistance = progressDistance - cumulativeDistance;
-                    LogHelper.Log("RealtimeITagControl", 
-                        $"[Phase13] ProgressDistance ({progressDistance:F2}mm) >= CumulativeDist ({cumulativeDistance:F2}mm) → Subtracting cumulative");
-                }
-
                 // 4. 현재 엘리먼트의 진행률 계산
                 double elementProgress = currentElementLength > 0 ? elementProgressDistance / currentElementLength : 0.0;
                 elementProgress = Math.Max(0.0, Math.Min(1.0, elementProgress));  // Clamp [0, 1]
 
                 // 5. ProgressManager에 업데이트
                 camViewerControl.progressManager.UpdateProgress(partIdx, contIdx, currentElementIndex, elementProgress);
-
-                // 6. 로그 (디버깅용)
-                LogHelper.Log("RealtimeITagControl", 
-                    $"[Phase13] Element Trace: Part={partIdx+1}, Contour={contIdx+1}, Element={currentElementIndex}, " +
-                    $"CumulativeDist={cumulativeDistance:F2}mm, ProgressDist={progressDistance:F2}mm, " +
-                    $"ElementProgress={elementProgress:F3} ({elementProgressDistance:F2}mm / {currentElementLength:F2}mm)");
             }
             catch (Exception ex)
             {
@@ -1471,14 +1460,11 @@ namespace RealtimeITagControl
         {
             if (contour?.AllSegments == null || string.IsNullOrEmpty(actLineCode))
             {
-                LogHelper.Log("RealtimeITagControl", "[Phase13] FindElementIndexByGCode: Null or empty input");
                 return -1;
             }
 
             // G-code 정규화 (공백 제거, 대소문자 통일)
             string normalizedActCode = NormalizeGCode(actLineCode);
-            LogHelper.Log("RealtimeITagControl", 
-                $"[Phase13] FindElementIndexByGCode: Searching for \"{actLineCode}\" → normalized: \"{normalizedActCode}\"");
 
             for (int i = 0; i < contour.AllSegments.Count; i++)
             {
@@ -1488,17 +1474,9 @@ namespace RealtimeITagControl
 
                 string normalizedSegmentCode = NormalizeGCode(segment.OriginalGCode);
 
-                // 디버깅: 첫 3개 엘리먼트만 출력
-                if (i < 3)
-                {
-                    LogHelper.Log("RealtimeITagControl", 
-                        $"[Phase13]   Element[{i}]: \"{segment.OriginalGCode}\" → \"{normalizedSegmentCode}\"");
-                }
-
                 // 정규화된 G-code 비교
                 if (normalizedSegmentCode == normalizedActCode)
                 {
-                    LogHelper.Log("RealtimeITagControl", $"[Phase13] ✅ Match found at Element[{i}]");
                     return i;  // 엘리먼트 인덱스 반환
                 }
             }
@@ -1507,7 +1485,6 @@ namespace RealtimeITagControl
             // "G1 X=68.171 Y=8.25" → "HKSTO(...)" 매칭은 향후 확장
             // 현재는 직접 매칭만 지원
 
-            LogHelper.Log("RealtimeITagControl", $"[Phase13] ❌ No match found for \"{actLineCode}\"");
             return -1;  // 찾지 못함
         }
 
@@ -1575,6 +1552,66 @@ namespace RealtimeITagControl
             {
                 LogHelper.Log("RealtimeITagControl", $"[Phase13] UpdateContourTotalProgress error: {ex.Message}");
             }
+        }
+
+        #endregion
+
+        #region Phase 15.3: Performance Testing Methods
+
+        /// <summary>
+        /// Phase 15.3: Start automated performance comparison test
+        /// </summary>
+        public void StartPerformanceTest()
+        {
+            camViewerControl?.StartPerformanceRecording();
+            LogHelper.Log("RealtimeITagControl", "📊 Performance test started");
+        }
+
+        /// <summary>
+        /// Phase 15.3: Stop automated performance comparison test
+        /// </summary>
+        public void StopPerformanceTest()
+        {
+            camViewerControl?.StopPerformanceRecording();
+            LogHelper.Log("RealtimeITagControl", "📊 Performance test stopped");
+        }
+
+        /// <summary>
+        /// Phase 15.3: Export performance comparison CSV
+        /// </summary>
+        public string ExportPerformanceCSV()
+        {
+            string csvPath = camViewerControl?.ExportPerformanceCSV();
+            if (!string.IsNullOrEmpty(csvPath))
+            {
+                LogHelper.Log("RealtimeITagControl", $"✅ CSV exported: {csvPath}");
+            }
+            return csvPath;
+        }
+
+        /// <summary>
+        /// Phase 15.3: Get performance statistics report
+        /// </summary>
+        public string GetPerformanceStatistics()
+        {
+            return camViewerControl?.GetPerformanceStatistics() ?? "Not available";
+        }
+
+        /// <summary>
+        /// Phase 15.3: Get snapshot count
+        /// </summary>
+        public int GetSnapshotCount()
+        {
+            return camViewerControl?.GetSnapshotCount() ?? 0;
+        }
+
+        /// <summary>
+        /// Phase 15.3: Reset performance monitor
+        /// </summary>
+        public void ResetPerformanceStats()
+        {
+            camViewerControl?.ResetPerformanceMonitor();
+            LogHelper.Log("RealtimeITagControl", "🔄 Performance stats reset");
         }
 
         #endregion
