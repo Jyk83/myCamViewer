@@ -215,6 +215,9 @@ namespace RealtimeITagControl
             this.Size = new System.Drawing.Size(800, 600);
             this.Load += new System.EventHandler(this.CamViewerControl_Load);
 
+            // Phase 16.1: Enable keyboard input
+            this.TabStop = true;  // 포커스를 받을 수 있도록
+
             this.ResumeLayout(false);
         }
 
@@ -239,6 +242,9 @@ namespace RealtimeITagControl
             renderPanel.MouseMove += RenderPanel_MouseMove;
             renderPanel.MouseUp += RenderPanel_MouseUp;
             renderPanel.MouseWheel += RenderPanel_MouseWheel;
+
+            // Phase 16.1: 마우스 클릭 시 포커스 받기
+            renderPanel.Click += (s, e) => this.Focus();
 
             this.Controls.Add(renderPanel);
         }
@@ -2711,6 +2717,196 @@ namespace RealtimeITagControl
             }
             catch (Exception ex)
             {
+            }
+        }
+
+        #endregion
+
+        #region Phase 16.1: Zoom/Pan Keyboard Support with ViewDirectionType
+
+        private const float PAN_STEP = 20.0f;      // Pan 이동 단위 (픽셀)
+        private const float ZOOM_STEP = 1.1f;      // 확대 비율 (10%)
+        private const float ZOOM_OUT_STEP = 0.9f;  // 축소 비율 (10%)
+        private const float MIN_ZOOM = 0.1f;       // 최소 줌
+        private const float MAX_ZOOM = 10.0f;      // 최대 줌
+
+        protected override void OnKeyDown(KeyEventArgs e)
+        {
+            base.OnKeyDown(e);
+
+            try
+            {
+                bool handled = false;
+
+                // Shift + 방향키: 확대/축소
+                if (e.Shift)
+                {
+                    if (e.KeyCode == Keys.Up)
+                    {
+                        // Shift + ↑: 확대
+                        ZoomAtCenter(ZOOM_STEP);
+                        handled = true;
+                    }
+                    else if (e.KeyCode == Keys.Down)
+                    {
+                        // Shift + ↓: 축소
+                        ZoomAtCenter(ZOOM_OUT_STEP);
+                        handled = true;
+                    }
+                }
+                // 방향키만: Pan 이동 (ViewDirectionType 고려)
+                else if (!e.Control && !e.Alt)
+                {
+                    float deltaX = 0;
+                    float deltaY = 0;
+
+                    switch (e.KeyCode)
+                    {
+                        case Keys.Up:
+                            deltaY = PAN_STEP;
+                            handled = true;
+                            break;
+
+                        case Keys.Down:
+                            deltaY = -PAN_STEP;
+                            handled = true;
+                            break;
+
+                        case Keys.Left:
+                            deltaX = -PAN_STEP;
+                            handled = true;
+                            break;
+
+                        case Keys.Right:
+                            deltaX = PAN_STEP;
+                            handled = true;
+                            break;
+                    }
+
+                    if (handled)
+                    {
+                        // ViewDirectionType 반영하여 Pan 적용
+                        ApplyPanWithViewDirection(deltaX, deltaY);
+                        this.Invalidate();
+                    }
+                }
+
+                // Backspace: 기본 화면 복구
+                if (e.KeyCode == Keys.Back)
+                {
+                    ResetView();
+                    handled = true;
+                }
+
+                e.Handled = handled;
+                e.SuppressKeyPress = handled;
+            }
+            catch (Exception ex)
+            {
+                LogHelper.LogError($"[Phase 16.1] KeyDown error: {ex.Message}", ex);
+            }
+        }
+
+        /// <summary>
+        /// ViewDirectionType을 고려하여 Pan 적용
+        /// Type 1 (RightBottom): 우하단 원점, X축 위(+)/아래(-), Y축 좌(+)/우(-)
+        /// Type 2 (LeftBottom): 좌하단 원점, X축 우(+)/좌(-), Y축 위(+)/아래(-)
+        /// </summary>
+        private void ApplyPanWithViewDirection(float deltaX, float deltaY)
+        {
+            Rendering.ViewDirectionType viewDir = Rendering.RenderSettings.Instance.ViewDirection;
+
+            float actualDeltaX = 0;
+            float actualDeltaY = 0;
+
+            // 픽셀 델타를 오브젝트 공간으로 변환
+            float dx = deltaX / (float)renderPanel.Width * 2.0f / zoom;
+            float dy = deltaY / (float)renderPanel.Height * 2.0f / zoom;
+
+            if (viewDir == Rendering.ViewDirectionType.RightBottom)
+            {
+                // Type 1: RightBottom 원점
+                // 키보드 방향키는 화면 기준이므로:
+                // ↑ 키 (deltaY > 0) → 화면 위 → 오브젝트 Y 증가 (좌측으로)
+                // ↓ 키 (deltaY < 0) → 화면 아래 → 오브젝트 Y 감소 (우측으로)
+                // ← 키 (deltaX < 0) → 화면 왼쪽 → 오브젝트 X 증가 (위로)
+                // → 키 (deltaX > 0) → 화면 오른쪽 → 오브젝트 X 감소 (아래로)
+                
+                actualDeltaX = -dx;  // 좌우 반전
+                actualDeltaY = dy;   // 상하 유지
+            }
+            else
+            {
+                // Type 2: LeftBottom (기본 OpenGL)
+                // ↑ 키 (deltaY > 0) → 화면 위 → 오브젝트 Y 증가
+                // ↓ 키 (deltaY < 0) → 화면 아래 → 오브젝트 Y 감소
+                // ← 키 (deltaX < 0) → 화면 왼쪽 → 오브젝트 X 감소
+                // → 키 (deltaX > 0) → 화면 오른쪽 → 오브젝트 X 증가
+                
+                actualDeltaX = dx;   // 좌우 유지
+                actualDeltaY = dy;   // 상하 유지
+            }
+
+            panX += actualDeltaX;
+            panY += actualDeltaY;
+
+            LogHelper.Log($"[Phase 16.1] Pan keyboard: ViewDir={viewDir}, " +
+                          $"Input=({deltaX:F1},{deltaY:F1}), " +
+                          $"Applied=({actualDeltaX:F3},{actualDeltaY:F3}), " +
+                          $"Result Pan=({panX:F3},{panY:F3})");
+
+            UpdateViewTransform();
+        }
+
+        /// <summary>
+        /// 패널 중앙을 기준으로 확대/축소
+        /// </summary>
+        private void ZoomAtCenter(float zoomFactor)
+        {
+            float oldZoom = zoom;
+            zoom *= zoomFactor;
+
+            // 줌 제한
+            zoom = Math.Max(MIN_ZOOM, Math.Min(MAX_ZOOM, zoom));
+
+            LogHelper.Log($"[Phase 16.1] Zoom keyboard: {oldZoom:F2} → {zoom:F2}");
+
+            UpdateViewTransform();
+            this.Invalidate();
+        }
+
+        /// <summary>
+        /// 기본 화면으로 복구 (Backspace 또는 더블클릭)
+        /// </summary>
+        private void ResetView()
+        {
+            zoom = 1.0f;
+            panX = 0;
+            panY = 0;
+
+            LogHelper.Log($"[Phase 16.1] View reset: Zoom=1.0, Pan=(0,0)");
+
+            UpdateViewTransform();
+            this.Invalidate();
+        }
+
+        /// <summary>
+        /// 마우스 더블클릭: 기본 화면 복구
+        /// </summary>
+        protected override void OnMouseDoubleClick(MouseEventArgs e)
+        {
+            base.OnMouseDoubleClick(e);
+
+            try
+            {
+                if (e.Button == MouseButtons.Left)
+                {
+                    ResetView();
+                }
+            }
+            catch (Exception ex)
+            {
+                LogHelper.LogError($"[Phase 16.1] MouseDoubleClick error: {ex.Message}", ex);
             }
         }
 
