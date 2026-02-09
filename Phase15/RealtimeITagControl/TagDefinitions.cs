@@ -41,6 +41,9 @@ namespace RealtimeITagControl
         // Phase 14.2: OpenGL 렌더링 모드
         public const string OPENGL_TYPE = "HMI_OPENGL_TYPE";
 
+        // 컨투어 선택 모드
+        public const string CONTOUR_SELECT_MODE = "HMI_VIEW_SEARCH_MODE";
+
         /// <summary>
         /// 모든 Tag 이름 배열 (ReadTagCyclic용)
         /// </summary>
@@ -54,7 +57,8 @@ namespace RealtimeITagControl
             ACT_LINE_CODE, ACT_LINE_NUM,
             SEARCH_PART, SEARCH_CONT,
             DIR_TYPE,
-            OPENGL_TYPE
+            OPENGL_TYPE,
+            CONTOUR_SELECT_MODE
         };
 
         /// <summary>
@@ -108,8 +112,8 @@ namespace RealtimeITagControl
         public int ActLineNum;
 
         // 선택 정보
-        public int SearchPart;
-        public int SearchContour;
+        public double SearchPart;
+        public double SearchContour;
 
         // 장비 타입
         public TagDefinitions.DirectionType DirType;
@@ -117,6 +121,7 @@ namespace RealtimeITagControl
         // Phase 14.2: OpenGL 렌더링 모드
         public int OpenGLType;
 
+        public double ContourSelectMode;
         /// <summary>
         /// MPF 파일 전체 경로
         /// </summary>

@@ -126,7 +126,7 @@ namespace RealtimeITagControl
         private bool isPanning = false;
 
         // Phase 12: Contour selection enable flag
-        private bool enableContourSelection = false;
+        public bool enableContourSelection = false;
 
         // MPF data
         private MPFProgram currentProgram = null;
@@ -212,7 +212,7 @@ namespace RealtimeITagControl
             this.AutoScaleDimensions = new System.Drawing.SizeF(6F, 13F);
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
             this.Name = "CamViewerControl";
-            this.Size = new System.Drawing.Size(800, 600);
+            this.Size = new System.Drawing.Size(968, 630);
             this.Load += new System.EventHandler(this.CamViewerControl_Load);
 
             // Phase 16.1: Enable keyboard input
@@ -229,12 +229,13 @@ namespace RealtimeITagControl
                 BackColor = Color.Black
             };
 
-            // Enable double buffering to prevent flickering
+            // Phase 16.x: Disable double buffering - OpenGL handles its own buffering
+            // GDI+ DoubleBuffered conflicts with OpenGL SwapBuffers
             typeof(Panel).InvokeMember("DoubleBuffered",
                 System.Reflection.BindingFlags.SetProperty |
                 System.Reflection.BindingFlags.Instance |
                 System.Reflection.BindingFlags.NonPublic,
-                null, renderPanel, new object[] { true });
+                null, renderPanel, new object[] { false });
 
             renderPanel.Resize += RenderPanel_Resize;
             renderPanel.Paint += RenderPanel_Paint;
@@ -242,6 +243,7 @@ namespace RealtimeITagControl
             renderPanel.MouseMove += RenderPanel_MouseMove;
             renderPanel.MouseUp += RenderPanel_MouseUp;
             renderPanel.MouseWheel += RenderPanel_MouseWheel;
+            renderPanel.MouseDoubleClick += RenderPanel_MouseDoubleClick;
 
             // Phase 16.1: 마우스 클릭 시 포커스 받기
             renderPanel.Click += (s, e) => this.Focus();
@@ -418,7 +420,6 @@ namespace RealtimeITagControl
                 asyncLoader.ProgressChanged += (s, e) =>
                 {
                     // Progress reporting (optional: show in UI)
-                    LogHelper.Log("CamViewerCore", $"Loading: {e.ProgressPercentage}% - {e.CurrentStatus}");
                 };
 
                 // Load asynchronously
@@ -753,8 +754,8 @@ namespace RealtimeITagControl
             {
                 if (part.Width > 0 && part.Height > 0)
                 {
-                    float partWidth = (float)(part.Width * workpieceScale);
-                    float partHeight = (float)(part.Height * workpieceScale);
+                    float partWidth = (float)((part.Width + 0.8) * workpieceScale);
+                    float partHeight = (float)((part.Height + 0.8) * workpieceScale);
 
                     float[] boundaryColor = settings.GetColorAsFloat(settings.PartBoundaryColor);
                     
@@ -1003,7 +1004,7 @@ namespace RealtimeITagControl
         /// <summary>
         /// Auto-fit view to show entire workpiece
         /// </summary>
-        private void AutoFitView()
+        public void AutoFitView()
         {
             if (currentProgram == null) return;
 
@@ -1048,17 +1049,6 @@ namespace RealtimeITagControl
                 panY = height / 2.0f;
             }
 
-            UpdateViewTransform();
-        }
-
-        /// <summary>
-        /// Reset view to default
-        /// </summary>
-        public void ResetView()
-        {
-            zoom = 1.0f;
-            panX = 0.0f;
-            panY = 0.0f;
             UpdateViewTransform();
         }
 
@@ -1407,7 +1397,8 @@ namespace RealtimeITagControl
 
                     // Phase 15.3: Draw text overlays (Part/Contour numbers only)
                     // Performance info moved to ProgramInfoPanel
-                    DrawTextOverlays(e.Graphics);
+                    // Phase 16.x: Disabled - OpenGL text rendering handles this, prevents duplicate text
+                    // DrawTextOverlays(e.Graphics);
 
                     // Now swap buffers to present both OpenGL and GDI+ content
                     NativeRenderer.SwapBuffersNow();
@@ -1748,7 +1739,8 @@ namespace RealtimeITagControl
         /// </summary>
         public new void Invalidate()
         {
-            base.Invalidate();
+            // Phase 16.x: Disabled base.Invalidate() - renderPanel.Invalidate() is sufficient
+            // base.Invalidate();
             if (renderPanel != null)
             {
                 // Phase 15.1: Record full screen invalidate
@@ -1998,16 +1990,12 @@ namespace RealtimeITagControl
             if (renderPanel == null)
                 return new GeometryUtils.Point2D(0, 0);
 
-            System.Diagnostics.Debug.WriteLine($"[ScreenToObject] Input screenPos: X={screenPos.X}, Y={screenPos.Y}");
-            System.Diagnostics.Debug.WriteLine($"[ScreenToObject] renderPanel size: W={renderPanel.Width}, H={renderPanel.Height}");
-            System.Diagnostics.Debug.WriteLine($"[ScreenToObject] zoom={zoom:F6}, panX={panX:F6}, panY={panY:F6}");
+            // Phase 16.x: Removed Debug.WriteLine for production
 
             // Normalize to [-1, 1] range (NDC)
             float ndcX = (screenPos.X / (float)renderPanel.Width) * 2.0f - 1.0f;
             // Phase 12 FIX: Y 좌표 변환 - 화면 좌표(위→아래 증가)를 OpenGL 좌표(아래→위 증가)로 변환
             float ndcY = -((screenPos.Y / (float)renderPanel.Height) * 2.0f - 1.0f); // Flip Y
-
-            System.Diagnostics.Debug.WriteLine($"[ScreenToObject] NDC: ndcX={ndcX:F6}, ndcY={ndcY:F6}");
 
             // Apply inverse projection (NDC → Object Space)
             // Phase 13: glOrtho changes based on ViewDirection
@@ -2043,7 +2031,7 @@ namespace RealtimeITagControl
                 finalY = (float)(ndcY / zoom / aspect + panY);
             }
 
-            System.Diagnostics.Debug.WriteLine($"[ScreenToObject] ViewDirection={viewDir}, Object space: X={finalX:F6}, Y={finalY:F6}");
+            // Phase 16.x: Removed Debug.WriteLine for production
 
             return new GeometryUtils.Point2D(finalX, finalY);
         }
@@ -2092,14 +2080,14 @@ namespace RealtimeITagControl
             // Calculate part offsets (in object space)
             (float X, float Y)[] partOffsets = CalculatePartOffsets();
 
-            System.Diagnostics.Debug.WriteLine($"[HandleContourSelection] Click position: ({objectPos.X:F6}, {objectPos.Y:F6})");
+            // Phase 16.x: Removed Debug.WriteLine for production
 
             // Phase 12: 개선된 선택 로직 사용 (파트 경계 체크 + 낮은 번호 우선)
             var result = selectionManager.FindContourAtPoint(objectPos, currentProgram.Parts, partOffsets, workpieceScale);
 
             if (result == null)
             {
-                System.Diagnostics.Debug.WriteLine($"[HandleContourSelection] No contour found");
+                // Phase 16.x: Removed Debug.WriteLine for production
                 selectionManager.ClearContourSelection();
             }
             else
@@ -2107,7 +2095,7 @@ namespace RealtimeITagControl
                 int selectedPartIndex = result.Value.Item1;
                 int selectedContourIndex = result.Value.Item2;
 
-                System.Diagnostics.Debug.WriteLine($"[HandleContourSelection] Selected Part {selectedPartIndex}, Contour {selectedContourIndex}");
+                // Phase 16.x: Removed Debug.WriteLine for production
 
                 selectionManager.SelectContour(selectedPartIndex, selectedContourIndex);
 
@@ -2694,29 +2682,33 @@ namespace RealtimeITagControl
         {
             try
             {
-                string appDataPath = Path.Combine(
-                    Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-                    "CamViewerPOC");
-
+                // Phase 16.x: Fixed path for settings
+                string appDataPath = @"C:\HK\CamViewerPOC";
                 string settingsPath = Path.Combine(appDataPath, "RenderSettings.json");
 
+                // Create directory if not exists
+                if (!Directory.Exists(appDataPath))
+                {
+                    Directory.CreateDirectory(appDataPath);
+                    LogHelper.Log($"[Phase 16.x] Created settings directory: {appDataPath}");
+                }
+
+                // Load settings if exists, otherwise create default
                 if (File.Exists(settingsPath))
                 {
                     RenderSettings.Instance.LoadFromFile(settingsPath);
+                    LogHelper.Log($"[Phase 16.x] Loaded settings from: {settingsPath}");
                 }
                 else
                 {
-
                     // Create default settings file
-                    if (!Directory.Exists(appDataPath))
-                    {
-                        Directory.CreateDirectory(appDataPath);
-                    }
                     RenderSettings.Instance.SaveToFile(settingsPath);
+                    LogHelper.Log($"[Phase 16.x] Created default settings: {settingsPath}");
                 }
             }
             catch (Exception ex)
             {
+                LogHelper.LogError($"[Phase 16.x] LoadRenderSettings error: {ex.Message}", ex);
             }
         }
 
@@ -2728,7 +2720,7 @@ namespace RealtimeITagControl
         private const float ZOOM_STEP = 1.1f;      // 확대 비율 (10%)
         private const float ZOOM_OUT_STEP = 0.9f;  // 축소 비율 (10%)
         private const float MIN_ZOOM = 0.1f;       // 최소 줌
-        private const float MAX_ZOOM = 10.0f;      // 최대 줌
+        private const float MAX_ZOOM = 20000.0f;      // 최대 줌
 
         protected override void OnKeyDown(KeyEventArgs e)
         {
@@ -2739,7 +2731,7 @@ namespace RealtimeITagControl
                 bool handled = false;
 
                 // Shift + 방향키: 확대/축소
-                if (e.Shift)
+                if (e.Control)
                 {
                     if (e.KeyCode == Keys.Up)
                     {
@@ -2763,22 +2755,22 @@ namespace RealtimeITagControl
                     switch (e.KeyCode)
                     {
                         case Keys.Up:
-                            deltaY = PAN_STEP;
-                            handled = true;
-                            break;
-
-                        case Keys.Down:
                             deltaY = -PAN_STEP;
                             handled = true;
                             break;
 
+                        case Keys.Down:
+                            deltaY = PAN_STEP;
+                            handled = true;
+                            break;
+
                         case Keys.Left:
-                            deltaX = -PAN_STEP;
+                            deltaX = PAN_STEP;
                             handled = true;
                             break;
 
                         case Keys.Right:
-                            deltaX = PAN_STEP;
+                            deltaX = -PAN_STEP;
                             handled = true;
                             break;
                     }
@@ -2794,7 +2786,7 @@ namespace RealtimeITagControl
                 // Backspace: 기본 화면 복구
                 if (e.KeyCode == Keys.Back)
                 {
-                    ResetView();
+                    AutoFitView();
                     handled = true;
                 }
 
@@ -2803,7 +2795,7 @@ namespace RealtimeITagControl
             }
             catch (Exception ex)
             {
-                LogHelper.LogError($"[Phase 16.1] KeyDown error: {ex.Message}", ex);
+                LogHelper.Log("CamViewerCore", $"[Phase 16.1] KeyDown error: {ex.Message}");
             }
         }
 
@@ -2850,11 +2842,6 @@ namespace RealtimeITagControl
             panX += actualDeltaX;
             panY += actualDeltaY;
 
-            LogHelper.Log($"[Phase 16.1] Pan keyboard: ViewDir={viewDir}, " +
-                          $"Input=({deltaX:F1},{deltaY:F1}), " +
-                          $"Applied=({actualDeltaX:F3},{actualDeltaY:F3}), " +
-                          $"Result Pan=({panX:F3},{panY:F3})");
-
             UpdateViewTransform();
         }
 
@@ -2869,23 +2856,6 @@ namespace RealtimeITagControl
             // 줌 제한
             zoom = Math.Max(MIN_ZOOM, Math.Min(MAX_ZOOM, zoom));
 
-            LogHelper.Log($"[Phase 16.1] Zoom keyboard: {oldZoom:F2} → {zoom:F2}");
-
-            UpdateViewTransform();
-            this.Invalidate();
-        }
-
-        /// <summary>
-        /// 기본 화면으로 복구 (Backspace 또는 더블클릭)
-        /// </summary>
-        private void ResetView()
-        {
-            zoom = 1.0f;
-            panX = 0;
-            panY = 0;
-
-            LogHelper.Log($"[Phase 16.1] View reset: Zoom=1.0, Pan=(0,0)");
-
             UpdateViewTransform();
             this.Invalidate();
         }
@@ -2893,20 +2863,20 @@ namespace RealtimeITagControl
         /// <summary>
         /// 마우스 더블클릭: 기본 화면 복구
         /// </summary>
-        protected override void OnMouseDoubleClick(MouseEventArgs e)
+        protected void RenderPanel_MouseDoubleClick(object sender, MouseEventArgs e)
         {
-            base.OnMouseDoubleClick(e);
+            //base.OnMouseDoubleClick(e);
 
             try
             {
                 if (e.Button == MouseButtons.Left)
                 {
-                    ResetView();
+                    AutoFitView();
                 }
             }
             catch (Exception ex)
             {
-                LogHelper.LogError($"[Phase 16.1] MouseDoubleClick error: {ex.Message}", ex);
+                LogHelper.Log("CamViewerCore", $"[Phase 16.1] MouseDoubleClick error: {ex.Message}");
             }
         }
 

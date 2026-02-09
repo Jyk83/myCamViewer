@@ -145,7 +145,7 @@ namespace RealtimeITagControl.UI
                 Text = "파트번호",
                 Location = new Point(chkX1, y),
                 Size = new Size(chkWidth, chkHeight),
-                Checked = true
+                Checked = false
             };
             chkShowPartNumber.CheckedChanged += (s, e) => ShowPartNumberChanged?.Invoke(this, chkShowPartNumber.Checked);
             this.Controls.Add(chkShowPartNumber);
@@ -155,7 +155,7 @@ namespace RealtimeITagControl.UI
                 Text = "컨투어번호",
                 Location = new Point(chkX2, y),
                 Size = new Size(chkWidth, chkHeight),
-                Checked = true
+                Checked = false
             };
             chkShowContourNumber.CheckedChanged += (s, e) => ShowContourNumberChanged?.Invoke(this, chkShowContourNumber.Checked);
             this.Controls.Add(chkShowContourNumber);

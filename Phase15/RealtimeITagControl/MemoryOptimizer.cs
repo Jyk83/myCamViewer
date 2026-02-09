@@ -69,8 +69,6 @@ namespace RealtimeITagControl
             // Large Object Heap 압축
             GCSettings.LargeObjectHeapCompactionMode = GCLargeObjectHeapCompactionMode.CompactOnce;
             GC.Collect();
-
-            LogHelper.Log("MemoryOptimizer", $"메모리 최적화 완료: {GetCurrentMemoryUsage()}MB");
         }
 
         /// <summary>

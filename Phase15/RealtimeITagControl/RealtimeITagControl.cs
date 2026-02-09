@@ -247,7 +247,6 @@ namespace RealtimeITagControl
 
             try
             {
-                LogHelper.Log("RealtimeITagControl", "=== CleanupResources 시작 ===");
 
                 // 1. ITag 연결 해제 (Cyclic Read 먼저 중단)
                 try
@@ -255,7 +254,6 @@ namespace RealtimeITagControl
                     if (tagManager != null && tagManager.IsCyclicReading)
                     {
                         tagManager.StopCyclicRead();
-                        LogHelper.Log("RealtimeITagControl", "Cyclic Read stopped");
                     }
                 }
                 catch (Exception ex)
@@ -270,7 +268,6 @@ namespace RealtimeITagControl
                     {
                         tagManager.DataChanged -= ITagManager_DataChanged;
                         tagManager.ConnectionChanged -= ITagManager_ConnectionChanged;
-                        LogHelper.Log("RealtimeITagControl", "ITagManager events unsubscribed");
                     }
                 }
                 catch (Exception ex)
@@ -282,7 +279,6 @@ namespace RealtimeITagControl
                 try
                 {
                     Disconnect();
-                    LogHelper.Log("RealtimeITagControl", "ITag Disconnected");
                 }
                 catch (Exception ex)
                 {
@@ -300,7 +296,6 @@ namespace RealtimeITagControl
                         programInfoPanel.ShowPartNumberChanged -= ProgramInfoPanel_ShowPartNumberChanged;
                         programInfoPanel.ShowContourNumberChanged -= ProgramInfoPanel_ShowContourNumberChanged;
                         programInfoPanel.EnableContourSelectionChanged -= ProgramInfoPanel_EnableContourSelectionChanged;  // Phase 12
-                        LogHelper.Log("RealtimeITagControl", "ProgramInfoPanel events unsubscribed");
                     }
                 }
                 catch (Exception ex)
@@ -317,7 +312,6 @@ namespace RealtimeITagControl
                         {
                             camViewerControl.ContourSelected -= CamViewerControl_ContourSelected;
                             camViewerControl.MouseCoordinatesChanged -= CamViewerControl_MouseCoordinatesChanged; // Phase 13
-                            LogHelper.Log("RealtimeITagControl", "CamViewerControl events unsubscribed");
                         }
                         catch (Exception unsubEx)
                         {
@@ -331,7 +325,6 @@ namespace RealtimeITagControl
                         {
                             // CamViewerControl 자체 Dispose 호출 (OpenGL 리소스 정리)
                             camViewerControl.Dispose();
-                            LogHelper.Log("RealtimeITagControl", "CamViewerControl disposed (OpenGL cleanup)");
                         }
                         catch (Exception disposeEx)
                         {
@@ -361,8 +354,6 @@ namespace RealtimeITagControl
                     {
                         // WinCC 환경에서 ProgramInfoPanel Dispose 시 오류 발생
                         // 이벤트 구독 해제만으로 충분하므로 Dispose 생략
-                        LogHelper.Log("RealtimeITagControl", "ProgramInfoPanel cleanup skipped (WinCC managed)");
-
                         programInfoPanel = null;
                     }
                 }
@@ -379,14 +370,11 @@ namespace RealtimeITagControl
                     lastTagData = default(TagData);
                     contourStatusMap?.Clear();
                     contourStatusMap = null;
-                    LogHelper.Log("RealtimeITagControl", "MPF data cleared");
                 }
                 catch (Exception ex)
                 {
                     LogHelper.Log("RealtimeITagControl", $"MPF data clear error: {ex.Message}");
                 }
-
-                LogHelper.Log("RealtimeITagControl", "=== CleanupResources 완료 ===");
             }
             catch (Exception ex)
             {
@@ -781,11 +769,12 @@ namespace RealtimeITagControl
                 int currentContour = tagData.CurrentContour;
                 double progressDistance = tagData.ProgressDistance;  // 실제 거리 (mm)
                 string actLineCode = tagData.ActLineCode;  // 현재 실행 중인 G-code
-
-                // Phase 13 디버깅: 입력 데이터 확인
-                LogHelper.Log("RealtimeITagControl", 
-                    $"[Phase13] UpdateContourStatus: Part={currentPart}, Contour={currentContour}, " +
-                    $"ProgressDistance={progressDistance:F2}mm, ActLineCode=\"{actLineCode}\"");
+                
+                // Phase 16.x: Remove special characters from Siemens ITag
+                if (!string.IsNullOrEmpty(actLineCode))
+                {
+                    actLineCode = actLineCode.TrimEnd('\0', '\r', '\n', ' ', '\t');
+                }
 
                 // 1. 현재 파트/컨투어 이전 것들은 모두 Completed 처리
                 for (int partIdx = 0; partIdx < mpfProgram.Parts.Count; partIdx++)
@@ -885,7 +874,6 @@ namespace RealtimeITagControl
                     if (partIdx >= 0 && contIdx >= 0)
                     {
                         camViewerControl.progressManager.StartCuttingProgress(lastTagData.Value.CurrentPart, lastTagData.Value.CurrentContour, false);
-                        LogHelper.Log("RealtimeITagControl", $"CuttingProgress Started: Part {lastTagData.Value.CurrentPart}, Contour {lastTagData.Value.CurrentContour}");
                     }
                 }
 
@@ -981,12 +969,11 @@ namespace RealtimeITagControl
                 {
                     Rendering.RenderSettings.Instance.ViewDirection = newDirection;
 
-                    LogHelper.Log("RealtimeITagControl", $"[Phase13] ViewDirection changed to: {newDirection} (HMI_VIEW_DIR_TYPE={dirTypeValue})");
-
                     // ViewDirection 변경 시 화면 다시 그리기
                     if (camViewerControl != null && !camViewerControl.IsDisposed)
                     {
                         camViewerControl.Invalidate();
+                        camViewerControl.AutoFitView();
                     }
                 }
             }
@@ -1013,10 +1000,6 @@ namespace RealtimeITagControl
                 if ((int)Rendering.OpenGLSettings.CurrentMode != openglType)
                 {
                     Rendering.OpenGLSettings.SetModeFromITag(openglType);
-
-                    LogHelper.Log("RealtimeITagControl", 
-                        $"[Phase14.2] OpenGL Mode changed: {Rendering.OpenGLSettings.CurrentMode} " +
-                        $"(HMI_OPENGL_TYPE={openglType})");
 
                     // 모드 변경 시 화면 다시 그리기
                     if (camViewerControl != null && !camViewerControl.IsDisposed)
@@ -1234,7 +1217,6 @@ namespace RealtimeITagControl
                         {
                             selectionManager.SelectElement(partIdx, contourIdx, elementIdx, false);
                             camViewerControl.Invalidate();
-                            LogHelper.Log("RealtimeITagControl", $"Element Selected: Part {partIdx + 1}, Contour {contourIdx + 1}, Element {elementIdx}");
                         }
                     }
                 }
@@ -1342,7 +1324,14 @@ namespace RealtimeITagControl
             if (camViewerControl != null)
             {
                 camViewerControl.SetEnableContourSelection(isChecked);
-                LogHelper.Log("RealtimeITagControl", $"Contour selection {(isChecked ? "enabled" : "disabled")}");
+                if (isChecked==true)
+                {
+                    tagManager.WriteTag(TagDefinitions.CONTOUR_SELECT_MODE, 1);
+                }
+                else
+                {
+                    tagManager.WriteTag(TagDefinitions.CONTOUR_SELECT_MODE, 0);
+                }
             }
         }
 
@@ -1359,12 +1348,14 @@ namespace RealtimeITagControl
 
             try
             {
-                // HMI_VIEW_SEARCH_PART에 Part 번호 Write (1-based)
-                tagManager.WriteTag(TagDefinitions.SEARCH_PART, e.PartNumber);
+                if (camViewerControl.enableContourSelection == true)
+                {
+                    // HMI_VIEW_SEARCH_PART에 Part 번호 Write (1-based)
+                    tagManager.WriteTag(TagDefinitions.SEARCH_PART, e.PartNumber);
 
-                // HMI_VIEW_SEARCH_CONT에 Contour 번호 Write (1-based)
-                tagManager.WriteTag(TagDefinitions.SEARCH_CONT, e.ContourNumber);
-
+                    // HMI_VIEW_SEARCH_CONT에 Contour 번호 Write (1-based)
+                    tagManager.WriteTag(TagDefinitions.SEARCH_CONT, e.ContourNumber);
+                }
             }
             catch (Exception ex)
             {
@@ -1438,20 +1429,21 @@ namespace RealtimeITagControl
                 int currentElementIndex = FindElementIndexByGCode(contour, actLineCode);
 
                 // Phase 15.7: GC11/GC12/GC13 감지 로그
-                string normalizedCode = NormalizeGCode(actLineCode);
-                if (normalizedCode.Contains("GC11") || 
-                    normalizedCode.Contains("GC12") || 
-                    normalizedCode.Contains("GC13"))
-                {
-                    LogHelper.Log("RealtimeITagControl", 
-                        $"Phase 15.7: HKSTO subroutine detected - ActLineCode={actLineCode}, " +
-                        $"ElementIndex={currentElementIndex}, EndGCode={contour.EndGCode}");
-                }
+                //string normalizedCode = NormalizeGCode(actLineCode);
+                //if (normalizedCode.Contains("GC11") || 
+                //    normalizedCode.Contains("GC12") || 
+                //    normalizedCode.Contains("GC13"))
+                //{
+                //    LogHelper.Log("RealtimeITagControl", 
+                //        $"Phase 15.7: HKSTO subroutine detected - ActLineCode={actLineCode}, " +
+                //        $"ElementIndex={currentElementIndex}, EndGCode={contour.EndGCode}");
+                //}
 
                 // 2. 찾지 못한 경우: 전체 진행률만 표시 (기존 방식)
                 if (currentElementIndex < 0)
                 {
-                    UpdateContourTotalProgress(partIdx, contIdx, contour, progressDistance);
+                    // Phase 16.x: Disabled - Prevents incorrect white reset for HKSTO end codes
+                    // UpdateContourTotalProgress(partIdx, contIdx, contour, progressDistance);
                     return;
                 }
 
@@ -1473,7 +1465,8 @@ namespace RealtimeITagControl
             {
                 LogHelper.Log("RealtimeITagControl", $"[Phase13] UpdateElementProgress error: {ex.Message}");
                 // 에러 발생 시 전체 진행률로 대체
-                UpdateContourTotalProgress(partIdx, contIdx, contour, progressDistance);
+                // Phase 16.x: Disabled - Prevents incorrect white reset
+                // UpdateContourTotalProgress(partIdx, contIdx, contour, progressDistance);
             }
         }
 

@@ -254,7 +254,7 @@ namespace RealtimeITagControl.Rendering
             // Phase 5.3: Part boundary defaults
             ShowPartBoundaries = false; // Hide by default (shown when part numbers are visible)
             PartBoundaryColor = Color.FromArgb(100, 200, 255); // Light Blue
-            PartBoundaryWidth = 1.0f;
+            PartBoundaryWidth = 0.8f;
             PartBoundaryDashPattern = DashPattern.Dash3; // Short dash (fixed)
 
             // Contour selection box defaults

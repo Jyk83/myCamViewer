@@ -79,13 +79,12 @@ namespace RealtimeITagControl.Selection
             if (boundingBox.Width == 0 || boundingBox.Height == 0)
                 return false; // 유효하지 않은 바운딩 박스
 
-            System.Diagnostics.Debug.WriteLine($"[IsPointInsideContour] Point: ({point.X:F6}, {point.Y:F6})");
-            System.Diagnostics.Debug.WriteLine($"[IsPointInsideContour] BBox: MinX={boundingBox.MinX:F6}, MinY={boundingBox.MinY:F6}, MaxX={boundingBox.MaxX:F6}, MaxY={boundingBox.MaxY:F6}");
+            // Phase 16.x: Removed Debug.WriteLine for production
             
             // 점이 바운딩 박스 내부에 있는지 확인
             bool isInside = IsPointInBoundingBox(point, boundingBox);
             
-            System.Diagnostics.Debug.WriteLine($"[IsPointInsideContour] Result: {isInside}");
+            // Phase 16.x: Removed Debug.WriteLine for production
             
             return isInside;
         }
@@ -753,8 +752,7 @@ namespace RealtimeITagControl.Selection
                 double radius = arc.Radius * scale;
 
                 // Phase 7 FIX: Arc 극값점이 범위에 포함되는지 체크
-                // 디버그: Arc 정보 출력
-                System.Diagnostics.Debug.WriteLine($"[Arc Center] Raw: ({arc.Center.X:F3}, {arc.Center.Y:F3}), Scaled: ({centerRaw.X:F6}, {centerRaw.Y:F6}), Radius: {radius:F6}");
+                // Phase 16.x: Removed Debug.WriteLine for production
 
                 // 호가 0°, 90°, 180°, 270°를 포함하는지 확인 (극값)
                 CheckArcExtreme(arc, centerRaw, radius, offsetX, offsetY, 0, ref minX, ref minY, ref maxX, ref maxY);   // +X
@@ -909,7 +907,7 @@ namespace RealtimeITagControl.Selection
                     centerRaw.X + radius * Math.Cos(extremeAngle * Math.PI / 180.0),
                     centerRaw.Y + radius * Math.Sin(extremeAngle * Math.PI / 180.0)
                 );
-                System.Diagnostics.Debug.WriteLine($"[Arc Extreme {extremeAngle}°] CenterRaw: ({centerRaw.X:F6}, {centerRaw.Y:F6}), Radius: {radius:F6}, Extreme: ({extremePoint.X:F6}, {extremePoint.Y:F6})");
+                // Phase 16.x: Removed Debug.WriteLine for production
                 UpdateBounds(extremePoint, ref minX, ref minY, ref maxX, ref maxY);
             }
         }

@@ -440,10 +440,10 @@ namespace RealtimeITagControl
                             tagData.ActLineNum = Convert.ToInt32(value);
                             break;
                         case TagDefinitions.SEARCH_PART:
-                            tagData.SearchPart = Convert.ToInt32(value);
+                            tagData.SearchPart = Convert.ToDouble(value);
                             break;
                         case TagDefinitions.SEARCH_CONT:
-                            tagData.SearchContour = Convert.ToInt32(value);
+                            tagData.SearchContour = Convert.ToDouble(value);
                             break;
                         case TagDefinitions.DIR_TYPE:
                             tagData.DirType = (TagDefinitions.DirectionType)Convert.ToInt32(value);

@@ -14,7 +14,7 @@ namespace RealtimeITagControl.Rendering
         /// - 안정적, 기준 성능
         /// - 기본값
         /// </summary>
-        Default = 1,
+        Default = 0,
 
         /// <summary>
         /// Type 2: Dirty Region 최적화
@@ -22,7 +22,7 @@ namespace RealtimeITagControl.Rendering
         /// - 성능 향상 기대: 1.5-2배
         /// - 테스트 및 평가 대상
         /// </summary>
-        DirtyRegion = 2
+        DirtyRegion = 1
     }
 
     /// <summary>
@@ -30,7 +30,8 @@ namespace RealtimeITagControl.Rendering
     /// </summary>
     public static class OpenGLSettings
     {
-        private static OpenGLRenderMode _currentMode = OpenGLRenderMode.Default;
+        // Phase 16.x: Changed default to DirtyRegion for production (prevents flickering on device)
+        private static OpenGLRenderMode _currentMode = OpenGLRenderMode.DirtyRegion;
 
         /// <summary>
         /// 현재 렌더링 모드

@@ -65,7 +65,7 @@ namespace RealtimeITagControl.MPF
         /// <summary>
         /// 한 줄 파싱 (N 블록 번호와 명령어가 한 줄에 있는 경우도 처리)
         /// </summary>
-        private Command ParseLine(string line)
+        public Command ParseLine(string line)
         {
             // 주석 처리
             if (line.StartsWith(";"))
