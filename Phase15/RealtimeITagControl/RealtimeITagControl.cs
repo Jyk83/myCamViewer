@@ -998,7 +998,8 @@ namespace RealtimeITagControl
                     // ViewDirection 변경 시 화면 다시 그리기
                     if (camViewerControl != null && !camViewerControl.IsDisposed)
                     {
-                        camViewerControl.Invalidate();
+                        // Phase 16.x: Disabled - Unnecessary redraw (OpenGL auto buffer swap)
+                        //camViewerControl.Invalidate();
                         camViewerControl.AutoFitView();
                     }
                 }

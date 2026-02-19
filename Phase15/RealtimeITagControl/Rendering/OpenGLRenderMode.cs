@@ -9,20 +9,19 @@ namespace RealtimeITagControl.Rendering
     public enum OpenGLRenderMode
     {
         /// <summary>
-        /// Type 1: Default (기본 방식)
-        /// - 전체 화면 갱신 (Invalidate 전체)
-        /// - 안정적, 기준 성능
-        /// - 기본값
+        /// Type 1: Dirty Region 최적화
+        /// - 변경 영역만 갱신 (부분 Invalidate)
+        /// - 성능 향상 기대: 1.5-2배
+        /// - MPF 로딩 후 깜빡임 방지
         /// </summary>
-        Default = 0,
+        DirtyRegion = 0,
 
         /// <summary>
-        /// Type 2: Dirty Region 최적화
-        /// - 화면 영역만 갱신 (Invalidate 부분)
-        /// - 성능 향상 기대: 1.5-2배
-        /// - 테스트 및 평가 대상
+        /// Type 2: Default (기본 방식)
+        /// - 전체 화면 갱신 (전체 Invalidate)
+        /// - 안정적이나 MPF 로딩 후 깜빡임 발생 가능
         /// </summary>
-        DirtyRegion = 1
+        Default = 1
     }
 
     /// <summary>
