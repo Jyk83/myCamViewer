@@ -289,6 +289,62 @@ namespace RealtimeITagControl.Trace
         // JYK - Phase 14.2: CompleteLastElement() 및 CompleteLastContour() 제거
         // 이유: TraceTestForm 삭제로 호출하는 곳 없음
         // 제거일: 2026-01-16
+        
+        // JYK - Phase 16.x: CompleteElement() 및 ResetElementIndex() 재추가
+        // 이유: 컨투어 전환 시 이전 컨투어 마지막 Element 완료 처리 및 Element 인덱스 초기화 필요
+        // 추가일: 2026-02-19
+
+        /// <summary>
+        /// Reset element index for new contour start
+        /// Phase 16.x: Prevents previous contour's element index from affecting new contour
+        /// </summary>
+        public void ResetElementIndex()
+        {
+            currentElementIndex = -1;
+            elementProgress = 0.0;
+        }
+
+        /// <summary>
+        /// Complete specific element (set progress to 100%)
+        /// Phase 16.x: Handles delayed ITag updates for last element
+        /// </summary>
+        /// <param name="partIndex">Part index (0-based)</param>
+        /// <param name="contourIndex">Contour index (0-based)</param>
+        /// <param name="elementIndex">Element index (0-based)</param>
+        public bool CompleteElement(int partIndex, int contourIndex, int elementIndex)
+        {
+            if (program == null || program.Parts == null)
+                return false;
+
+            // Validate indices
+            if (partIndex < 0 || partIndex >= program.Parts.Count)
+                return false;
+
+            var part = program.Parts[partIndex];
+            if (part.Contours == null || contourIndex < 0 || contourIndex >= part.Contours.Count)
+                return false;
+
+            var contour = part.Contours[contourIndex];
+            if (contour.AllSegments == null || elementIndex < 0 || elementIndex >= contour.AllSegments.Count)
+                return false;
+
+            // Update state to 100% complete
+            currentPartIndex = partIndex;
+            currentContourIndex = contourIndex;
+            currentElementIndex = elementIndex;
+            elementProgress = 1.0;  // 100% complete
+
+            OnProgressUpdated(new CuttingProgressEventArgs
+            {
+                PartIndex = currentPartIndex,
+                ContourIndex = currentContourIndex,
+                ElementIndex = currentElementIndex,
+                Progress = 1.0,
+                State = CuttingState.InProgress
+            });
+
+            return true;
+        }
 
         /// <summary>
         /// Get element length (simplified)

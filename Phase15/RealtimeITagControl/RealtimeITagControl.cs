@@ -811,6 +811,32 @@ namespace RealtimeITagControl
                             contourStatusMap[key].Status = CutStatus.InProgress;
                             contourStatusMap[key].CompletedDistance = progressDistance;
 
+                            // Phase 16.x: 컨투어 전환 감지 및 이전 컨투어 완료 처리
+                            if (camViewerControl?.progressManager != null)
+                            {
+                                int prevContourIdx = camViewerControl.progressManager.CurrentContourIndex;
+                                int prevPartIdx = camViewerControl.progressManager.CurrentPartIndex;
+                                
+                                // 컨투어 번호가 증가했는지 확인 (0-based 비교)
+                                bool isContourChanged = (prevPartIdx != partIdx) || (prevContourIdx != contIdx);
+                                
+                                if (isContourChanged)
+                                {
+                                    // 1. 이전 컨투어의 마지막 Element를 100% 완료 처리 (통신 지연 대응)
+                                    if (prevPartIdx >= 0 && prevContourIdx >= 0 && 
+                                        camViewerControl.progressManager.CurrentElementIndex >= 0)
+                                    {
+                                        camViewerControl.progressManager.CompleteElement(
+                                            prevPartIdx, 
+                                            prevContourIdx, 
+                                            camViewerControl.progressManager.CurrentElementIndex);
+                                    }
+                                    
+                                    // 2. 새 컨투어 시작을 위해 Element 인덱스 초기화
+                                    camViewerControl.progressManager.ResetElementIndex();
+                                }
+                            }
+
                             // Phase 13: 엘리먼트 단위 진행률 계산 (ActLineCode + ProgressDistance)
                             UpdateElementProgress(partIdx, contIdx, contour, tagData.ActLineCode, progressDistance);
                         }
