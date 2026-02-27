@@ -1,0 +1,12 @@
+C:\Work\00_Project\00_Siemens_Upgrade\01_DLL_PG\109760182_ControlDevelopment_samples\samples\VB100\CCITagTest\CCITagTestLibrary\bin\x86\Debug\CCITagTestLibrary.dll.config
+C:\Work\00_Project\00_Siemens_Upgrade\01_DLL_PG\109760182_ControlDevelopment_samples\samples\VB100\CCITagTest\CCITagTestLibrary\bin\x86\Debug\CCITagTestLibrary.dll
+C:\Work\00_Project\00_Siemens_Upgrade\01_DLL_PG\109760182_ControlDevelopment_samples\samples\VB100\CCITagTest\CCITagTestLibrary\bin\x86\Debug\CCITagTestLibrary.pdb
+C:\Work\00_Project\00_Siemens_Upgrade\01_DLL_PG\109760182_ControlDevelopment_samples\samples\VB100\CCITagTest\CCITagTestLibrary\bin\x86\Debug\Siemens.Runtime.ControlDev.dll
+C:\Work\00_Project\00_Siemens_Upgrade\01_DLL_PG\109760182_ControlDevelopment_samples\samples\VB100\CCITagTest\CCITagTestLibrary\obj\x86\Debug\CCITagTestLibrary.vbproj.AssemblyReference.cache
+C:\Work\00_Project\00_Siemens_Upgrade\01_DLL_PG\109760182_ControlDevelopment_samples\samples\VB100\CCITagTest\CCITagTestLibrary\obj\x86\Debug\CCITagTestLibrary.ITagUserControl.resources
+C:\Work\00_Project\00_Siemens_Upgrade\01_DLL_PG\109760182_ControlDevelopment_samples\samples\VB100\CCITagTest\CCITagTestLibrary\obj\x86\Debug\CCITagTestLibrary.Resources.resources
+C:\Work\00_Project\00_Siemens_Upgrade\01_DLL_PG\109760182_ControlDevelopment_samples\samples\VB100\CCITagTest\CCITagTestLibrary\obj\x86\Debug\CCITagTestLibrary.vbproj.GenerateResource.cache
+C:\Work\00_Project\00_Siemens_Upgrade\01_DLL_PG\109760182_ControlDevelopment_samples\samples\VB100\CCITagTest\CCITagTestLibrary\obj\x86\Debug\CCITagTestLibrary.vbproj.CoreCompileInputs.cache
+C:\Work\00_Project\00_Siemens_Upgrade\01_DLL_PG\109760182_ControlDevelopment_samples\samples\VB100\CCITagTest\CCITagTestLibrary\obj\x86\Debug\CCITagTestLibrary.vbproj.CopyComplete
+C:\Work\00_Project\00_Siemens_Upgrade\01_DLL_PG\109760182_ControlDevelopment_samples\samples\VB100\CCITagTest\CCITagTestLibrary\obj\x86\Debug\CCITagTestLibrary.dll
+C:\Work\00_Project\00_Siemens_Upgrade\01_DLL_PG\109760182_ControlDevelopment_samples\samples\VB100\CCITagTest\CCITagTestLibrary\obj\x86\Debug\CCITagTestLibrary.pdb

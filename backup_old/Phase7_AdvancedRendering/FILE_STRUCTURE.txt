@@ -1,0 +1,164 @@
+CAM Viewer POC - 파일 구조
+=====================================
+
+프로젝트 루트: CamViewerPOC/
+│
+├── 📄 README.md                    # 메인 문서 (시작점)
+├── 📄 PROJECT_SUMMARY.md           # 프로젝트 요약 및 평가
+├── 📄 QUICKSTART.md                # 5분 빠른 시작 가이드
+├── 📄 .gitignore                   # Git 제외 파일 목록
+│
+├── 🔧 build_all.bat                # 전체 자동 빌드 스크립트
+├── 🔧 build_native.bat             # C++ DLL 빌드 스크립트
+├── 🔧 build_csharp.bat             # C# 앱 빌드 스크립트
+│
+├── 📁 NativeRenderer/              # C++ OpenGL 렌더링 엔진
+│   ├── 📄 renderer.h               # C API 헤더 (인터페이스)
+│   ├── 📄 renderer.cpp             # OpenGL 구현 (렌더링 로직)
+│   ├── 📄 CMakeLists.txt           # CMake 빌드 설정
+│   └── 📁 build/                   # (빌드 후 생성됨)
+│       └── 📁 bin/Release/
+│           └── 📄 NativeRenderer.dll   # 컴파일된 DLL
+│
+├── 📁 WinFormsApp/                 # C# WinForms 애플리케이션
+│   ├── 📄 Program.cs               # 진입점 (Main 함수)
+│   ├── 📄 MainForm.cs              # 테스트용 메인 폼
+│   ├── 📄 CamViewerControl.cs      # ⭐ 메인 뷰어 컨트롤 (WinCC 삽입용)
+│   ├── 📄 CamViewerPOC.csproj      # C# 프로젝트 파일
+│   ├── 📄 App.config               # 앱 설정
+│   ├── 📁 Properties/
+│   │   └── 📄 AssemblyInfo.cs      # 어셈블리 정보
+│   └── 📁 bin/Release/             # (빌드 후 생성됨)
+│       ├── 📄 CamViewerPOC.exe     # 실행 파일
+│       └── 📄 NativeRenderer.dll   # 종속 DLL (필수!)
+│
+└── 📁 Docs/                        # 상세 문서
+    ├── 📄 ARCHITECTURE.md          # 아키텍처 상세 설계
+    ├── 📄 BUILD_GUIDE.md           # 빌드 상세 가이드
+    └── 📄 WINCC_INTEGRATION.md     # WinCC 통합 가이드
+
+=====================================
+
+주요 파일 설명
+=====================================
+
+🎯 시작 파일 (읽기 권장 순서)
+  1. QUICKSTART.md              - 5분 안에 시작하기
+  2. README.md                  - 프로젝트 전체 개요
+  3. PROJECT_SUMMARY.md         - 설계 및 평가 요약
+
+🔨 빌드 스크립트
+  build_all.bat                 - 전체 자동 빌드 (권장)
+  build_native.bat              - C++ DLL만 빌드
+  build_csharp.bat              - C# 앱만 빌드
+
+💻 C++ 레이어 (NativeRenderer/)
+  renderer.h                    - API 인터페이스 정의
+  renderer.cpp                  - OpenGL 렌더링 구현
+  CMakeLists.txt                - CMake 빌드 설정
+
+🖥️ C# 레이어 (WinFormsApp/)
+  CamViewerControl.cs           - ⭐ 핵심 컨트롤 (WinCC에 이걸 삽입)
+  MainForm.cs                   - 테스트용 폼
+  Program.cs                    - 애플리케이션 진입점
+
+📚 상세 문서 (Docs/)
+  ARCHITECTURE.md               - 설계 원칙 및 데이터 흐름
+  BUILD_GUIDE.md                - 빌드 문제 해결 포함
+  WINCC_INTEGRATION.md          - WinCC 통합 단계별 가이드
+
+=====================================
+
+빌드 출력물
+=====================================
+
+빌드 성공 시 다음 파일이 생성됩니다:
+
+NativeRenderer/build/bin/Release/
+  └── NativeRenderer.dll        - C++ 렌더링 엔진 DLL
+
+WinFormsApp/bin/Release/
+  ├── CamViewerPOC.exe          - 메인 실행 파일
+  ├── CamViewerPOC.exe.config   - 설정 파일
+  └── NativeRenderer.dll        - 종속 DLL (자동 복사)
+
+=====================================
+
+WinCC 배포용 파일
+=====================================
+
+WinCC Advanced에 배포 시 필요한 파일:
+
+필수 파일:
+  ✅ CamViewerControl.cs        (또는 컴파일된 DLL)
+  ✅ NativeRenderer.dll         (반드시 포함!)
+
+선택 파일:
+  📄 README.md                  (사용자 가이드)
+  📄 WINCC_INTEGRATION.md       (통합 가이드)
+
+배포 위치:
+  TIA_Project/Runtime/
+    ├── CamViewerControl.Library.dll
+    └── NativeRenderer.dll
+
+=====================================
+
+파일 크기 (대략)
+=====================================
+
+소스 코드:
+  renderer.cpp           ~6 KB
+  renderer.h             ~1 KB
+  CamViewerControl.cs   ~10 KB
+  MainForm.cs            ~5 KB
+  문서 (.md)            ~30 KB
+
+컴파일 결과:
+  NativeRenderer.dll    ~50-100 KB (Release)
+  CamViewerPOC.exe      ~20-30 KB
+  총 배포 크기          ~100-150 KB
+
+=====================================
+
+중요 참고 사항
+=====================================
+
+⚠️ NativeRenderer.dll 위치
+   - 반드시 CamViewerPOC.exe와 같은 폴더에 있어야 함
+   - WinCC 배포 시에도 마찬가지
+
+⚠️ 플랫폼 설정
+   - C++ DLL: x64 (64-bit)
+   - C# 앱: Any CPU (권장) 또는 x64
+
+⚠️ .NET Framework 버전
+   - 4.7.2 이상 필요
+   - WinCC Advanced v17 요구사항과 일치
+
+⚠️ Visual Studio 요구사항
+   - 2019 또는 2022
+   - C++ 및 .NET 워크로드 설치 필요
+
+=====================================
+
+Git 저장소 구조
+=====================================
+
+커밋에 포함되는 파일:
+  ✅ 소스 코드 (.cs, .cpp, .h)
+  ✅ 프로젝트 파일 (.csproj, CMakeLists.txt)
+  ✅ 빌드 스크립트 (.bat)
+  ✅ 문서 (.md)
+  ✅ 설정 파일 (.config, .gitignore)
+
+제외되는 파일 (.gitignore):
+  ❌ 빌드 결과 (bin/, obj/, build/)
+  ❌ Visual Studio 임시 파일 (.vs/, *.user)
+  ❌ 컴파일된 바이너리 (*.exe, *.dll)
+  ❌ 디버그 심볼 (*.pdb)
+
+=====================================
+
+버전: 1.0.0-POC
+최종 업데이트: 2024

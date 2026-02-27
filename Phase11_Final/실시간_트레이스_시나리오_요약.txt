@@ -1,0 +1,406 @@
+═══════════════════════════════════════════════════════════════
+  실시간 트레이스 프로세스 시나리오 요약 (1.MPF 기준)
+═══════════════════════════════════════════════════════════════
+
+📂 샘플 MPF 파일 구조 (1.MPF)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+- Part 1 (PartNumber: 10001): 8개 컨투어
+  ├─ N10001: 4 Elements (HKSTR → G1×3 → HKSTO)
+  ├─ N10002: 4 Elements (HKSTR → G1×2 → HKSTO)
+  ├─ N10003: 12 Elements (HKSTR → G1×10 → HKSTO)
+  ├─ N10004: 13 Elements (HKSTR → G1×11 → HKSTO)
+  ├─ N10005: 9 Elements (HKSTR → HKLEA → HKCUT → G1×2 → G3×3 → HKSTO)
+  ├─ N10006: 6 Elements (HKSTR → HKLEA → HKCUT → G1 → G3×2 → HKSTO)
+  ├─ N10007: 6 Elements (HKSTR → HKLEA → HKCUT → G1 → G3×2 → HKSTO)
+  └─ N10008: 13 Elements (HKSTR → HKLEA → HKCUT → G1×2 → G2×3 → G3×4 → HKSTO)
+
+- Part 2 (PartNumber: 20001): 5개 컨투어
+  ├─ N20001: 5 Elements (HKSTR → G1×3 → HKSTO)
+  ├─ N20002: 4 Elements (HKSTR → G1×2 → HKSTO)
+  ├─ N20003: 11 Elements (HKSTR → G1×9 → HKSTO)
+  ├─ N20004: 10 Elements (HKSTR → G1×8 → HKSTO)
+  └─ N20005: 41 Elements (HKSTR → HKLEA → HKCUT → G1×36 → G2×2 → HKSTO)
+
+
+🔄 전체 프로세스 흐름 (12단계)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+1️⃣ MPF 파일 로드 및 파싱
+   ┌────────────────────────────────────────────────────┐
+   │ RealtimeITagControl.cs                             │
+   │ └─ LoadMpfFile(filePath)                           │
+   │     ├─ File.ReadAllText(filePath)                  │
+   │     ├─ MPFParser.Parse(content) → MPFProgram       │
+   │     ├─ camViewerControl.LoadProgram(mpfProgram)    │
+   │     └─ tagManager.WriteTag("HMI_MPF_PATH", path)   │
+   └────────────────────────────────────────────────────┘
+
+   ✅ 결과: MPFProgram 객체 생성 (Parts[], Contours[], Elements[])
+
+
+2️⃣ OpenGL 렌더링 초기화
+   ┌────────────────────────────────────────────────────┐
+   │ CamViewerCore.cs                                   │
+   │ └─ LoadProgram(program)                            │
+   │     ├─ InitializeRenderer() → C++ OpenGL          │
+   │     ├─ InitializeTextRenderer() → 번호 표시       │
+   │     ├─ BuildGeometry() → GPU 버퍼 전송            │
+   │     │   ├─ LineSegment → NativeRenderer.AddLine() │
+   │     │   └─ ArcSegment → NativeRenderer.AddArc()   │
+   │     └─ Invalidate() → 화면 갱신                   │
+   └────────────────────────────────────────────────────┘
+
+   ✅ 결과: 모든 컨투어 형상이 OpenGL로 렌더링됨
+
+
+3️⃣ ITag 서버 연결
+   ┌────────────────────────────────────────────────────┐
+   │ ITagManager.cs (Singleton)                         │
+   │ └─ Connect()                                       │
+   │     ├─ siteProvider.GetService(typeof(ITag))       │
+   │     ├─ m_ITag.Register(this, out m_RegisterCookie) │
+   │     └─ ConnectionChanged 이벤트 발생               │
+   └────────────────────────────────────────────────────┘
+
+   ✅ 결과: WinCC Runtime ITag 서버 연결 성공
+
+
+4️⃣ ReadTagCyclic 시작
+   ┌────────────────────────────────────────────────────┐
+   │ ITagManager.cs                                     │
+   │ └─ StartReadTagCyclic(tagNames[])                  │
+   │     ├─ HMI_NC_PART_NUMBER (절단 중인 파트)        │
+   │     ├─ HMI_NC_CONTOUR_NUMBER (절단 중인 컨투어)   │
+   │     ├─ HMI_NC_ELEMENT_INDEX (절단 중인 엘리먼트)  │
+   │     ├─ HMI_NC_PROGRESS (엘리먼트 진행률 0.0~1.0)  │
+   │     ├─ HMI_NC_WCS_X, HMI_NC_WCS_Y (좌표)          │
+   │     ├─ HMI_NC_GCODE_BLOCK (G-Code 블록 문자열)    │
+   │     └─ HMI_NC_MPF_LINE_NO (MPF 라인 번호)         │
+   └────────────────────────────────────────────────────┘
+
+   ✅ 결과: NC 컨트롤러 데이터 주기적 읽기 시작 (100ms 주기)
+
+
+5️⃣ 절단 시작 (예: Part 1, Contour 5)
+   ┌────────────────────────────────────────────────────┐
+   │ NC Controller (PLC) → WinCC Runtime                │
+   │ ├─ HMI_NC_PART_NUMBER = 1                          │
+   │ ├─ HMI_NC_CONTOUR_NUMBER = 5                       │
+   │ ├─ HMI_NC_ELEMENT_INDEX = 0                        │
+   │ └─ HMI_NC_PROGRESS = 0.0                           │
+   └────────────────────────────────────────────────────┘
+            ↓ (ITag DataChanged 이벤트)
+   ┌────────────────────────────────────────────────────┐
+   │ RealtimeITagControl.cs                             │
+   │ └─ OnTagDataChanged(sender, e)                     │
+   │     ├─ e.GetInt("HMI_NC_PART_NUMBER")              │
+   │     ├─ e.GetInt("HMI_NC_CONTOUR_NUMBER")           │
+   │     ├─ e.GetInt("HMI_NC_ELEMENT_INDEX")            │
+   │     ├─ e.GetDouble("HMI_NC_PROGRESS")              │
+   │     └─ progressManager.UpdateProgress(...)         │
+   └────────────────────────────────────────────────────┘
+            ↓
+   ┌────────────────────────────────────────────────────┐
+   │ CuttingProgressManager.cs                          │
+   │ └─ StartCuttingProgress(1, 5, false)               │
+   │     ├─ currentPartIndex = 0 (1-based → 0-based)    │
+   │     ├─ currentContourIndex = 4                     │
+   │     ├─ currentElementIndex = 0                     │
+   │     ├─ isUnderCuttingProgress = true               │
+   │     └─ ProgressUpdated 이벤트 발생                 │
+   └────────────────────────────────────────────────────┘
+            ↓
+   ┌────────────────────────────────────────────────────┐
+   │ CamViewerCore.cs                                   │
+   │ └─ CuttingProgressManager_ProgressUpdated(e)       │
+   │     ├─ HighlightContour(0, 4, Color.Green)         │
+   │     ├─ HighlightElement(0, 4, 0, Color.LimeGreen)  │
+   │     └─ Invalidate() → 화면 갱신                    │
+   └────────────────────────────────────────────────────┘
+
+   ✅ 결과: Contour 5가 녹색으로 하이라이트, Element 0 시작 표시
+
+
+6️⃣ 실시간 절단 진행 추적 (Element 단위)
+   ┌─────────────────────────────────────────────────────────┐
+   │ T=0ms: Element 0 시작 (HKLEA - Lead-in)                 │
+   │   iTag: P1 C5 E0 Progress=0.0                            │
+   │   렌더링: Element 0 밝은 녹색 (0%)                       │
+   ├─────────────────────────────────────────────────────────┤
+   │ T=500ms: Element 0 진행 중                               │
+   │   iTag: Progress=0.5                                     │
+   │   렌더링: Element 0 50% 진행 표시                        │
+   ├─────────────────────────────────────────────────────────┤
+   │ T=1000ms: Element 1 시작 (HKCUT)                         │
+   │   iTag: E1 Progress=0.0                                  │
+   │   렌더링: Element 0 완료 (진한 녹색), Element 1 시작     │
+   ├─────────────────────────────────────────────────────────┤
+   │ T=1500ms: Element 2 진행 (G1 라인)                       │
+   │   iTag: E2 Progress=0.75, WCS(95.5, 58.8)               │
+   │         GCODE="G1 X96.322 Y59.05"                        │
+   │   렌더링: Element 2 75% 진행, 현재 위치 마커 표시        │
+   ├─────────────────────────────────────────────────────────┤
+   │ T=2000ms: Element 3 진행 (G3 아크)                       │
+   │   iTag: E3 Progress=0.3                                  │
+   │         GCODE="G3 X96.526 Y59.85 I-0.286 J0.499"         │
+   │   렌더링: Element 3 아크 경로 30% 진행                   │
+   └─────────────────────────────────────────────────────────┘
+
+
+7️⃣ 컨투어 완료
+   ┌────────────────────────────────────────────────────┐
+   │ iTag 수신: E8 (HKSTO) Progress=1.0                 │
+   │ → CuttingProgressManager:                          │
+   │    ContourCompleted = true                         │
+   │ → 렌더링: Contour 5 완료 (진한 녹색)               │
+   └────────────────────────────────────────────────────┘
+            ↓
+   ┌────────────────────────────────────────────────────┐
+   │ 다음 컨투어로 이동: Contour 6 (N10006)             │
+   │ iTag 수신: C6 E0 Progress=0.0                      │
+   │ → 렌더링: Contour 6 시작 (밝은 녹색)               │
+   └────────────────────────────────────────────────────┘
+
+
+8️⃣ 파트 완료
+   ┌────────────────────────────────────────────────────┐
+   │ Part 1 마지막 컨투어 (C8: N10008) 완료             │
+   │ iTag 수신: P1 C8 E12 Progress=1.0                  │
+   │ → CuttingProgressManager:                          │
+   │    PartCompleted = true                            │
+   │ → 렌더링: Part 1 전체 완료 (진한 녹색)             │
+   └────────────────────────────────────────────────────┘
+            ↓
+   ┌────────────────────────────────────────────────────┐
+   │ 다음 파트로 이동: Part 2 (PartNumber: 20001)       │
+   │ iTag 수신: P2 C1 E0 Progress=0.0                   │
+   │ → 렌더링: Part 2 Contour 1 시작 (밝은 녹색)        │
+   └────────────────────────────────────────────────────┘
+
+
+9️⃣ 전체 절단 완료
+   ┌────────────────────────────────────────────────────┐
+   │ Part 2 마지막 컨투어 (C5: N20005) 완료             │
+   │ iTag 수신: P2 C5 E40 Progress=1.0                  │
+   │ → CuttingProgressManager:                          │
+   │    isUnderCuttingProgress = false                  │
+   │    hasCuttingProgress = true                       │
+   │    State = CuttingState.Completed                  │
+   │    AllCompleted = true                             │
+   │ → 렌더링: 전체 완료 (진한 녹색)                    │
+   │ → UI: "절단 완료" 메시지 표시                      │
+   └────────────────────────────────────────────────────┘
+
+
+🔟 TraceTestForm 수동 테스트
+   ┌────────────────────────────────────────────────────┐
+   │ ProgramInfoPanel에서 "Trace 테스트" 버튼 클릭     │
+   │ → TraceTestForm 열림                               │
+   │                                                    │
+   │ [수동 테스트 시나리오]                             │
+   │ 1. Part: 1, Contour: 5, Element: 0                │
+   │ 2. "시작" 버튼 클릭                                │
+   │    → StartCuttingProgress(1, 5, false)             │
+   │    → Contour 5 녹색 하이라이트                     │
+   │                                                    │
+   │ 3. Element: 2, Progress: 50% (TrackBar 조정)      │
+   │ 4. "업데이트" 버튼 클릭                            │
+   │    → UpdateProgress(1, 5, 2, 0.5)                  │
+   │    → Element 2 50% 진행 표시                       │
+   │                                                    │
+   │ 5. "엘리먼트 완료" 버튼 클릭                       │
+   │    → currentElementIndex++                         │
+   │    → Element 2 완료 → Element 3 시작               │
+   │                                                    │
+   │ 6. "컨투어 완료" 버튼 클릭                         │
+   │    → currentContourIndex++                         │
+   │    → Contour 5 완료 → Contour 6 시작               │
+   └────────────────────────────────────────────────────┘
+
+
+1️⃣1️⃣ 리소스 정리 및 종료
+   ┌────────────────────────────────────────────────────┐
+   │ ITagManager.StopReadTagCyclic()                    │
+   │ → ReadTagCyclic 중지                               │
+   ├────────────────────────────────────────────────────┤
+   │ ITagManager.Disconnect()                           │
+   │ → ITag 연결 해제                                   │
+   ├────────────────────────────────────────────────────┤
+   │ CamViewerCore.Dispose()                            │
+   │ ├─ NativeRenderer.CleanupTextRenderer()            │
+   │ ├─ NativeRenderer.CleanupRenderer()                │
+   │ └─ progressManager.ProgressUpdated 구독 해제       │
+   └────────────────────────────────────────────────────┘
+
+
+1️⃣2️⃣ 전체 타임라인 (1.MPF 기준)
+   ┌────────────────────────────────────────────────────┐
+   │ T=0s:    MPF 로드 → 파싱 → 렌더링 초기화          │
+   │ T=1s:    ITag 연결 → ReadTagCyclic 시작            │
+   │ T=2s:    절단 대기 중...                           │
+   │ T=5s:    Part 1, Contour 1 (N10001) 시작           │
+   │ T=8s:    Contour 1 완료 → Contour 2 시작           │
+   │ T=11s:   Contour 2 완료 → Contour 3 시작           │
+   │ T=18s:   Contour 3 완료 → Contour 4 시작           │
+   │ T=26s:   Contour 4 완료 → Contour 5 시작           │
+   │ T=35s:   Contour 5 완료 → Contour 6 시작           │
+   │ T=42s:   Contour 6 완료 → Contour 7 시작           │
+   │ T=49s:   Contour 7 완료 → Contour 8 시작           │
+   │ T=62s:   Part 1 완료 → Part 2, Contour 1 시작      │
+   │ T=68s:   Contour 1 완료 → Contour 2 시작           │
+   │ T=73s:   Contour 2 완료 → Contour 3 시작           │
+   │ T=85s:   Contour 3 완료 → Contour 4 시작           │
+   │ T=97s:   Contour 4 완료 → Contour 5 시작           │
+   │ T=130s:  Part 2 완료 → 전체 절단 완료              │
+   │ T=131s:  ReadTagCyclic 중지 → 리소스 정리          │
+   └────────────────────────────────────────────────────┘
+
+
+📊 데이터 흐름도
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+NC Controller (PLC)
+    ↓ Siemens S7 통신
+WinCC Runtime
+    ↓ ITag ReadTagCyclic (100ms 주기)
+ITagManager (Singleton)
+    ↓ DataChanged 이벤트
+RealtimeITagControl
+    ↓ UpdateProgress 호출
+CuttingProgressManager
+    ↓ ProgressUpdated 이벤트
+├─→ CamViewerCore (OpenGL 렌더링)
+│   ├─ HighlightContour(partIdx, contourIdx, Color.Green)
+│   ├─ HighlightElement(partIdx, contourIdx, elemIdx, Color.LimeGreen, progress)
+│   └─ Invalidate() → 화면 갱신
+└─→ TraceTestForm (UI 표시)
+    ├─ numPart.Value = partIdx + 1
+    ├─ numContour.Value = contourIdx + 1
+    ├─ numElement.Value = elemIdx
+    ├─ trackProgress.Value = (int)(progress * 100)
+    └─ AddLog($"업데이트: P{partIdx+1} C{contourIdx+1} E{elemIdx} ({progress:P1})")
+
+
+🎯 핵심 클래스 및 메서드
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+[핵심 클래스]
+1. MPFParser: MPF 파일 파싱
+   - Parse(content) → MPFProgram
+
+2. MPFProgram: 프로그램 데이터 구조
+   - Parts[] → Contours[] → AllSegments[]
+
+3. CuttingProgressManager: 절단 진행 상태 관리
+   - StartCuttingProgress(partNumber, contourNumber, reverse)
+   - UpdateProgress(partNumber, contourNumber, elementIndex, progress)
+   - StopCuttingProgress()
+   - ResetCuttingProgress()
+
+4. ITagManager: ITag 통신 (Singleton)
+   - Connect() / Disconnect()
+   - StartReadTagCyclic(tagNames[])
+   - StopReadTagCyclic()
+   - WriteTag(tagName, value)
+
+5. CamViewerCore: OpenGL 렌더링
+   - LoadProgram(program)
+   - BuildGeometry()
+   - HighlightContour(partIdx, contourIdx, color)
+   - HighlightElement(partIdx, contourIdx, elemIdx, color, progress)
+
+6. RealtimeITagControl: 전체 컨트롤러
+   - LoadMpfFile(filePath)
+   - OnTagDataChanged(sender, e)
+
+7. TraceTestForm: 수동 테스트 UI
+   - BtnStart_Click() → StartCuttingProgress()
+   - BtnUpdate_Click() → UpdateProgress()
+   - BtnCompleteElement_Click() → elementIndex++
+   - BtnCompleteContour_Click() → contourIndex++
+
+
+[핵심 이벤트]
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+1. ITagManager.DataChanged
+   - TagDataEventArgs { Values, GetInt(), GetDouble(), GetString() }
+
+2. CuttingProgressManager.ProgressUpdated
+   - CuttingProgressEventArgs
+     {
+       PartIndex, ContourIndex, ElementIndex, Progress,
+       State, PartChanged, ContourChanged,
+       ContourCompleted, PartCompleted, AllCompleted
+     }
+
+3. CamViewerCore.ContourSelected
+   - ContourSelectedEventArgs { PartIndex, ContourIndex, PartNumber, ContourNumber }
+
+
+[ITag 태그 목록]
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+[ReadTagCyclic - NC → HMI]
+- HMI_NC_PART_NUMBER      : 현재 절단 중인 파트 번호 (1-based)
+- HMI_NC_CONTOUR_NUMBER   : 현재 절단 중인 컨투어 번호 (1-based)
+- HMI_NC_ELEMENT_INDEX    : 현재 절단 중인 엘리먼트 인덱스 (0-based)
+- HMI_NC_PROGRESS         : 엘리먼트 진행률 (0.0 ~ 1.0)
+- HMI_NC_WCS_X            : WCS X 좌표
+- HMI_NC_WCS_Y            : WCS Y 좌표
+- HMI_NC_GCODE_BLOCK      : 현재 G-Code 블록 문자열
+- HMI_NC_MPF_LINE_NO      : MPF 라인 번호
+
+[WriteTag - HMI → NC]
+- HMI_MPF_PATH            : MPF 파일 경로
+- HMI_VIEW_SEARCH_PART    : 선택된 파트 번호 (컨투어 클릭 시)
+- HMI_VIEW_SEARCH_CONT    : 선택된 컨투어 번호 (컨투어 클릭 시)
+
+
+🔍 디버깅 및 로그
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+[로그 파일 위치]
+Desktop/CamViewer_Logs/
+├─ RealtimeITagControl.txt
+│  - MPF 로드 로그
+│  - ITag 연결 로그
+│  - 절단 진행 로그
+│  - 컨투어 선택 로그
+├─ CamViewerCore.txt
+│  - 렌더링 업데이트 로그
+│  - 하이라이트 로그
+│  - 리소스 정리 로그
+└─ TraceTestForm.txt
+   - 수동 테스트 로그
+   - 진행 업데이트 로그
+
+
+[TraceTestForm 활용 방법]
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+1. MPF 로드 후 "Trace 테스트" 버튼 클릭
+2. Part/Contour/Element 수동 입력
+3. "시작" → "업데이트" → "엘리먼트 완료" 버튼으로 시뮬레이션
+4. 실시간 로그 및 렌더링 확인
+5. "컨투어 완료" 버튼으로 다음 컨투어 이동
+6. "리셋" 버튼으로 초기화
+
+
+✅ 체크리스트
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+✅ MPF 파일 로드 및 파싱
+✅ OpenGL 렌더링 초기화
+✅ ITag 서버 연결
+✅ ReadTagCyclic 시작
+✅ 절단 진행 추적 (Part/Contour/Element 단위)
+✅ 렌더링 업데이트 (하이라이트)
+✅ 컨투어/파트 완료 감지
+✅ TraceTestForm 수동 테스트
+✅ Element 선택 팝업
+✅ ITag Write (컨투어 선택 → HMI_VIEW_SEARCH_PART/CONT)
+✅ 리소스 정리 (Dispose)
+
+
+═══════════════════════════════════════════════════════════════
+문서 작성일: 2025-12-03
+버전: Phase 11 Final
+상세 문서: 실시간_트레이스_프로세스_시나리오.md (23KB)
+═══════════════════════════════════════════════════════════════
